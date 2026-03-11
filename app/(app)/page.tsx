@@ -241,56 +241,30 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 rounded-[20px] p-4"
+          className="mb-6 flex items-center justify-between gap-2 rounded-button px-4 py-2.5"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-[12px]"
-                style={{ backgroundColor: 'rgba(59,130,246,0.14)' }}
-              >
-                <ArrowRightLeft className="h-4 w-4" style={{ color: 'var(--color-accent-base)' }} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                  Live Exchange Rate
-                </p>
-                <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                  USD / KRW
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--color-accent-base)' }} />
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>
+              1 USD = KRW {formattedExchangeRate ?? '-'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
+              {format(new Date(exchangeRateInfo.fetched_at), 'MMM d, HH:mm')}
+            </p>
             <span
-              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
               style={{
                 backgroundColor: exchangeRateInfo.fallback || exchangeRateInfo.error
-                  ? 'rgba(245,158,11,0.14)'
-                  : 'rgba(16,185,129,0.14)',
+                  ? 'rgba(245,158,11,0.14)' : 'rgba(16,185,129,0.14)',
                 color: exchangeRateInfo.fallback || exchangeRateInfo.error
-                  ? 'var(--color-warning-base)'
-                  : 'var(--color-income-base)',
+                  ? 'var(--color-warning-base)' : 'var(--color-income-base)',
               }}
             >
-              {exchangeRateInfo.fallback || exchangeRateInfo.error
-                ? 'Fallback'
-                : exchangeRateInfo.cached
-                  ? 'Cached'
-                  : 'Live'}
+              {exchangeRateInfo.fallback || exchangeRateInfo.error ? 'Est' : exchangeRateInfo.cached ? 'Cached' : 'Live'}
             </span>
-          </div>
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <p className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
-                1 USD = {formattedExchangeRate ? `KRW ${formattedExchangeRate}` : '-'}
-              </p>
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                1 KRW = {formatUSD(exchangeRateInfo.rate ? 1 / exchangeRateInfo.rate : 0)}
-              </p>
-            </div>
-            <p className="text-right text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-              Updated {format(new Date(exchangeRateInfo.fetched_at), 'MMM d, HH:mm')}
-            </p>
           </div>
         </motion.div>
       )}

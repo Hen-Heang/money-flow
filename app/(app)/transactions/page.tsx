@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { formatKRW, formatUSD } from '@/lib/utils'
 import { TransactionSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
-import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
+import AddTransactionSheet, { EditTransaction } from '@/components/transactions/AddTransactionSheet'
 
 interface Transaction {
   id: string
@@ -31,17 +31,21 @@ function SwipeableRow({
   transaction,
   showUSD,
   onDelete,
+  onEdit,
 }: {
   transaction: Transaction
   showUSD: boolean
   onDelete: (id: string) => void
+  onEdit: (t: Transaction) => void
 }) {
   const [offset, setOffset] = useState(0)
   const [deleting, setDeleting] = useState(false)
+  const isDragging = useRef(false)
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < -80) {
-      setOffset(-80)
+    isDragging.current = false
+    if (info.offset.x < -60) {
+      setOffset(-120)
     } else {
       setOffset(0)
     }
@@ -52,10 +56,25 @@ function SwipeableRow({
     onDelete(transaction.id)
   }
 
+  const handleTap = () => {
+    if (offset !== 0) {
+      setOffset(0)
+      return
+    }
+    if (!isDragging.current) onEdit(transaction)
+  }
+
   return (
     <div className="relative overflow-hidden">
-      {/* Delete action revealed on swipe */}
-      <div className="absolute right-0 top-0 bottom-0 flex items-center px-4 gap-2">
+      {/* Actions revealed on swipe */}
+      <div className="absolute right-0 top-0 bottom-0 flex items-center px-3 gap-2">
+        <button
+          onClick={() => { setOffset(0); onEdit(transaction) }}
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'var(--color-accent-base)' }}
+        >
+          <Edit3 className="w-4 h-4 text-white" />
+        </button>
         <button
           onClick={handleDelete}
           className="w-10 h-10 rounded-full flex items-center justify-center"
@@ -67,12 +86,14 @@ function SwipeableRow({
 
       <motion.div
         drag="x"
-        dragConstraints={{ left: -80, right: 0 }}
+        dragConstraints={{ left: -120, right: 0 }}
         dragElastic={0.1}
+        onDragStart={() => { isDragging.current = true }}
         onDragEnd={handleDragEnd}
+        onTap={handleTap}
         animate={{ x: offset, opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="flex items-center gap-4 px-4 py-3 relative"
+        className="flex items-center gap-4 px-4 py-3 relative cursor-pointer"
         style={{ backgroundColor: 'var(--color-card-base)' }}
       >
         <div
@@ -127,6 +148,7 @@ export default function TransactionsPage() {
   const [filter, setFilter] = useState<FilterType>('all')
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
+  const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
@@ -320,6 +342,10 @@ export default function TransactionsPage() {
                           transaction={t}
                           showUSD={showUSD}
                           onDelete={handleDelete}
+                          onEdit={(t) => {
+                            setEditingTransaction(t)
+                            setShowAddSheet(true)
+                          }}
                         />
                       </div>
                     ))}
@@ -347,11 +373,12 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      <FAB onClick={() => setShowAddSheet(true)} />
+      {!showAddSheet && <FAB onClick={() => { setEditingTransaction(undefined); setShowAddSheet(true) }} />}
       <AddTransactionSheet
         isOpen={showAddSheet}
-        onClose={() => setShowAddSheet(false)}
+        onClose={() => { setShowAddSheet(false); setEditingTransaction(undefined) }}
         onSuccess={() => loadTransactions(true)}
+        editTransaction={editingTransaction}
       />
     </div>
   )
