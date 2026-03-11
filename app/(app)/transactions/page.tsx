@@ -248,14 +248,16 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Transactions</h1>
           <button
             onClick={() => setShowUSD(!showUSD)}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold"
+            className="px-3 py-1.5 rounded-full text-lg leading-none"
             style={{
               backgroundColor: 'var(--color-card-elevated-base)',
               color: 'var(--color-accent-base)',
               border: '1px solid var(--color-border-base)',
             }}
+            aria-label={showUSD ? 'Switch to KRW' : 'Switch to USD'}
+            title={showUSD ? 'USD mode' : 'KRW mode'}
           >
-            {showUSD ? 'USD' : 'KRW'}
+            {showUSD ? '🇺🇸' : '🇰🇷'}
           </button>
         </div>
 
