@@ -18,29 +18,55 @@ export async function GET() {
       .single()
 
     if (cached) {
-      return NextResponse.json({ rate: cached.rate, cached: true })
+      return NextResponse.json({
+        rate: cached.rate,
+        base_currency: 'USD',
+        target_currency: 'KRW',
+        fetched_at: cached.fetched_at,
+        cached: true,
+      })
     }
 
     // Fetch fresh rate
     const apiKey = process.env.EXCHANGE_RATE_API_KEY
     if (!apiKey || apiKey === 'YOUR_EXCHANGE_RATE_API_KEY') {
-      return NextResponse.json({ rate: 1300, cached: false, fallback: true })
+      return NextResponse.json({
+        rate: 1300,
+        base_currency: 'USD',
+        target_currency: 'KRW',
+        fetched_at: new Date().toISOString(),
+        cached: false,
+        fallback: true,
+      })
     }
 
     const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/pair/USD/KRW`)
     const data = await response.json()
     const rate = data.conversion_rate
+    const fetchedAt = new Date().toISOString()
 
     // Store in cache
     await supabase.from('exchange_rates').insert({
       base_currency: 'USD',
       target_currency: 'KRW',
       rate,
-      fetched_at: new Date().toISOString(),
+      fetched_at: fetchedAt,
     })
 
-    return NextResponse.json({ rate, cached: false })
+    return NextResponse.json({
+      rate,
+      base_currency: 'USD',
+      target_currency: 'KRW',
+      fetched_at: fetchedAt,
+      cached: false,
+    })
   } catch {
-    return NextResponse.json({ rate: 1300, error: true })
+    return NextResponse.json({
+      rate: 1300,
+      base_currency: 'USD',
+      target_currency: 'KRW',
+      fetched_at: new Date().toISOString(),
+      error: true,
+    })
   }
 }

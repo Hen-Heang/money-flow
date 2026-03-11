@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, ArrowRightLeft } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -35,6 +35,16 @@ interface CategoryTotal {
   total: number
 }
 
+interface ExchangeRateInfo {
+  rate: number
+  base_currency: string
+  target_currency: string
+  fetched_at: string
+  cached?: boolean
+  fallback?: boolean
+  error?: boolean
+}
+
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 export default function DashboardPage() {
@@ -45,6 +55,7 @@ export default function DashboardPage() {
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [userName, setUserName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
   const supabase = createClient()
 
   const monthStart = startOfMonth(currentDate)
@@ -79,6 +90,30 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    let active = true
+
+    const loadExchangeRate = async () => {
+      try {
+        const response = await fetch('/api/exchange-rate', { cache: 'no-store' })
+        if (!response.ok) return
+
+        const data = await response.json() as ExchangeRateInfo
+        if (active) {
+          setExchangeRateInfo(data)
+        }
+      } catch (error) {
+        console.error(error)
+      }
+    }
+
+    loadExchangeRate()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
@@ -129,6 +164,10 @@ export default function DashboardPage() {
 
   const fmt = (amount: number, usd: number) =>
     showUSD ? formatUSD(usd) : formatKRW(amount)
+
+  const formattedExchangeRate = exchangeRateInfo
+    ? new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(exchangeRateInfo.rate)
+    : null
 
   const summaryCards = [
     {
@@ -197,6 +236,64 @@ export default function DashboardPage() {
           <span>{showUSD ? 'USD' : 'KRW'}</span>
         </motion.button>
       </motion.div>
+
+      {exchangeRateInfo && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 rounded-[20px] p-4"
+          style={{ backgroundColor: 'var(--color-card-base)' }}
+        >
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-[12px]"
+                style={{ backgroundColor: 'rgba(59,130,246,0.14)' }}
+              >
+                <ArrowRightLeft className="h-4 w-4" style={{ color: 'var(--color-accent-base)' }} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                  Live Exchange Rate
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                  USD / KRW
+                </p>
+              </div>
+            </div>
+            <span
+              className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+              style={{
+                backgroundColor: exchangeRateInfo.fallback || exchangeRateInfo.error
+                  ? 'rgba(245,158,11,0.14)'
+                  : 'rgba(16,185,129,0.14)',
+                color: exchangeRateInfo.fallback || exchangeRateInfo.error
+                  ? 'var(--color-warning-base)'
+                  : 'var(--color-income-base)',
+              }}
+            >
+              {exchangeRateInfo.fallback || exchangeRateInfo.error
+                ? 'Fallback'
+                : exchangeRateInfo.cached
+                  ? 'Cached'
+                  : 'Live'}
+            </span>
+          </div>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+                1 USD = {formattedExchangeRate ? `KRW ${formattedExchangeRate}` : '-'}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                1 KRW = {formatUSD(exchangeRateInfo.rate ? 1 / exchangeRateInfo.rate : 0)}
+              </p>
+            </div>
+            <p className="text-right text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
+              Updated {format(new Date(exchangeRateInfo.fetched_at), 'MMM d, HH:mm')}
+            </p>
+          </div>
+        </motion.div>
+      )}
 
       {/* Month Selector */}
       <div className="flex items-center justify-between mb-6">
