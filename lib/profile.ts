@@ -13,11 +13,13 @@ export interface UserProfileRecord {
 }
 
 export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
-  const { data: existing, error } = await supabase
+  const { data: existingData, error } = await supabase
     .from('users')
     .select('*')
     .eq('id', user.id)
-    .maybeSingle<UserProfileRecord>()
+    .maybeSingle()
+
+  const existing = existingData as UserProfileRecord | null
 
   if (error) throw error
 
@@ -44,11 +46,13 @@ export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
     default_currency: 'KRW',
   }
 
-  const { data: created, error: insertError } = await supabase
+  const { data: createdData, error: insertError } = await supabase
     .from('users')
     .insert(profile)
     .select('*')
-    .single<UserProfileRecord>()
+    .single()
+
+  const created = createdData as UserProfileRecord | null
 
   if (insertError) throw insertError
 
@@ -58,11 +62,13 @@ export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
 export async function getUserProfile(supabase: SupabaseClient, user: User) {
   const ensured = await ensureUserProfile(supabase, user)
 
-  const { data, error } = await supabase
+  const { data: profileData, error } = await supabase
     .from('users')
     .select('*')
     .eq('id', user.id)
-    .single<UserProfileRecord>()
+    .single()
+
+  const data = profileData as UserProfileRecord | null
 
   if (error) throw error
 

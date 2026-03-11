@@ -82,12 +82,14 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('You are not signed in')
 
-      const { data, error } = await supabase
+      const { data: updatedProfileData, error } = await supabase
         .from('users')
         .update({ avatar_url: avatarUrl })
         .eq('id', user.id)
         .select('*')
-        .single<UserProfile>()
+        .single()
+
+      const data = updatedProfileData as UserProfile | null
 
       if (error) throw error
 

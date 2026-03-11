@@ -34,13 +34,13 @@ export default function LoginPage() {
     setLoading(true)
     try {
       if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email: data.email,
           password: data.password,
         })
         if (error) throw error
-        if (data.user) {
-          await ensureUserProfile(supabase, data.user)
+        if (signUpData.user) {
+          await ensureUserProfile(supabase, signUpData.user)
         }
         toast.success('Account created! Check your email to verify.')
       } else {
