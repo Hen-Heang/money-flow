@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, List, BarChart2, Settings } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 
 const tabs = [
   { href: '/', label: 'Home', icon: Home },
@@ -45,7 +45,7 @@ export default function TabBar() {
               {isActive && (
                 <motion.div
                   layoutId="tab-active-pill"
-                  className="absolute top-2 h-12 w-[86%] rounded-[14px]"
+                  className="absolute top-1.5 h-11 w-[84%] rounded-[14px]"
                   style={{
                     backgroundColor: 'color-mix(in srgb, var(--color-accent-base) 16%, transparent)',
                     border: '1px solid color-mix(in srgb, var(--color-accent-base) 32%, transparent)',
@@ -57,7 +57,7 @@ export default function TabBar() {
               <motion.div
                 whileTap={{ scale: 0.88 }}
                 transition={{ type: 'spring', stiffness: 600, damping: 20, mass: 0.5 }}
-                className="relative z-10 flex flex-col items-center gap-1"
+                className="relative z-10 flex flex-col items-center justify-center gap-1"
               >
                 <Icon
                   className="h-5 w-5"
@@ -66,15 +66,22 @@ export default function TabBar() {
                     transition: 'color 0.18s ease',
                   }}
                 />
-                <span
-                  className="text-[10px] font-medium"
-                  style={{
-                    color: isActive ? 'var(--color-accent-base)' : 'var(--color-text-secondary)',
-                    transition: 'color 0.18s ease',
-                  }}
-                >
-                  {label}
-                </span>
+                <AnimatePresence initial={false}>
+                  {isActive && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 2 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 2 }}
+                      transition={{ duration: 0.14 }}
+                      className="text-[10px] font-medium leading-none"
+                      style={{
+                        color: 'var(--color-accent-base)',
+                      }}
+                    >
+                      {label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </motion.div>
             </Link>
           )
