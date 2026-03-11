@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, List, BarChart2, Settings } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 const tabs = [
   { href: '/', label: 'Home', icon: Home },
@@ -26,39 +26,40 @@ export default function TabBar() {
         right: 0,
         zIndex: 50,
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingLeft: 'max(8px, env(safe-area-inset-left, 0px))',
+        paddingRight: 'max(8px, env(safe-area-inset-right, 0px))',
         background: 'color-mix(in srgb, var(--color-card-base) 86%, transparent)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderTop: '1px solid color-mix(in srgb, var(--color-border-base) 88%, white 12%)',
       }}
     >
-      <div className="mx-auto flex h-20 max-w-xl items-center justify-around px-2">
+      <div className="mx-auto grid h-[84px] max-w-2xl grid-cols-4 items-center gap-0.5 px-1">
         {tabs.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href
           return (
             <Link
               key={href}
               href={href}
-              className="relative flex h-full flex-1 flex-col items-center justify-center"
+              className="relative flex h-full min-w-0 items-center justify-center px-1"
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
             >
-              {isActive && (
-                <motion.div
-                  layoutId="tab-active-pill"
-                  className="absolute top-1.5 h-11 w-[84%] rounded-[14px]"
-                  style={{
-                    backgroundColor: 'color-mix(in srgb, var(--color-accent-base) 16%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--color-accent-base) 32%, transparent)',
-                  }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                />
-              )}
-
               <motion.div
                 whileTap={{ scale: 0.88 }}
                 transition={{ type: 'spring', stiffness: 600, damping: 20, mass: 0.5 }}
-                className="relative z-10 flex flex-col items-center justify-center gap-1"
+                className="relative z-10 flex flex-col items-center justify-center gap-1 rounded-[14px] px-4 py-2"
               >
+                {isActive && (
+                  <motion.div
+                    layoutId="tab-active-pill"
+                    className="absolute inset-0 -z-10 rounded-[14px]"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-accent-base) 16%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--color-accent-base) 32%, transparent)',
+                    }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                  />
+                )}
                 <Icon
                   className="h-5 w-5"
                   style={{
@@ -66,22 +67,15 @@ export default function TabBar() {
                     transition: 'color 0.18s ease',
                   }}
                 />
-                <AnimatePresence initial={false}>
-                  {isActive && (
-                    <motion.span
-                      initial={{ opacity: 0, y: 2 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 2 }}
-                      transition={{ duration: 0.14 }}
-                      className="text-[10px] font-medium leading-none"
-                      style={{
-                        color: 'var(--color-accent-base)',
-                      }}
-                    >
-                      {label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                <span
+                  className="text-[10px] font-medium leading-none"
+                  style={{
+                    color: isActive ? 'var(--color-accent-base)' : 'var(--color-text-secondary)',
+                    transition: 'color 0.18s ease',
+                  }}
+                >
+                  {label}
+                </span>
               </motion.div>
             </Link>
           )
