@@ -26,11 +26,18 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Money Flow" />
+        {/* Theme init — runs before render to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var t = localStorage.getItem('theme');
+            if (t === 'light') document.documentElement.classList.add('light');
+          } catch(e) {}
+        ` }} />
       </head>
       <body style={{
         backgroundColor: 'var(--color-bg)',
@@ -42,10 +49,10 @@ export default function RootLayout({
           position="top-center"
           toastOptions={{
             style: {
-              background: '#1a2332',
-              color: '#e2e8f0',
+              background: 'var(--color-card-elevated-base)',
+              color: 'var(--color-text-primary)',
               borderRadius: '12px',
-              border: '1px solid #1e293b',
+              border: '1px solid var(--color-border-base)',
             },
           }}
         />

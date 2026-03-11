@@ -30,11 +30,13 @@ type FilterType = 'all' | 'income' | 'expense'
 function SwipeableRow({
   transaction,
   showUSD,
+  liveRate,
   onDelete,
   onEdit,
 }: {
   transaction: Transaction
   showUSD: boolean
+  liveRate: number
   onDelete: (id: string) => void
   onEdit: (t: Transaction) => void
 }) {
@@ -130,7 +132,7 @@ function SwipeableRow({
             }}
           >
             {transaction.type === 'income' ? '+' : '-'}
-            {showUSD ? formatUSD(transaction.amount_usd) : formatKRW(transaction.amount_krw)}
+            {showUSD ? formatUSD(transaction.amount_krw / liveRate) : formatKRW(transaction.amount_krw)}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
             {format(parseISO(transaction.date), 'h:mm a')}
@@ -149,6 +151,7 @@ export default function TransactionsPage() {
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
+  const [liveRate, setLiveRate] = useState(1300)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
@@ -198,6 +201,13 @@ export default function TransactionsPage() {
   useEffect(() => {
     loadTransactions(true)
   }, [filter, search]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetch('/api/exchange-rate')
+      .then(r => r.json())
+      .then(d => { if (d.rate) setLiveRate(d.rate) })
+      .catch(() => {})
+  }, [])
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from('transactions').delete().eq('id', id)
@@ -341,6 +351,7 @@ export default function TransactionsPage() {
                         <SwipeableRow
                           transaction={t}
                           showUSD={showUSD}
+                          liveRate={liveRate}
                           onDelete={handleDelete}
                           onEdit={(t) => {
                             setEditingTransaction(t)

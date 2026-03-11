@@ -36,19 +36,17 @@
   --color-warning-base: #f59e0b;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not(.dark) {
-    --color-bg: #f8fafc;
-    --color-card-base: #ffffff;
-    --color-card-elevated-base: #f1f5f9;
-    --color-text-primary: #0f172a;
-    --color-text-secondary: #64748b;
-    --color-border-base: #e2e8f0;
-    --color-income-base: #10b981;
-    --color-expense-base: #ef4444;
-    --color-accent-base: #3b82f6;
-    --color-warning-base: #f59e0b;
-  }
+.light {
+  --color-bg: #f8fafc;
+  --color-card-base: #ffffff;
+  --color-card-elevated-base: #f1f5f9;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-border-base: #e2e8f0;
+  --color-income-base: #10b981;
+  --color-expense-base: #ef4444;
+  --color-accent-base: #3b82f6;
+  --color-warning-base: #f59e0b;
 }
 
 * {
@@ -59,6 +57,9 @@
 body {
   min-height: 100dvh;
   background-color: var(--color-bg);
+  background-image:
+    radial-gradient(900px 420px at -10% -10%, color-mix(in srgb, var(--color-accent-base) 16%, transparent), transparent 60%),
+    radial-gradient(700px 340px at 120% -20%, color-mix(in srgb, var(--color-income-base) 14%, transparent), transparent 60%);
   color: var(--color-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -130,6 +131,43 @@ input, select, textarea {
   border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
+.surface-card {
+  background-color: color-mix(in srgb, var(--color-card-base) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border-base) 92%, white 8%);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.surface-row {
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.surface-row:hover {
+  transform: translateY(-1px);
+  background-color: color-mix(in srgb, var(--color-card-elevated-base) 70%, transparent);
+}
+
+.soft-ring {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border-base) 88%, white 12%);
+}
+
+.fade-up {
+  animation: fadeUp 0.35s ease both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .glass-card {
   background: rgba(17, 24, 39, 0.75);
   backdrop-filter: blur(20px) saturate(160%);
@@ -176,4 +214,13 @@ input, select, textarea {
 /* Date input styling for dark mode */
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
