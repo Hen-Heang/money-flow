@@ -43,16 +43,24 @@ export default function TabBar() {
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
             >
               <motion.div
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: 0.82 }}
+                transition={{ type: 'spring', stiffness: 600, damping: 20, mass: 0.5 }}
                 className="flex flex-col items-center gap-1"
+                style={{ WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
               >
                 <Icon
-                  className="w-6 h-6 transition-colors"
-                  style={{ color: isActive ? 'var(--color-income-base)' : 'var(--color-text-secondary)' }}
+                  className="w-6 h-6"
+                  style={{
+                    color: isActive ? 'var(--color-income-base)' : 'var(--color-text-secondary)',
+                    transition: 'color 0.15s ease',
+                  }}
                 />
                 <span
-                  className="text-[10px] font-medium transition-colors"
-                  style={{ color: isActive ? 'var(--color-income-base)' : 'var(--color-text-secondary)' }}
+                  className="text-[10px] font-medium"
+                  style={{
+                    color: isActive ? 'var(--color-income-base)' : 'var(--color-text-secondary)',
+                    transition: 'color 0.15s ease',
+                  }}
                 >
                   {label}
                 </span>

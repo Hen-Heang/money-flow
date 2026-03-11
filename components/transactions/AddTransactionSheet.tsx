@@ -36,19 +36,32 @@ interface PaymentMethod {
   icon: string
 }
 
+export interface EditTransaction {
+  id: string
+  type: 'income' | 'expense'
+  amount_krw: number
+  date: string
+  description: string
+  category_id: string | null
+  payment_method_id: string | null
+  note: string | null
+  exchange_rate?: number
+}
+
 interface Props {
   isOpen: boolean
   onClose: () => void
   onSuccess: (transaction: unknown) => void
-  editTransaction?: unknown
+  editTransaction?: EditTransaction
 }
 
-export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Props) {
+export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTransaction }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [exchangeRate, setExchangeRate] = useState(1300)
   const amountInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
+  const isEditing = !!editTransaction
 
   const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -66,15 +79,11 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
     if (isOpen) {
       const loadData = async () => {
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { console.error('No user found'); return }
-        console.log('Loading data for user:', user.id)
-
+        if (!user) return
         const [cats, methods] = await Promise.all([
           supabase.from('categories').select('*'),
           supabase.from('payment_methods').select('*'),
         ])
-        console.log('Categories:', cats.data, 'Error:', cats.error)
-        console.log('Payment methods:', methods.data, 'Error:', methods.error)
         if (cats.data) setCategories(cats.data)
         if (methods.data) setPaymentMethods(methods.data)
       }
@@ -85,16 +94,36 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
         .then(d => { if (d.rate) setExchangeRate(d.rate) })
         .catch(() => {})
 
-      setTimeout(() => amountInputRef.current?.focus(), 300)
-
-      if (typeof window !== 'undefined') {
-        const lastCategory = localStorage.getItem('lastCategory')
-        const lastPaymentMethod = localStorage.getItem('lastPaymentMethod')
-        if (lastCategory) setValue('category_id', lastCategory)
-        if (lastPaymentMethod) setValue('payment_method_id', lastPaymentMethod)
+      if (editTransaction) {
+        // Pre-fill form for editing
+        reset({
+          type: editTransaction.type,
+          amount: formatNumber(editTransaction.amount_krw),
+          date: editTransaction.date,
+          description: editTransaction.description,
+          category_id: editTransaction.category_id || '',
+          payment_method_id: editTransaction.payment_method_id || '',
+          note: editTransaction.note || '',
+        })
+        if (editTransaction.exchange_rate) setExchangeRate(editTransaction.exchange_rate)
+      } else {
+        // New transaction defaults
+        reset({
+          type: 'expense',
+          date: format(new Date(), 'yyyy-MM-dd'),
+          amount: '',
+          description: '',
+        })
+        if (typeof window !== 'undefined') {
+          const lastCategory = localStorage.getItem('lastCategory')
+          const lastPaymentMethod = localStorage.getItem('lastPaymentMethod')
+          if (lastCategory) setValue('category_id', lastCategory)
+          if (lastPaymentMethod) setValue('payment_method_id', lastPaymentMethod)
+        }
+        setTimeout(() => amountInputRef.current?.focus(), 300)
       }
     }
-  }, [isOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, editTransaction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (data: FormData) => {
     const amountKrw = parseFloat(data.amount.replace(/,/g, ''))
@@ -107,8 +136,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const transaction = {
-      user_id: user.id,
+    const payload = {
       date: data.date,
       type: data.type,
       category_id: data.category_id || null,
@@ -120,30 +148,51 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
       note: data.note || null,
     }
 
-    const { data: saved, error } = await supabase.from('transactions').insert(transaction).select().single()
+    let saved, error
+    if (isEditing && editTransaction) {
+      const result = await supabase
+        .from('transactions')
+        .update(payload)
+        .eq('id', editTransaction.id)
+        .select()
+        .single()
+      saved = result.data
+      error = result.error
+    } else {
+      const result = await supabase
+        .from('transactions')
+        .insert({ ...payload, user_id: user.id })
+        .select()
+        .single()
+      saved = result.data
+      error = result.error
+    }
+
     if (error) {
       toast.error('Failed to save transaction')
       return
     }
 
-    if (typeof window !== 'undefined') {
+    if (!isEditing && typeof window !== 'undefined') {
       if (data.category_id) localStorage.setItem('lastCategory', data.category_id)
       if (data.payment_method_id) localStorage.setItem('lastPaymentMethod', data.payment_method_id)
     }
 
     haptic('medium')
-    toast.success('Transaction saved!')
+    toast.success(isEditing ? 'Transaction updated!' : 'Transaction saved!')
     onSuccess(saved)
 
-    const currentDate = data.date
-    const currentPaymentMethod = data.payment_method_id
-    reset({
-      type: 'expense',
-      date: currentDate,
-      amount: '',
-      description: '',
-      payment_method_id: currentPaymentMethod,
-    })
+    if (!isEditing) {
+      const currentDate = data.date
+      const currentPaymentMethod = data.payment_method_id
+      reset({
+        type: 'expense',
+        date: currentDate,
+        amount: '',
+        description: '',
+        payment_method_id: currentPaymentMethod,
+      })
+    }
     onClose()
   }
 
@@ -165,15 +214,20 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
       type="submit"
       form="add-transaction-form"
       disabled={isSubmitting}
-      className="w-full text-white rounded-[14px] py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
+      className="w-full text-white rounded-button py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
       style={{ backgroundColor: 'var(--color-income-base)' }}
     >
-      {isSubmitting ? 'Saving...' : 'Save Transaction'}
+      {isSubmitting ? 'Saving...' : isEditing ? 'Update Transaction' : 'Save Transaction'}
     </button>
   )
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Transaction" footer={submitButton}>
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
+      footer={submitButton}
+    >
       <form id="add-transaction-form" onSubmit={handleSubmit(onSubmit)} className="px-4 pb-2 sm:px-6 space-y-4">
         {/* Type Toggle */}
         <div
