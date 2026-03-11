@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, ArrowRightLeft } from 'lucide-react'
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, ArrowRightLeft, AlertTriangle, Lightbulb } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -33,6 +33,7 @@ interface CategoryTotal {
   icon: string
   color: string
   total: number
+  budget?: number
 }
 
 interface ExchangeRateInfo {
@@ -50,6 +51,8 @@ const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [budgetMap, setBudgetMap] = useState<Record<string, number>>({})
+  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; income: number; expense: number; savings: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -71,15 +74,47 @@ export default function DashboardPage() {
       setUserName(getDisplayName(profile.email, profile.display_name))
       setAvatarUrl(profile.avatar_url)
 
-      const { data } = await supabase
-        .from('transactions')
-        .select('*, categories(name, icon, color)')
-        .eq('user_id', user.id)
-        .gte('date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('date', format(monthEnd, 'yyyy-MM-dd'))
-        .order('date', { ascending: false })
+      const today = new Date()
+      const [{ data }, { data: buds }, { data: historical }] = await Promise.all([
+        supabase
+          .from('transactions')
+          .select('*, categories(name, icon, color)')
+          .eq('user_id', user.id)
+          .gte('date', format(monthStart, 'yyyy-MM-dd'))
+          .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+          .order('date', { ascending: false }),
+        supabase
+          .from('budgets')
+          .select('category_id, amount_krw')
+          .eq('user_id', user.id),
+        supabase
+          .from('transactions')
+          .select('date, type, amount_krw')
+          .eq('user_id', user.id)
+          .gte('date', format(startOfMonth(subMonths(today, 5)), 'yyyy-MM-dd'))
+          .lte('date', format(endOfMonth(today), 'yyyy-MM-dd')),
+      ])
 
       setTransactions((data as Transaction[]) || [])
+      if (buds) {
+        const map: Record<string, number> = {}
+        buds.forEach((b: { category_id: string; amount_krw: number }) => {
+          map[b.category_id] = b.amount_krw
+        })
+        setBudgetMap(map)
+      }
+      if (historical) {
+        const months = []
+        for (let i = 5; i >= 0; i--) {
+          const m = subMonths(today, i)
+          const prefix = format(m, 'yyyy-MM')
+          const txns = (historical as { date: string; type: string; amount_krw: number }[]).filter(t => t.date.startsWith(prefix))
+          const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+          const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+          months.push({ month: format(m, 'MMM'), income, expense, savings: income - expense })
+        }
+        setMonthlyChartData(months)
+      }
     } catch (err) {
       console.error(err)
     } finally {
@@ -119,9 +154,7 @@ export default function DashboardPage() {
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
   const balance = totalIncome - totalExpense
 
-  const totalIncomeUSD = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_usd, 0)
-  const totalExpenseUSD = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_usd, 0)
-  const balanceUSD = totalIncomeUSD - totalExpenseUSD
+  const liveRate = exchangeRateInfo?.rate || 1300
 
   // Category breakdown for pie chart
   const categoryTotals: CategoryTotal[] = []
@@ -133,10 +166,13 @@ export default function DashboardPage() {
       if (existing) {
         existing.total += t.amount_krw
       } else {
-        categoryTotals.push({ name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw })
+        const budget = t.category_id ? budgetMap[t.category_id] : undefined
+        categoryTotals.push({ name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget })
       }
     })
   categoryTotals.sort((a, b) => b.total - a.total)
+
+  const budgetedCategories = categoryTotals.filter(c => c.budget && c.budget > 0)
 
   // Daily spending trend
   const dailyData: { day: string; expense: number; income: number }[] = []
@@ -151,19 +187,8 @@ export default function DashboardPage() {
     })
   }
 
-  // Last 6 months bar chart
-  const monthlyData = []
-  for (let i = 5; i >= 0; i--) {
-    const m = subMonths(currentDate, i)
-    monthlyData.push({
-      month: format(m, 'MMM'),
-      income: 0,
-      expense: 0,
-    })
-  }
-
-  const fmt = (amount: number, usd: number) =>
-    showUSD ? formatUSD(usd) : formatKRW(amount)
+  const fmt = (amount: number) =>
+    showUSD ? formatUSD(amount / liveRate) : formatKRW(amount)
 
   const formattedExchangeRate = exchangeRateInfo
     ? new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(exchangeRateInfo.rate)
@@ -172,7 +197,7 @@ export default function DashboardPage() {
   const summaryCards = [
     {
       label: 'Income',
-      amount: fmt(totalIncome, totalIncomeUSD),
+      amount: fmt(totalIncome),
       icon: TrendingUp,
       color: '#10b981',
       glassClass: 'glass-income',
@@ -180,7 +205,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Expense',
-      amount: fmt(totalExpense, totalExpenseUSD),
+      amount: fmt(totalExpense),
       icon: TrendingDown,
       color: '#ef4444',
       glassClass: 'glass-expense',
@@ -188,7 +213,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Balance',
-      amount: fmt(balance, balanceUSD),
+      amount: fmt(balance),
       icon: DollarSign,
       color: balance >= 0 ? '#10b981' : '#ef4444',
       glassClass: 'glass-balance',
@@ -349,6 +374,144 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* Spending Insights */}
+      {!loading && categoryTotals.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[20px] p-5 mb-6"
+          style={{ backgroundColor: 'var(--color-card-base)' }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(245,158,11,0.15)' }}
+            >
+              <Lightbulb className="w-4 h-4" style={{ color: 'var(--color-warning-base)' }} />
+            </div>
+            <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Spending Insights</h3>
+          </div>
+
+          {/* Warning alert if overspending */}
+          {totalIncome > 0 && (totalExpense / totalIncome) > 0.7 && (
+            <div
+              className="flex items-start gap-3 rounded-[12px] p-3 mb-4"
+              style={{ backgroundColor: (totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', border: `1px solid ${(totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}` }}
+            >
+              <AlertTriangle
+                className="w-4 h-4 mt-0.5 shrink-0"
+                style={{ color: (totalExpense / totalIncome) > 1 ? 'var(--color-expense-base)' : 'var(--color-warning-base)' }}
+              />
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
+                {(totalExpense / totalIncome) > 1
+                  ? `You've exceeded your income by ${formatKRW(totalExpense - totalIncome)} this month.`
+                  : `You've used ${Math.round((totalExpense / totalIncome) * 100)}% of your income. Watch your spending.`}
+              </p>
+            </div>
+          )}
+
+          {/* Top spending categories */}
+          <div className="space-y-3">
+            {categoryTotals.slice(0, 3).map((cat, index) => {
+              const pct = totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0
+              const isTop = index === 0
+              return (
+                <div key={cat.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base leading-none">{cat.icon}</span>
+                      <span className="text-sm font-medium truncate" style={{ color: isTop ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+                        {cat.name}
+                      </span>
+                      {isTop && (
+                        <span
+                          className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold shrink-0"
+                          style={{ backgroundColor: 'rgba(239,68,68,0.12)', color: 'var(--color-expense-base)' }}
+                        >
+                          TOP
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{Math.round(pct)}%</span>
+                      <span className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                        {fmt(cat.total)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.6, ease: 'easeOut', delay: index * 0.1 }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: cat.color || '#3b82f6' }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Budget Progress */}
+      {!loading && budgetedCategories.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[20px] p-5 mb-6"
+          style={{ backgroundColor: 'var(--color-card-base)' }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Monthly Budgets</h3>
+            <a href="/settings" className="text-xs" style={{ color: 'var(--color-accent-base)' }}>Edit</a>
+          </div>
+          <div className="space-y-4">
+            {budgetedCategories.map(cat => {
+              const pct = Math.min((cat.total / cat.budget!) * 100, 100)
+              const over = cat.total > cat.budget!
+              const warn = pct >= 80
+              const barColor = over ? 'var(--color-expense-base)' : warn ? 'var(--color-warning-base)' : 'var(--color-income-base)'
+              return (
+                <div key={cat.name}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base leading-none">{cat.icon}</span>
+                      <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>
+                        {cat.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <span className="text-xs font-semibold" style={{ color: barColor }}>
+                        {fmt(cat.total)}
+                      </span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                        / {fmt(cat.budget!)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.7, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: barColor }}
+                    />
+                  </div>
+                  {over && (
+                    <p className="text-[11px] mt-1" style={{ color: 'var(--color-expense-base)' }}>
+                      Over by {fmt(cat.total - cat.budget!)}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
       {/* Daily Trend Chart */}
       {!loading && dailyData.some(d => d.expense > 0 || d.income > 0) && (
         <motion.div
@@ -392,6 +555,73 @@ export default function DashboardPage() {
               <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#incomeGrad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
+        </motion.div>
+      )}
+
+      {/* 6-Month Overview */}
+      {!loading && monthlyChartData.some(m => m.income > 0 || m.expense > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-[20px] p-5 mb-6"
+          style={{ backgroundColor: 'var(--color-card-base)' }}
+        >
+          <h3 className="font-semibold mb-0.5" style={{ color: 'var(--color-text-primary)' }}>6-Month Overview</h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--color-text-secondary)' }}>Income vs Expenses</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={monthlyChartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }} barGap={3}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-base)" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tick={{ fontSize: 11, fill: 'var(--color-text-secondary)' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) =>
+                  v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M`
+                  : v >= 1_000 ? `${(v / 1_000).toFixed(0)}K`
+                  : String(v)
+                }
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'var(--color-card-elevated-base)',
+                  border: '1px solid var(--color-border-base)',
+                  borderRadius: '12px',
+                  color: 'var(--color-text-primary)',
+                  fontSize: '12px',
+                }}
+                formatter={(value: number, name: string) => [formatKRW(value), name === 'income' ? 'Income' : 'Expense']}
+              />
+              <Legend
+                formatter={(value: string) => value === 'income' ? 'Income' : 'Expense'}
+                wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
+              />
+              <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={26} />
+              <Bar dataKey="expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={26} />
+            </BarChart>
+          </ResponsiveContainer>
+          {/* This month savings pill */}
+          {(() => {
+            const last = monthlyChartData[monthlyChartData.length - 1]
+            if (!last) return null
+            const positive = last.savings >= 0
+            return (
+              <div
+                className="mt-3 flex items-center justify-between rounded-[10px] px-3 py-2"
+                style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+              >
+                <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>This month saved</span>
+                <span className="text-sm font-semibold" style={{ color: positive ? 'var(--color-income-base)' : 'var(--color-expense-base)' }}>
+                  {positive ? '+' : ''}{formatKRW(last.savings)}
+                </span>
+              </div>
+            )
+          })()}
         </motion.div>
       )}
 
@@ -497,7 +727,7 @@ export default function DashboardPage() {
                   className="text-sm font-semibold"
                   style={{ color: t.type === 'income' ? 'var(--color-income-base)' : 'var(--color-expense-base)' }}
                 >
-                  {t.type === 'income' ? '+' : '-'}{showUSD ? formatUSD(t.amount_usd) : formatKRW(t.amount_krw)}
+                  {t.type === 'income' ? '+' : '-'}{showUSD ? formatUSD(t.amount_krw / liveRate) : formatKRW(t.amount_krw)}
                 </p>
               </div>
             </div>

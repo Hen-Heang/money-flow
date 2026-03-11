@@ -14,12 +14,13 @@ interface BottomSheetProps {
 
 export default function BottomSheet({ isOpen, onClose, children, title, footer }: BottomSheetProps) {
   const [keyboardHeight, setKeyboardHeight] = useState(0)
-  const [isDesktop, setIsDesktop] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(
+    () => (typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : false)
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const mq = window.matchMedia('(min-width: 768px)')
-    setIsDesktop(mq.matches)
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
