@@ -2,16 +2,29 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface BottomSheetProps {
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
   title?: string
+  footer?: React.ReactNode
 }
 
-export default function BottomSheet({ isOpen, onClose, children, title }: BottomSheetProps) {
+export default function BottomSheet({ isOpen, onClose, children, title, footer }: BottomSheetProps) {
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 768px)')
+    setIsDesktop(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -19,6 +32,25 @@ export default function BottomSheet({ isOpen, onClose, children, title }: Bottom
       document.body.style.overflow = ''
     }
     return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || typeof window === 'undefined') return
+    const vv = window.visualViewport
+    if (!vv) return
+
+    const handleChange = () => {
+      const offset = window.innerHeight - vv.height - vv.offsetTop
+      setKeyboardHeight(Math.max(0, offset))
+    }
+
+    vv.addEventListener('resize', handleChange)
+    vv.addEventListener('scroll', handleChange)
+    return () => {
+      vv.removeEventListener('resize', handleChange)
+      vv.removeEventListener('scroll', handleChange)
+      setKeyboardHeight(0)
+    }
   }, [isOpen])
 
   return (
@@ -44,14 +76,18 @@ export default function BottomSheet({ isOpen, onClose, children, title }: Bottom
             onDragEnd={(_, info) => {
               if (info.offset.y > 100) onClose()
             }}
-            className="fixed bottom-0 left-0 right-0 z-50 mx-auto flex flex-col"
+            className="fixed left-0 right-0 z-50 mx-auto flex flex-col"
             style={{
+              bottom: keyboardHeight > 0 ? keyboardHeight : isDesktop ? 0 : 80,
+              transition: 'bottom 0.25s ease-out',
               backgroundColor: 'var(--color-card-base)',
               borderRadius: '24px 24px 0 0',
               width: 'min(100%, 32rem)',
-              maxHeight: 'min(82dvh, 760px)',
+              maxHeight: keyboardHeight > 0
+                ? `calc(100dvh - ${keyboardHeight}px)`
+                : 'min(82dvh, 760px)',
               overflow: 'hidden',
-              paddingBottom: 'env(safe-area-inset-bottom, 16px)',
+              paddingBottom: keyboardHeight > 0 || !isDesktop ? '8px' : 'env(safe-area-inset-bottom, 16px)',
             }}
           >
             <div className="flex items-center justify-center py-3 flex-shrink-0">
@@ -71,6 +107,11 @@ export default function BottomSheet({ isOpen, onClose, children, title }: Bottom
             >
               {children}
             </div>
+            {footer && (
+              <div className="shrink-0 px-4 pb-2 pt-3" style={{ borderTop: '1px solid var(--color-border-base)' }}>
+                {footer}
+              </div>
+            )}
           </motion.div>
         </>
       )}

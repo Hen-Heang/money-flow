@@ -160,9 +160,21 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
     outline: 'none',
   }
 
+  const submitButton = (
+    <button
+      type="submit"
+      form="add-transaction-form"
+      disabled={isSubmitting}
+      className="w-full text-white rounded-[14px] py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
+      style={{ backgroundColor: 'var(--color-income-base)' }}
+    >
+      {isSubmitting ? 'Saving...' : 'Save Transaction'}
+    </button>
+  )
+
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Transaction">
-      <form onSubmit={handleSubmit(onSubmit)} className="px-4 pb-5 sm:px-6 sm:pb-6 space-y-4">
+    <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Transaction" footer={submitButton}>
+      <form id="add-transaction-form" onSubmit={handleSubmit(onSubmit)} className="px-4 pb-2 sm:px-6 space-y-4">
         {/* Type Toggle */}
         <div
           className="flex rounded-[12px] p-1"
@@ -277,14 +289,6 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess }: Prop
           style={inputStyle}
         />
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full text-white rounded-[14px] py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
-          style={{ backgroundColor: 'var(--color-income-base)' }}
-        >
-          {isSubmitting ? 'Saving...' : 'Save Transaction'}
-        </button>
       </form>
     </BottomSheet>
   )

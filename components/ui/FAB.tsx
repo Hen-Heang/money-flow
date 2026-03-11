@@ -14,7 +14,7 @@ export default function FAB({ onClick }: FABProps) {
       whileTap={{ scale: 0.9 }}
       whileHover={{ scale: 1.05 }}
       onClick={onClick}
-      className="fixed z-40 flex items-center justify-center"
+      className="fixed z-60 flex items-center justify-center"
       style={{
         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)',
         right: 'max(16px, env(safe-area-inset-right, 0px))',
