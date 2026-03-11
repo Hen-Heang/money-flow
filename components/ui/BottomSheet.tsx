@@ -78,7 +78,11 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
             }}
             className="fixed left-0 right-0 z-50 mx-auto flex flex-col"
             style={{
-              bottom: keyboardHeight > 0 ? keyboardHeight : isDesktop ? 0 : 80,
+              bottom: keyboardHeight > 0
+                ? keyboardHeight
+                : isDesktop
+                  ? 0
+                  : 'calc(80px + env(safe-area-inset-bottom, 0px))',
               transition: 'bottom 0.25s ease-out',
               backgroundColor: 'var(--color-card-base)',
               borderRadius: '24px 24px 0 0',
@@ -90,7 +94,7 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
               paddingBottom: keyboardHeight > 0 || !isDesktop ? '8px' : 'env(safe-area-inset-bottom, 16px)',
             }}
           >
-            <div className="flex items-center justify-center py-3 flex-shrink-0">
+            <div className="flex items-center justify-center py-3 shrink-0">
               <div
                 className="w-10 rounded-full"
                 style={{ height: '5px', backgroundColor: 'var(--color-text-secondary)', opacity: 0.5 }}
