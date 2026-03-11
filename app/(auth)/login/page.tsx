@@ -6,10 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase'
 import { ensureUserProfile } from '@/lib/profile'
+import Logo from '@/components/ui/Logo'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, TrendingUp } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 
 
 const schema = z.object({
@@ -74,12 +75,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <div
-            className="w-20 h-20 rounded-[22px] flex items-center justify-center shadow-lg mb-4"
-            style={{ backgroundColor: 'var(--color-income-base)' }}
-          >
-            <TrendingUp className="w-10 h-10 text-white" />
-          </div>
+          <Logo size={92} className="mb-4 drop-shadow-[0_16px_34px_rgba(16,185,129,0.2)]" />
           <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Money Flow</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>Track your finances beautifully</p>
         </div>
