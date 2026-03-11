@@ -548,7 +548,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      <FAB onClick={() => setShowAddSheet(true)} />
+      {!showAddSheet && <FAB onClick={() => setShowAddSheet(true)} />}
       <AddTransactionSheet
         isOpen={showAddSheet}
         onClose={() => setShowAddSheet(false)}
