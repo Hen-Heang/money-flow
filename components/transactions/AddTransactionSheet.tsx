@@ -285,74 +285,70 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
           ))}
         </div>
 
-        {/* Currency Toggle */}
-        <Controller
-          name="currency"
-          control={control}
-          render={({ field }) => (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Currency</span>
-              <div
-                className="flex rounded-[10px] p-0.5 ml-auto"
-                style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
-              >
-                {(['KRW', 'USD'] as const).map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => { field.onChange(c); setValue('amount', ''); haptic('light') }}
-                    className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                    style={{
-                      backgroundColor: field.value === c ? 'var(--color-accent-base)' : 'transparent',
-                      color: field.value === c ? 'white' : 'var(--color-text-secondary)',
-                    }}
-                  >
-                    {c === 'KRW' ? '🇰🇷 KRW' : '🇺🇸 USD'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        />
-
-        {/* Amount */}
+        {/* Amount with inline Currency Toggle */}
         <div>
-          <div className="relative">
-            <span
-              className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-lg"
-              style={{ color: 'var(--color-text-secondary)' }}
-            >
-              {currency === 'USD' ? '$' : '₩'}
-            </span>
-            <input
-              {...register('amount')}
-              ref={(e) => {
-                register('amount').ref(e)
-                amountInputRef.current = e
-              }}
-              inputMode="decimal"
-              placeholder="0"
-              style={{
-                ...inputStyle,
-                paddingLeft: '40px',
-                fontSize: 'clamp(22px, 6vw, 28px)',
-                fontWeight: 'bold',
-              }}
-              onChange={(e) => {
-                const raw = e.target.value.replace(/,/g, '')
-                const num = parseFloat(raw)
-                if (currency === 'KRW') {
-                  if (!isNaN(num)) {
-                    setValue('amount', formatNumber(num))
-                  } else {
-                    setValue('amount', raw)
-                  }
-                } else {
-                  setValue('amount', raw)
-                }
-              }}
-            />
-          </div>
+          <Controller
+            name="currency"
+            control={control}
+            render={({ field: currencyField }) => (
+              <div className="relative">
+                <span
+                  className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-lg"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  {currency === 'USD' ? '$' : '₩'}
+                </span>
+                <input
+                  {...register('amount')}
+                  ref={(e) => {
+                    register('amount').ref(e)
+                    amountInputRef.current = e
+                  }}
+                  inputMode="decimal"
+                  placeholder="0"
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: '40px',
+                    paddingRight: '112px',
+                    fontSize: 'clamp(22px, 6vw, 28px)',
+                    fontWeight: 'bold',
+                  }}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/,/g, '')
+                    const num = parseFloat(raw)
+                    if (currency === 'KRW') {
+                      if (!isNaN(num)) {
+                        setValue('amount', formatNumber(num))
+                      } else {
+                        setValue('amount', raw)
+                      }
+                    } else {
+                      setValue('amount', raw)
+                    }
+                  }}
+                />
+                <div
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex rounded-lg p-0.5"
+                  style={{ backgroundColor: 'var(--color-card-base)' }}
+                >
+                  {(['KRW', 'USD'] as const).map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { currencyField.onChange(c); setValue('amount', ''); haptic('light') }}
+                      className="px-2.5 py-1 rounded-md text-xs font-semibold transition-all"
+                      style={{
+                        backgroundColor: currencyField.value === c ? 'var(--color-accent-base)' : 'transparent',
+                        color: currencyField.value === c ? 'white' : 'var(--color-text-secondary)',
+                      }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          />
           {convertedHint && amountNum > 0 && (
             <p className="text-xs mt-1.5 pl-1" style={{ color: 'var(--color-text-secondary)' }}>
               {convertedHint}
