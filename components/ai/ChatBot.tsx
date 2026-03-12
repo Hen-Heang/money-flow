@@ -376,6 +376,34 @@ export default function ChatBot() {
     }
   }, [isMobile, open])
 
+  useEffect(() => {
+    if (!open || !isMobile || typeof document === 'undefined') return
+
+    const body = document.body
+    const html = document.documentElement
+    const scrollY = window.scrollY
+    const previousBodyOverflow = body.style.overflow
+    const previousBodyPosition = body.style.position
+    const previousBodyTop = body.style.top
+    const previousBodyWidth = body.style.width
+    const previousHtmlOverflow = html.style.overflow
+
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    body.style.position = 'fixed'
+    body.style.top = `-${scrollY}px`
+    body.style.width = '100%'
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow
+      body.style.overflow = previousBodyOverflow
+      body.style.position = previousBodyPosition
+      body.style.top = previousBodyTop
+      body.style.width = previousBodyWidth
+      window.scrollTo(0, scrollY)
+    }
+  }, [isMobile, open])
+
   const showSuggestions = messages.length === 0 && !isLoading
   const hasMessages = messages.length > 0
   const lastMessage = messages[messages.length - 1]
