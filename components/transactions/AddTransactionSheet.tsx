@@ -6,9 +6,39 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import { formatNumber, haptic } from '@/lib/utils'
 import BottomSheet from '@/components/ui/BottomSheet'
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+  return isMobile
+}
+
+function useKeyboardOffset() {
+  const [offset, setOffset] = useState(0)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => setOffset(Math.max(0, window.innerHeight - vv.height))
+    update()
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
+  }, [])
+  return offset
+}
 
 const schema = z.object({
   type: z.enum(['income', 'expense']),
@@ -67,9 +97,13 @@ export default function AddTransactionSheet({
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [exchangeRate, setExchangeRate] = useState(1300)
+  const [canDrag, setCanDrag] = useState(true)
   const amountInputRef = useRef<HTMLInputElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const isEditing = !!editTransaction
+  const isMobile = useIsMobile()
+  const keyboardOffset = useKeyboardOffset()
 
   const {
     register,
@@ -101,6 +135,25 @@ export default function AddTransactionSheet({
       : amountNum > 0
         ? `Approx. USD ${(amountNum / activeExchangeRate).toFixed(2)}`
         : ''
+
+  // Body scroll lock for mobile
+  useEffect(() => {
+    if (!isOpen || !isMobile || typeof document === 'undefined') return
+    const scrollY = window.scrollY
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.width = '100%'
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [isOpen, isMobile])
 
   useEffect(() => {
     if (!isOpen) return
@@ -269,6 +322,214 @@ export default function AddTransactionSheet({
     color: 'var(--color-text-secondary)',
   }
 
+  const formContent = (
+    <form
+      id="add-transaction-form"
+      onSubmit={handleSubmit(onSubmit)}
+      className="space-y-5 px-4 pb-6 sm:px-6"
+    >
+      <div
+        className="flex rounded-xl p-1"
+        style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+      >
+        {(['expense', 'income'] as const).map((option) => (
+          <Controller
+            key={option}
+            name="type"
+            control={control}
+            render={({ field }) => (
+              <button
+                type="button"
+                onClick={() => {
+                  field.onChange(option)
+                  haptic('light')
+                }}
+                className="flex-1 rounded-[10px] py-3 text-sm font-semibold transition-all"
+                style={{
+                  backgroundColor:
+                    field.value === option
+                      ? option === 'expense'
+                        ? 'var(--color-expense-base)'
+                        : 'var(--color-income-base)'
+                      : 'transparent',
+                  color: field.value === option ? 'white' : 'var(--color-text-secondary)',
+                }}
+              >
+                {option === 'expense' ? 'Expense' : 'Income'}
+              </button>
+            )}
+          />
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <p style={sectionLabelStyle}>Core Details</p>
+
+        <div>
+          <Controller
+            name="currency"
+            control={control}
+            render={({ field: currencyField }) => (
+              <div className="relative">
+                <span
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                >
+                  {currency === 'USD' ? '$' : 'KRW'}
+                </span>
+                <input
+                  {...register('amount')}
+                  ref={(element) => {
+                    register('amount').ref(element)
+                    amountInputRef.current = element
+                  }}
+                  inputMode="decimal"
+                  placeholder="0"
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: currency === 'USD' ? '40px' : '58px',
+                    paddingRight: '112px',
+                    fontSize: 'clamp(22px, 6vw, 28px)',
+                    fontWeight: 'bold',
+                  }}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/,/g, '')
+                    const num = parseFloat(raw)
+                    if (currency === 'KRW') {
+                      if (!isNaN(num)) {
+                        setValue('amount', formatNumber(num))
+                      } else {
+                        setValue('amount', raw)
+                      }
+                    } else {
+                      setValue('amount', raw)
+                    }
+                  }}
+                />
+                <div
+                  className="absolute right-2 top-1/2 flex -translate-y-1/2 rounded-lg p-0.5"
+                  style={{ backgroundColor: 'var(--color-card-base)' }}
+                >
+                  {(['KRW', 'USD'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        currencyField.onChange(option)
+                        setValue('amount', '')
+                        haptic('light')
+                      }}
+                      className="rounded-md px-2.5 py-1 text-xs font-semibold transition-all"
+                      style={{
+                        backgroundColor:
+                          currencyField.value === option
+                            ? 'var(--color-accent-base)'
+                            : 'transparent',
+                        color:
+                          currencyField.value === option ? 'white' : 'var(--color-text-secondary)',
+                      }}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          />
+          {convertedHint && amountNum > 0 && (
+            <p className="mt-1.5 pl-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+              {convertedHint}
+            </p>
+          )}
+          {errors.amount && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
+              {errors.amount.message}
+            </p>
+          )}
+        </div>
+
+        {filteredCategories.length > 0 && (
+          <div>
+            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+              Category
+            </p>
+            <select {...register('category_id')} style={inputStyle}>
+              <option value="">Select category</option>
+              {filteredCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.icon} {category.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {paymentMethods.length > 0 && (
+          <div>
+            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+              Payment Method
+            </p>
+            <select {...register('payment_method_id')} style={inputStyle}>
+              <option value="">Select payment method</option>
+              {paymentMethods.map((method) => (
+                <option key={method.id} value={method.id}>
+                  {method.icon} {method.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <p style={sectionLabelStyle}>When</p>
+
+        <div>
+          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+            Date
+          </p>
+          <input
+            {...register('date')}
+            type="date"
+            style={{ ...inputStyle, padding: '12px 16px', fontSize: '15px' }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p style={sectionLabelStyle}>Details</p>
+
+        <div>
+          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+            Description
+          </p>
+          <input
+            {...register('description')}
+            placeholder="What was this for?"
+            style={inputStyle}
+          />
+          {errors.description && (
+            <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
+              {errors.description.message}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+            Note
+          </p>
+          <textarea
+            {...register('note')}
+            placeholder="Optional note"
+            rows={2}
+            style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
+          />
+        </div>
+      </div>
+    </form>
+  )
+
   const submitButton = (
     <button
       type="submit"
@@ -281,218 +542,116 @@ export default function AddTransactionSheet({
     </button>
   )
 
-  return (
-    <BottomSheet
-      isOpen={isOpen}
-      onClose={onClose}
-      title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
-      footer={submitButton}
-    >
-      <form
-        id="add-transaction-form"
-        onSubmit={handleSubmit(onSubmit)}
-        className="space-y-5 px-4 pb-6 sm:px-6"
+  // Desktop: use BottomSheet as before
+  if (!isMobile) {
+    return (
+      <BottomSheet
+        isOpen={isOpen}
+        onClose={onClose}
+        title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
+        footer={submitButton}
       >
-        <div
-          className="flex rounded-xl p-1"
-          style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
-        >
-          {(['expense', 'income'] as const).map((option) => (
-            <Controller
-              key={option}
-              name="type"
-              control={control}
-              render={({ field }) => (
-                <button
-                  type="button"
-                  onClick={() => {
-                    field.onChange(option)
-                    haptic('light')
-                  }}
-                  className="flex-1 rounded-[10px] py-3 text-sm font-semibold transition-all"
-                  style={{
-                    backgroundColor:
-                      field.value === option
-                        ? option === 'expense'
-                          ? 'var(--color-expense-base)'
-                          : 'var(--color-income-base)'
-                        : 'transparent',
-                    color: field.value === option ? 'white' : 'var(--color-text-secondary)',
-                  }}
-                >
-                  {option === 'expense' ? 'Expense' : 'Income'}
-                </button>
-              )}
-            />
-          ))}
-        </div>
+        {formContent}
+      </BottomSheet>
+    )
+  }
 
-        <div className="space-y-3">
-          <p style={sectionLabelStyle}>Core Details</p>
-
-          <div>
-            <Controller
-              name="currency"
-              control={control}
-              render={({ field: currencyField }) => (
-                <div className="relative">
-                  <span
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold"
-                    style={{ color: 'var(--color-text-secondary)' }}
-                  >
-                    {currency === 'USD' ? '$' : 'KRW'}
-                  </span>
-                  <input
-                    {...register('amount')}
-                    ref={(element) => {
-                      register('amount').ref(element)
-                      amountInputRef.current = element
-                    }}
-                    inputMode="decimal"
-                    placeholder="0"
-                    style={{
-                      ...inputStyle,
-                      paddingLeft: currency === 'USD' ? '40px' : '58px',
-                      paddingRight: '112px',
-                      fontSize: 'clamp(22px, 6vw, 28px)',
-                      fontWeight: 'bold',
-                    }}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/,/g, '')
-                      const num = parseFloat(raw)
-                      if (currency === 'KRW') {
-                        if (!isNaN(num)) {
-                          setValue('amount', formatNumber(num))
-                        } else {
-                          setValue('amount', raw)
-                        }
-                      } else {
-                        setValue('amount', raw)
-                      }
-                    }}
-                  />
-                  <div
-                    className="absolute right-2 top-1/2 flex -translate-y-1/2 rounded-lg p-0.5"
-                    style={{ backgroundColor: 'var(--color-card-base)' }}
-                  >
-                    {(['KRW', 'USD'] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          currencyField.onChange(option)
-                          setValue('amount', '')
-                          haptic('light')
-                        }}
-                        className="rounded-md px-2.5 py-1 text-xs font-semibold transition-all"
-                        style={{
-                          backgroundColor:
-                            currencyField.value === option
-                              ? 'var(--color-accent-base)'
-                              : 'transparent',
-                          color:
-                            currencyField.value === option ? 'white' : 'var(--color-text-secondary)',
-                        }}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            />
-            {convertedHint && amountNum > 0 && (
-              <p className="mt-1.5 pl-1 text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                {convertedHint}
-              </p>
-            )}
-            {errors.amount && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
-                {errors.amount.message}
-              </p>
-            )}
-          </div>
-
-          {filteredCategories.length > 0 && (
-            <div>
-              <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-                Category
-              </p>
-              <select {...register('category_id')} style={inputStyle}>
-                <option value="">Select category</option>
-                {filteredCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.icon} {category.name}
-                  </option>
-                ))}
-              </select>
+  // Mobile: full-screen slide-up panel (same pattern as ChatBot)
+  const mobilePanel = (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-90"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            onClick={onClose}
+          />
+          <motion.div
+            key="panel"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 32, stiffness: 280 }}
+            drag={canDrag ? 'y' : false}
+            dragConstraints={{ top: 0 }}
+            dragElastic={{ top: 0, bottom: 0.25 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 80) onClose()
+            }}
+            className="fixed inset-0 z-100 flex flex-col overflow-hidden"
+            style={{
+              background: 'var(--color-card-base)',
+              willChange: 'transform',
+            }}
+          >
+            {/* Drag handle */}
+            <div
+              className="flex shrink-0 justify-center pb-1 pt-3"
+              style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}
+            >
+              <div
+                className="h-1 w-9 rounded-full"
+                style={{ background: 'var(--color-border-base)', opacity: 0.7 }}
+              />
             </div>
-          )}
 
-          {paymentMethods.length > 0 && (
-            <div>
-              <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-                Payment Method
-              </p>
-              <select {...register('payment_method_id')} style={inputStyle}>
-                <option value="">Select payment method</option>
-                {paymentMethods.map((method) => (
-                  <option key={method.id} value={method.id}>
-                    {method.icon} {method.name}
-                  </option>
-                ))}
-              </select>
+            {/* Header */}
+            <div
+              className="flex shrink-0 items-center justify-between px-4 pb-4 pt-1"
+              style={{ borderBottom: '1px solid var(--color-border-base)' }}
+            >
+              <h2
+                className="text-xl font-semibold"
+                style={{ color: 'var(--color-text-primary)' }}
+              >
+                {isEditing ? 'Edit Transaction' : 'Add Transaction'}
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-          )}
-        </div>
 
-        <div className="space-y-3">
-          <p style={sectionLabelStyle}>When</p>
+            {/* Scrollable content */}
+            <div
+              ref={scrollRef}
+              className="min-h-0 flex-1 overflow-y-auto pt-4"
+              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              onScroll={() => {
+                const el = scrollRef.current
+                setCanDrag(!el || el.scrollTop === 0)
+              }}
+            >
+              {formContent}
+            </div>
 
-          <div>
-            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-              Date
-            </p>
-            <input
-              {...register('date')}
-              type="date"
-              style={{ ...inputStyle, padding: '12px 16px', fontSize: '15px' }}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <p style={sectionLabelStyle}>Details</p>
-
-          <div>
-            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-              Description
-            </p>
-            <input
-              {...register('description')}
-              placeholder="What was this for?"
-              style={inputStyle}
-            />
-            {errors.description && (
-              <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
-                {errors.description.message}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-              Note
-            </p>
-            <textarea
-              {...register('note')}
-              placeholder="Optional note"
-              rows={2}
-              style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
-            />
-          </div>
-        </div>
-      </form>
-    </BottomSheet>
+            {/* Footer */}
+            <div
+              className="shrink-0 px-4 pt-3"
+              style={{
+                borderTop: '1px solid var(--color-border-base)',
+                paddingBottom:
+                  keyboardOffset > 0
+                    ? `${keyboardOffset + 8}px`
+                    : 'max(20px, env(safe-area-inset-bottom, 20px))',
+              }}
+            >
+              {submitButton}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   )
+
+  return typeof document !== 'undefined' ? createPortal(mobilePanel, document.body) : null
 }
