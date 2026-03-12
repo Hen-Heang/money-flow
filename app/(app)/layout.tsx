@@ -19,14 +19,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64">
         <div
-          className="sticky top-0 z-30 px-4 pb-1.5 pt-2 md:px-6 md:pb-2 md:pt-3 lg:px-8"
-          style={{
-            paddingTop: 'max(8px, calc(env(safe-area-inset-top, 0px) + 8px))',
-            background:
-              'linear-gradient(180deg, var(--color-bg) 40%, color-mix(in srgb, var(--color-bg) 80%, transparent), transparent)',
-          }}
+          className="pointer-events-none absolute right-0 top-0 z-30 px-4 md:px-6 lg:px-8"
+          style={{ paddingTop: 'max(8px, calc(env(safe-area-inset-top, 0px) + 8px))' }}
         >
-          <div className="flex justify-end">
+          <div className="pointer-events-auto flex justify-end">
             <ChatBot />
           </div>
         </div>
