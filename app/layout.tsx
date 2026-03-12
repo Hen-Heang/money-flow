@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: 'Money Flow',
   description: 'Personal finance tracker',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+  },
 }
 
 export const viewport: Viewport = {
