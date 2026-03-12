@@ -314,7 +314,7 @@ export default function TransactionsPage() {
     <div className="max-w-2xl mx-auto overflow-x-hidden">
       {/* Header */}
       <div
-        className="sticky top-0 z-20 pl-4 pr-16 pt-4 pb-4 md:px-4"
+        className="sticky top-0 z-20 px-4 pt-4 pb-4"
         style={{
           backgroundColor: 'color-mix(in srgb, var(--color-bg) 92%, transparent)',
           backdropFilter: 'blur(14px)',

@@ -1,5 +1,4 @@
 import React from 'react'
-import ChatBot from '@/components/ai/ChatBot'
 import Sidebar from '@/components/layout/Sidebar'
 import TabBar from '@/components/layout/TabBar'
 
@@ -18,15 +17,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64">
-        <div
-          className="pointer-events-none absolute right-0 top-0 z-30 px-4 md:px-6 lg:px-8"
-          style={{ paddingTop: 'max(8px, calc(env(safe-area-inset-top, 0px) + 8px))' }}
-        >
-          <div className="pointer-events-auto flex justify-end">
-            <ChatBot />
-          </div>
-        </div>
-
         <main
           className="relative min-h-screen flex-1 px-0 md:px-2 lg:px-4"
           style={{
