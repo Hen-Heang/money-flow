@@ -20,28 +20,22 @@ function useIsMobile() {
   return isMobile
 }
 
-function useVisualViewportHeight() {
-  const [height, setHeight] = useState<number | null>(null)
+function useKeyboardOffset() {
+  const [offset, setOffset] = useState(0)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    const vv = window.visualViewport
+    if (!vv) return
 
-    const viewport = window.visualViewport
-    if (!viewport) return
-
-    const update = () => setHeight(Math.round(viewport.height))
+    const update = () => setOffset(Math.max(0, window.innerHeight - vv.height))
 
     update()
-    viewport.addEventListener('resize', update)
-    viewport.addEventListener('scroll', update)
-
-    return () => {
-      viewport.removeEventListener('resize', update)
-      viewport.removeEventListener('scroll', update)
-    }
+    vv.addEventListener('resize', update)
+    return () => vv.removeEventListener('resize', update)
   }, [])
 
-  return height
+  return offset
 }
 
 interface Message {
@@ -308,7 +302,7 @@ export default function ChatBot() {
   const [open, setOpen] = useState(false)
   const [panelTop, setPanelTop] = useState(72)
   const isMobile = useIsMobile()
-  const viewportHeight = useVisualViewportHeight()
+  const keyboardOffset = useKeyboardOffset()
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -454,7 +448,6 @@ export default function ChatBot() {
             style={
               isMobile
                 ? {
-                    height: viewportHeight ? `${viewportHeight}px` : '100dvh',
                     background: 'var(--color-card-base)',
                     willChange: 'transform',
                   }
@@ -688,9 +681,11 @@ export default function ChatBot() {
               className="shrink-0 px-4 pt-2.5 sm:pt-3"
               style={{
                 borderTop: '1px solid var(--color-border-base)',
-                paddingBottom: isMobile
-                  ? 'max(20px, env(safe-area-inset-bottom, 20px))'
-                  : 'max(16px, env(safe-area-inset-bottom, 16px))',
+                paddingBottom: isMobile && keyboardOffset > 0
+                  ? `${keyboardOffset + 8}px`
+                  : isMobile
+                    ? 'max(20px, env(safe-area-inset-bottom, 20px))'
+                    : 'max(16px, env(safe-area-inset-bottom, 16px))',
               }}
             >
               <form onSubmit={handleSubmit} className="flex items-center gap-2">
