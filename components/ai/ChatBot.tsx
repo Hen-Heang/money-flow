@@ -1,0 +1,695 @@
+'use client'
+
+import { AnimatePresence, motion } from 'framer-motion'
+import { Bot, ChevronRight, RotateCcw, Send, Sparkles, Trash2, User, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  )
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  return isMobile
+}
+
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  error?: boolean
+}
+
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
+
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>
+    }
+
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i}>{part.slice(1, -1)}</em>
+    }
+
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return (
+        <code
+          key={i}
+          className="rounded px-1 py-0.5 font-mono text-xs"
+          style={{ background: 'var(--color-border-base)', color: 'var(--color-income-base)' }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      )
+    }
+
+    return part
+  })
+}
+
+function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
+  if (isUser) return <span>{text}</span>
+
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+
+    if (/^[-*•]\s/.test(line)) {
+      const bullets: string[] = []
+      while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
+        bullets.push(lines[i].replace(/^[-*•]\s/, ''))
+        i++
+      }
+
+      elements.push(
+        <ul key={`ul-${i}`} className="my-1 space-y-1 pl-1">
+          {bullets.map((bullet, index) => (
+            <li key={index} className="flex gap-2">
+              <span
+                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: 'var(--color-accent-base)' }}
+              />
+              <span>{renderInline(bullet)}</span>
+            </li>
+          ))}
+        </ul>,
+      )
+      continue
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\.\s/, ''))
+        i++
+      }
+
+      elements.push(
+        <ol key={`ol-${i}`} className="my-1 list-decimal space-y-1 pl-5">
+          {items.map((item, index) => (
+            <li key={index}>{renderInline(item)}</li>
+          ))}
+        </ol>,
+      )
+      continue
+    }
+
+    if (/^#{1,3}\s/.test(line)) {
+      elements.push(
+        <p key={`h-${i}`} className="mt-2 font-semibold">
+          {renderInline(line.replace(/^#{1,3}\s/, ''))}
+        </p>,
+      )
+      i++
+      continue
+    }
+
+    elements.push(
+      <p key={`p-${i}`} className={i > 0 ? 'mt-1.5' : ''}>
+        {renderInline(line)}
+      </p>,
+    )
+    i++
+  }
+
+  return <div className="space-y-0.5 text-sm leading-6">{elements}</div>
+}
+
+function useStreamingChat(api: string) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const messagesRef = useRef<Message[]>([])
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  const append = useCallback(
+    async (userContent: string) => {
+      const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: userContent }
+      const assistantId = `a-${Date.now()}`
+      const assistantMsg: Message = { id: assistantId, role: 'assistant', content: '' }
+
+      const history = [...messagesRef.current, userMsg]
+      setMessages([...history, assistantMsg])
+      setIsLoading(true)
+
+      try {
+        const res = await fetch(api, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: history.map((m) => ({ role: m.role, content: m.content })),
+          }),
+        })
+
+        if (res.status === 401) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: 'Please sign in again to use the AI assistant.', error: true }
+                : m,
+            ),
+          )
+          return
+        }
+
+        if (!res.ok || !res.body) {
+          throw new Error('Request failed')
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value, { stream: true })
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + chunk } : m)),
+          )
+        }
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: 'Something went wrong. Tap retry to try again.', error: true }
+              : m,
+          ),
+        )
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [api],
+  )
+
+  const retry = useCallback(() => {
+    const msgs = messagesRef.current
+    const lastUserMsg = [...msgs].reverse().find((m) => m.role === 'user')
+    if (!lastUserMsg) return
+
+    const cleaned = msgs.filter((m) => !(m.role === 'assistant' && m.error))
+    setMessages(cleaned.filter((m) => m.id !== lastUserMsg.id))
+    append(lastUserMsg.content)
+  }, [append])
+
+  const clearMessages = useCallback(() => {
+    setMessages([])
+    setInput('')
+  }, [])
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault()
+      const text = input.trim()
+      if (!text || isLoading) return
+      setInput('')
+      append(text)
+    },
+    [append, input, isLoading],
+  )
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value)
+  }, [])
+
+  return { append, clearMessages, retry, handleInputChange, handleSubmit, input, isLoading, messages }
+}
+
+const SUGGESTIONS = [
+  'Summarize this month in 3 bullets',
+  'What category needs attention?',
+  'How can I save more next month?',
+  'Explain my recent spending pattern',
+]
+
+function AIBadge() {
+  return (
+    <div
+      className="relative h-10 w-10 shrink-0 overflow-hidden rounded-button"
+      style={{
+        background:
+          'linear-gradient(135deg, color-mix(in srgb, #8b5cf6 22%, var(--color-card-elevated-base)), color-mix(in srgb, #3b82f6 18%, var(--color-card-elevated-base)))',
+        border: '1px solid color-mix(in srgb, var(--color-border-base) 80%, #8b5cf6 20%)',
+        boxShadow: '0 10px 28px rgba(59,130,246,0.18)',
+      }}
+    >
+      <div
+        className="absolute inset-x-2 bottom-2 top-2 rounded-[10px]"
+        style={{
+          border: '2px solid transparent',
+          borderColor: 'rgba(168,85,247,0.9)',
+          borderTopColor: 'rgba(59,130,246,0.95)',
+          borderRightColor: 'rgba(59,130,246,0.95)',
+        }}
+      />
+      <div
+        className="absolute bottom-[7px] left-[11px] text-[19px] font-semibold tracking-[-0.08em]"
+        style={{
+          background: 'linear-gradient(135deg, #a855f7 0%, #3b82f6 100%)',
+          WebkitBackgroundClip: 'text',
+          color: 'transparent',
+        }}
+      >
+        Ai
+      </div>
+      <Sparkles className="absolute right-1 top-1 h-3.5 w-3.5" style={{ color: '#3b82f6' }} />
+    </div>
+  )
+}
+
+export default function ChatBot() {
+  const [open, setOpen] = useState(false)
+  const [panelTop, setPanelTop] = useState(72)
+  const isMobile = useIsMobile()
+  const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, append, clearMessages, retry } =
+    useStreamingChat('/api/chat')
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  useEffect(() => {
+    if (!open) return
+    const timeout = setTimeout(() => inputRef.current?.focus(), 180)
+    return () => clearTimeout(timeout)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node
+      const isInsideTrigger = rootRef.current?.contains(target)
+      const isInsidePanel = panelRef.current?.contains(target)
+
+      if (!isInsideTrigger && !isInsidePanel) {
+        setOpen(false)
+      }
+    }
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('touchstart', handlePointerDown, { passive: true })
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('touchstart', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open || isMobile) return
+
+    const updatePanelPosition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPanelTop(Math.round(rect.bottom + 12))
+    }
+
+    updatePanelPosition()
+    window.addEventListener('resize', updatePanelPosition)
+    window.addEventListener('scroll', updatePanelPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition)
+      window.removeEventListener('scroll', updatePanelPosition, true)
+    }
+  }, [isMobile, open])
+
+  const showSuggestions = messages.length === 0 && !isLoading
+  const hasMessages = messages.length > 0
+  const lastMessage = messages[messages.length - 1]
+  const showTyping = isLoading && lastMessage?.role === 'assistant' && lastMessage?.content === ''
+
+  const overlay = (
+    <>
+      <AnimatePresence>
+        {open && isMobile && (
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[90] bg-black/50"
+            style={{ WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            ref={panelRef}
+            key="panel"
+            initial={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -10, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className={`z-[100] flex flex-col overflow-hidden rounded-[24px] ${
+              isMobile ? 'fixed left-3 right-3' : 'fixed right-4 md:right-6 lg:right-8'
+            }`}
+            style={
+              isMobile
+                ? {
+                    top: 'calc(env(safe-area-inset-top, 0px) + 68px)',
+                    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 90px)',
+                    background: 'var(--color-card-base)',
+                    border: '1px solid var(--color-border-base)',
+                    boxShadow: '0 28px 80px rgba(2,6,23,0.52)',
+                  }
+                : {
+                    width: 'min(calc(100vw - 32px), 420px)',
+                    maxHeight: 'min(76vh, 680px)',
+                    top: `${panelTop}px`,
+                    background: 'var(--color-card-base)',
+                    border: '1px solid var(--color-border-base)',
+                    boxShadow: '0 28px 80px rgba(2,6,23,0.42)',
+                  }
+            }
+          >
+            <div
+              className="relative shrink-0 overflow-hidden px-4 pb-4 pt-4"
+              style={{ borderBottom: '1px solid var(--color-border-base)' }}
+            >
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  background:
+                    'radial-gradient(80% 120% at 0% 0%, color-mix(in srgb, #3b82f6 14%, transparent), transparent 55%), radial-gradient(70% 100% at 100% 0%, color-mix(in srgb, #8b5cf6 12%, transparent), transparent 52%)',
+                }}
+              />
+
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <AIBadge />
+                  <div className="min-w-0">
+                    <div
+                      className="text-[11px] uppercase tracking-[0.26em]"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      Finance assistant
+                    </div>
+                    <h2
+                      className="truncate text-base font-semibold"
+                      style={{ color: 'var(--color-text-primary)' }}
+                    >
+                      Ask better money questions
+                    </h2>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {hasMessages && (
+                    <button
+                      type="button"
+                      onClick={clearMessages}
+                      title="Clear chat"
+                      className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-black/10 dark:hover:bg-white/10"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <p
+                className="relative mt-2.5 max-w-[34ch] text-sm leading-6"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Quick reads, spending explanations, and cleaner guidance for your monthly decisions.
+              </p>
+
+              {showSuggestions && (
+                <div className="relative mt-3.5 grid grid-cols-2 gap-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => append(s)}
+                      className="rounded-button px-3 py-2.5 text-left text-xs leading-5 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+                      style={{
+                        background: 'var(--color-card-elevated-base)',
+                        border: '1px solid var(--color-border-base)',
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              {!hasMessages ? (
+                <div
+                  className="rounded-[18px] p-4"
+                  style={{
+                    background: 'var(--color-card-elevated-base)',
+                    border: '1px solid var(--color-border-base)',
+                  }}
+                >
+                  <div
+                    className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.22em]"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Start here
+                  </div>
+                  <p className="text-sm leading-6" style={{ color: 'var(--color-text-primary)' }}>
+                    Try asking for a monthly summary, an explanation of unusual spending, or a simple action plan for next month.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {messages.map((message) => {
+                    const isUser = message.role === 'user'
+                    return (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className={`flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}
+                      >
+                        {!isUser && (
+                          <div
+                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                            style={{ background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)' }}
+                          >
+                            <Bot className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        )}
+
+                        <div
+                          className={`max-w-[84%] rounded-[18px] px-4 py-2.5 ${
+                            isUser ? 'rounded-tr-md' : 'rounded-tl-md'
+                          } ${message.error ? 'opacity-70' : ''}`}
+                          style={
+                            isUser
+                              ? {
+                                  background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)',
+                                  color: '#eff6ff',
+                                  boxShadow: '0 8px 20px rgba(29,78,216,0.22)',
+                                }
+                              : {
+                                  background: 'var(--color-card-elevated-base)',
+                                  border: '1px solid var(--color-border-base)',
+                                  color: 'var(--color-text-primary)',
+                                }
+                          }
+                        >
+                          <MessageContent text={message.content} isUser={isUser} />
+
+                          {message.error && (
+                            <button
+                              type="button"
+                              onClick={retry}
+                              className="mt-2 flex items-center gap-1.5 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
+                              style={{ color: 'var(--color-accent-base)' }}
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              Retry
+                            </button>
+                          )}
+                        </div>
+
+                        {isUser && (
+                          <div
+                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                            style={{ background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)' }}
+                          >
+                            <User className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        )}
+                      </motion.div>
+                    )
+                  })}
+
+                  {showTyping && (
+                    <div className="flex gap-2.5">
+                      <div
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                        style={{ background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)' }}
+                      >
+                        <Bot className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <div
+                        className="flex items-center gap-1 rounded-[18px] rounded-tl-md px-4 py-3"
+                        style={{
+                          background: 'var(--color-card-elevated-base)',
+                          border: '1px solid var(--color-border-base)',
+                        }}
+                      >
+                        {[0, 1, 2].map((i) => (
+                          <motion.div
+                            key={i}
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: 'var(--color-accent-base)' }}
+                            animate={{ opacity: [0.25, 1, 0.25], y: [0, -2, 0] }}
+                            transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            <div
+              className="shrink-0 px-4 pt-3"
+              style={{
+                borderTop: '1px solid var(--color-border-base)',
+                paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+              }}
+            >
+              <form onSubmit={handleSubmit} className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={handleInputChange}
+                  placeholder="Ask about budget, savings, or spending..."
+                  disabled={isLoading}
+                  className="flex-1 rounded-button px-4 py-2.5 text-sm outline-none disabled:opacity-50"
+                  style={{
+                    background: 'var(--color-card-elevated-base)',
+                    border: '1px solid var(--color-border-base)',
+                    color: 'var(--color-text-primary)',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSubmit(e as unknown as React.FormEvent)
+                    }
+                  }}
+                />
+                <motion.button
+                  type="submit"
+                  whileTap={{ scale: 0.94 }}
+                  disabled={isLoading || !input.trim()}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)',
+                    boxShadow: '0 8px 20px rgba(37,99,235,0.28)',
+                  }}
+                >
+                  <Send className="h-4 w-4 text-white" />
+                </motion.button>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+
+  return (
+    <div ref={rootRef} className="relative z-50">
+      <motion.button
+        ref={triggerRef}
+        type="button"
+        whileHover={{ y: -1 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Open AI finance assistant"
+        className="flex items-center gap-3 rounded-[18px] px-3 py-2"
+        style={{
+          background: 'var(--color-card-base)',
+          border: '1px solid var(--color-border-base)',
+          boxShadow: open
+            ? '0 16px 40px rgba(5,10,22,0.28), 0 0 0 1px color-mix(in srgb, #8b5cf6 28%, transparent)'
+            : '0 8px 24px rgba(5,10,22,0.16)',
+          backdropFilter: 'blur(18px)',
+          WebkitBackdropFilter: 'blur(18px)',
+        }}
+      >
+        <AIBadge />
+        <div className="hidden min-w-0 text-left xs:block">
+          <div
+            className="text-[11px] uppercase tracking-[0.26em]"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            Money Flow
+          </div>
+          <div
+            className="mt-0.5 flex items-center gap-1 text-sm font-semibold"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            AI Brief
+            <ChevronRight
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+              style={{ color: 'var(--color-text-secondary)' }}
+            />
+          </div>
+        </div>
+      </motion.button>
+
+      {typeof document !== 'undefined' ? createPortal(overlay, document.body) : null}
+    </div>
+  )
+}

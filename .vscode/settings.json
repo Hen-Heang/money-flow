@@ -1,0 +1,25 @@
+{
+  "cSpell.enabledLanguageIds": [
+    "javascript",
+    "javascriptreact",
+    "json",
+    "markdown",
+    "plaintext",
+    "typescript",
+    "typescriptreact"
+  ],
+  "cSpell.import": [
+    "./cspell.json"
+  ],
+  "cSpell.words": [
+    "ilike",
+    "Swipeable",
+    "supabase",
+    "Supabase",
+    "pkce",
+    "recharts",
+    "txns",
+    "Turbopack",
+    "toastOptions"
+  ]
+}

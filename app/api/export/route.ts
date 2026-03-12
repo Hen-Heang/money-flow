@@ -45,7 +45,7 @@ export async function GET() {
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     })
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: 'Export failed' }, { status: 500 })
   }
 }
