@@ -228,7 +228,7 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="px-4 pt-3 pb-6 max-w-2xl mx-auto overflow-x-hidden">
+    <div className="pl-4 pr-16 pt-3 pb-6 md:px-4 max-w-2xl mx-auto overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
