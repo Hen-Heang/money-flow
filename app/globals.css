@@ -23,6 +23,10 @@
   --breakpoint-xs: 375px;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 :root {
   --color-bg: #0a0f1a;
   --color-card-base: #111827;

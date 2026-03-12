@@ -205,14 +205,14 @@ export default function AnalyticsPage() {
                 <div key={cat.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <div
-                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      className="w-2 h-2 shrink-0 rounded-full"
                       style={{ backgroundColor: cat.color || COLORS[index % COLORS.length] }}
                     />
                     <span className="text-xs truncate" style={{ color: 'var(--color-text-secondary)' }}>
                       {cat.icon} {cat.name}
                     </span>
                   </div>
-                  <span className="text-xs font-semibold ml-2 flex-shrink-0" style={{ color: 'var(--color-text-primary)' }}>
+                  <span className="ml-2 shrink-0 text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                     {formatKRW(cat.total)}
                   </span>
                 </div>

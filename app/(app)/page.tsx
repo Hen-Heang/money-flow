@@ -71,11 +71,12 @@ export default function DashboardPage() {
       if (!user) return
 
       const profile = await getUserProfile(supabase, user)
-      setUserName(getDisplayName(profile.email, profile.display_name))
-      setAvatarUrl(profile.avatar_url)
+      // getUserProfile can return null if both ensure and fetch fail; guard here
+      setUserName(getDisplayName(profile?.email, profile?.display_name))
+      setAvatarUrl(profile?.avatar_url ?? null)
 
       const today = new Date()
-      const [{ data }, { data: buds }, { data: historical }] = await Promise.all([
+      const [{ data }, budgetsResult, { data: historical }] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -83,10 +84,14 @@ export default function DashboardPage() {
           .gte('date', format(monthStart, 'yyyy-MM-dd'))
           .lte('date', format(monthEnd, 'yyyy-MM-dd'))
           .order('date', { ascending: false }),
+        // budgets table may not exist in all deployments — catch so it never
+        // breaks the entire Promise.all and sets budgetMap to {} gracefully.
         supabase
           .from('budgets')
           .select('category_id, amount_krw')
-          .eq('user_id', user.id),
+          .eq('user_id', user.id)
+          .then((res) => res)
+          .catch(() => ({ data: null, error: null })),
         supabase
           .from('transactions')
           .select('date, type, amount_krw')
@@ -96,7 +101,8 @@ export default function DashboardPage() {
       ])
 
       setTransactions((data as Transaction[]) || [])
-      if (buds) {
+      const buds = budgetsResult.data
+      if (buds && !budgetsResult.error) {
         const map: Record<string, number> = {}
         buds.forEach((b: { category_id: string; amount_krw: number }) => {
           map[b.category_id] = b.amount_krw
@@ -324,7 +330,7 @@ export default function DashboardPage() {
               key={label}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`${glassClass} min-h-[132px] p-3 sm:p-4`}
+              className={`${glassClass} min-h-33 p-3 sm:p-4`}
             >
               <div
                 className="w-8 h-8 rounded-[10px] flex items-center justify-center mb-2"
@@ -333,7 +339,7 @@ export default function DashboardPage() {
                 <Icon className="w-4 h-4" style={{ color }} />
               </div>
               <p className="text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>{label}</p>
-              <p className="break-words text-[13px] font-bold leading-tight sm:text-sm" style={{ color }}>
+              <p className="wrap-break-word text-[13px] font-bold leading-tight sm:text-sm" style={{ color }}>
                 {amount}
               </p>
             </motion.div>
@@ -346,7 +352,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <div className="flex items-center justify-between mb-3">
@@ -379,7 +385,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <div className="flex items-center gap-2 mb-4">
@@ -395,7 +401,7 @@ export default function DashboardPage() {
           {/* Warning alert if overspending */}
           {totalIncome > 0 && (totalExpense / totalIncome) > 0.7 && (
             <div
-              className="flex items-start gap-3 rounded-[12px] p-3 mb-4"
+              className="mb-4 flex items-start gap-3 rounded-xl p-3"
               style={{ backgroundColor: (totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', border: `1px solid ${(totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}` }}
             >
               <AlertTriangle
@@ -460,7 +466,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <div className="flex items-center justify-between mb-4">
@@ -517,7 +523,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <h3 className="font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Daily Trend</h3>
@@ -563,7 +569,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <h3 className="font-semibold mb-0.5" style={{ color: 'var(--color-text-primary)' }}>6-Month Overview</h3>
@@ -630,7 +636,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] p-5 mb-6"
+          className="rounded-card p-5 mb-6"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <h3 className="font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Spending by Category</h3>
@@ -668,14 +674,14 @@ export default function DashboardPage() {
                 <div key={cat.name} className="flex items-center justify-between">
                   <div className="flex min-w-0 items-center gap-2">
                     <div
-                      className="h-2 w-2 rounded-full flex-shrink-0"
+                      className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: cat.color || COLORS[index % COLORS.length] }}
                     />
                     <span className="truncate text-xs" style={{ color: 'var(--color-text-secondary)' }}>
                       {cat.icon} {cat.name}
                     </span>
                   </div>
-                  <span className="ml-2 flex-shrink-0 text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                  <span className="ml-2 shrink-0 text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
                     {formatKRW(cat.total)}
                   </span>
                 </div>
@@ -690,7 +696,7 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-[20px] mb-6 overflow-hidden"
+          className="rounded-card mb-6 overflow-hidden"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <div className="px-5 py-4 flex items-center justify-between">
@@ -704,7 +710,7 @@ export default function DashboardPage() {
               style={{ borderTop: '1px solid var(--color-border-base)' }}
             >
               <div
-                className="w-10 h-10 rounded-[12px] flex items-center justify-center text-lg"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-lg"
                 style={{
                   backgroundColor: t.type === 'income'
                     ? 'rgba(16, 185, 129, 0.1)'

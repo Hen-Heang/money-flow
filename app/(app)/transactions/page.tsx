@@ -42,7 +42,10 @@ function SwipeableRow({
 }) {
   const [offset, setOffset] = useState(0)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const isDragging = useRef(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     isDragging.current = false
@@ -53,8 +56,13 @@ function SwipeableRow({
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
+    setConfirmDelete(true)
+  }
+
+  const confirmAndDelete = () => {
     setDeleting(true)
+    setConfirmDelete(false)
     onDelete(transaction.id)
   }
 
@@ -66,24 +74,88 @@ function SwipeableRow({
     if (!isDragging.current) onEdit(transaction)
   }
 
+  const handlePointerDown = () => {
+    longPressTimer.current = setTimeout(() => {
+      setOffset(-120)
+    }, 500)
+  }
+
+  const handlePointerUp = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+  }
+
   return (
     <div className="relative overflow-hidden">
-      {/* Actions revealed on swipe */}
+      {/* Confirm delete dialog */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-30 flex items-center justify-center gap-2 px-4"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-card-base) 96%, transparent)' }}
+          >
+            <span className="text-sm font-medium mr-2" style={{ color: 'var(--color-text-primary)' }}>Delete?</span>
+            <button
+              onClick={confirmAndDelete}
+              className="px-4 py-1.5 rounded-full text-sm font-semibold text-white"
+              style={{ backgroundColor: 'var(--color-expense-base)' }}
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => { setConfirmDelete(false); setOffset(0) }}
+              className="px-4 py-1.5 rounded-full text-sm font-semibold"
+              style={{ backgroundColor: 'var(--color-card-elevated-base)', color: 'var(--color-text-secondary)' }}
+            >
+              Cancel
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Actions: always visible on desktop hover, revealed by swipe on mobile */}
       <div className="absolute right-0 top-0 bottom-0 flex items-center px-3 gap-2">
-        <button
-          onClick={() => { setOffset(0); onEdit(transaction) }}
-          className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: 'var(--color-accent-base)' }}
+        {/* Desktop hover buttons (hidden on touch devices) */}
+        <div
+          className="hidden md:flex items-center gap-1.5 transition-opacity duration-150"
+          style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none' }}
         >
-          <Edit3 className="w-4 h-4 text-white" />
-        </button>
-        <button
-          onClick={handleDelete}
-          className="w-10 h-10 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: 'var(--color-expense-base)' }}
-        >
-          <Trash2 className="w-4 h-4 text-white" />
-        </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(transaction) }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+            style={{ backgroundColor: 'var(--color-accent-base)' }}
+            title="Edit"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-white" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDelete() }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+            style={{ backgroundColor: 'var(--color-expense-base)' }}
+            title="Delete"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-white" />
+          </button>
+        </div>
+        {/* Mobile swipe buttons */}
+        <div className="md:hidden flex items-center gap-2">
+          <button
+            onClick={() => { setOffset(0); onEdit(transaction) }}
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--color-accent-base)' }}
+          >
+            <Edit3 className="w-4 h-4 text-white" />
+          </button>
+          <button
+            onClick={handleDelete}
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--color-expense-base)' }}
+          >
+            <Trash2 className="w-4 h-4 text-white" />
+          </button>
+        </div>
       </div>
 
       <motion.div
@@ -93,13 +165,18 @@ function SwipeableRow({
         onDragStart={() => { isDragging.current = true }}
         onDragEnd={handleDragEnd}
         onTap={handleTap}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onHoverStart={() => setHovered(true)}
+        onHoverEnd={() => setHovered(false)}
         animate={{ x: offset, opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className="flex items-center gap-4 px-4 py-3 relative cursor-pointer"
         style={{ backgroundColor: 'var(--color-card-base)' }}
       >
         <div
-          className="w-12 h-12 rounded-[14px] flex items-center justify-center text-xl flex-shrink-0"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-button text-xl"
           style={{
             backgroundColor: transaction.type === 'income'
               ? 'rgba(16, 185, 129, 0.15)'
@@ -122,7 +199,7 @@ function SwipeableRow({
             </p>
           )}
         </div>
-        <div className="text-right flex-shrink-0">
+        <div className="text-right shrink-0">
           <p
             className="text-sm font-semibold"
             style={{
@@ -268,7 +345,7 @@ export default function TransactionsPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search transactions..."
-            className="w-full rounded-[12px] pl-10 pr-10 py-3 text-sm focus:outline-none"
+            className="w-full rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none"
             style={{
               backgroundColor: 'var(--color-card-elevated-base)',
               border: '1px solid var(--color-border-base)',
@@ -344,7 +421,7 @@ export default function TransactionsPage() {
                   </div>
 
                   {/* Transactions for this date */}
-                  <div className="rounded-[16px] overflow-hidden mx-4" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                  <div className="mx-4 overflow-hidden rounded-2xl" style={{ backgroundColor: 'var(--color-card-base)' }}>
                     {txns.map((t, i) => (
                       <div key={t.id}>
                         {i > 0 && (

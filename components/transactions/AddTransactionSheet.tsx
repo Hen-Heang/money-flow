@@ -6,13 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { ChevronDown, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { haptic, formatNumber } from '@/lib/utils'
 import BottomSheet from '@/components/ui/BottomSheet'
 
 const schema = z.object({
   type: z.enum(['income', 'expense']),
+  currency: z.enum(['KRW', 'USD']),
   amount: z.string().min(1, 'Amount is required'),
   date: z.string(),
   description: z.string().min(1, 'Description is required'),
@@ -40,7 +40,9 @@ interface PaymentMethod {
 export interface EditTransaction {
   id: string
   type: 'income' | 'expense'
+  currency?: string
   amount_krw: number
+  amount_usd: number
   date: string
   description: string
   category_id: string | null
@@ -68,6 +70,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
     resolver: zodResolver(schema),
     defaultValues: {
       type: 'expense',
+      currency: 'KRW',
       date: format(new Date(), 'yyyy-MM-dd'),
       amount: '',
       description: '',
@@ -75,6 +78,14 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
   })
 
   const type = watch('type')
+  const currency = watch('currency')
+  const amountRaw = watch('amount')
+
+  // Convert preview: if entering USD show KRW equivalent, vice versa
+  const amountNum = parseFloat((amountRaw || '0').replace(/,/g, '')) || 0
+  const convertedHint = currency === 'USD'
+    ? `≈ ₩${formatNumber(Math.round(amountNum * exchangeRate))}`
+    : amountNum > 0 ? `≈ $${(amountNum / exchangeRate).toFixed(2)}` : ''
 
   useEffect(() => {
     if (isOpen) {
@@ -96,10 +107,14 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
         .catch(() => {})
 
       if (editTransaction) {
-        // Pre-fill form for editing
+        const editCurrency = (editTransaction.currency as 'KRW' | 'USD') || 'KRW'
+        const displayAmount = editCurrency === 'USD'
+          ? editTransaction.amount_usd.toFixed(2)
+          : formatNumber(editTransaction.amount_krw)
         reset({
           type: editTransaction.type,
-          amount: formatNumber(editTransaction.amount_krw),
+          currency: editCurrency,
+          amount: displayAmount,
           date: editTransaction.date,
           description: editTransaction.description,
           category_id: editTransaction.category_id || '',
@@ -108,9 +123,9 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
         })
         if (editTransaction.exchange_rate) setExchangeRate(editTransaction.exchange_rate)
       } else {
-        // New transaction defaults
         reset({
           type: 'expense',
+          currency: 'KRW',
           date: format(new Date(), 'yyyy-MM-dd'),
           amount: '',
           description: '',
@@ -127,12 +142,21 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
   }, [isOpen, editTransaction]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (data: FormData) => {
-    const amountKrw = parseFloat(data.amount.replace(/,/g, ''))
-    if (isNaN(amountKrw)) {
+    const rawNum = parseFloat(data.amount.replace(/,/g, ''))
+    if (isNaN(rawNum) || rawNum <= 0) {
       toast.error('Invalid amount')
       return
     }
-    const amountUsd = amountKrw / exchangeRate
+
+    let amountKrw: number
+    let amountUsd: number
+    if (data.currency === 'USD') {
+      amountUsd = rawNum
+      amountKrw = Math.round(rawNum * exchangeRate)
+    } else {
+      amountKrw = rawNum
+      amountUsd = rawNum / exchangeRate
+    }
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
@@ -140,6 +164,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
     const payload = {
       date: data.date,
       type: data.type,
+      currency: data.currency,
       category_id: data.category_id || null,
       description: data.description,
       amount_krw: amountKrw,
@@ -188,6 +213,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
       const currentPaymentMethod = data.payment_method_id
       reset({
         type: 'expense',
+        currency: 'KRW',
         date: currentDate,
         amount: '',
         description: '',
@@ -232,7 +258,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
       <form id="add-transaction-form" onSubmit={handleSubmit(onSubmit)} className="px-4 pb-2 sm:px-6 space-y-4">
         {/* Type Toggle */}
         <div
-          className="flex rounded-[12px] p-1"
+          className="flex rounded-xl p-1"
           style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
         >
           {(['expense', 'income'] as const).map(t => (
@@ -259,40 +285,81 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
           ))}
         </div>
 
+        {/* Currency Toggle */}
+        <Controller
+          name="currency"
+          control={control}
+          render={({ field }) => (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Currency</span>
+              <div
+                className="flex rounded-[10px] p-0.5 ml-auto"
+                style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+              >
+                {(['KRW', 'USD'] as const).map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => { field.onChange(c); setValue('amount', ''); haptic('light') }}
+                    className="px-4 py-1.5 rounded-lg text-sm font-semibold transition-all"
+                    style={{
+                      backgroundColor: field.value === c ? 'var(--color-accent-base)' : 'transparent',
+                      color: field.value === c ? 'white' : 'var(--color-text-secondary)',
+                    }}
+                  >
+                    {c === 'KRW' ? '🇰🇷 KRW' : '🇺🇸 USD'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        />
+
         {/* Amount */}
-        <div className="relative">
-          <span
-            className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-lg"
-            style={{ color: 'var(--color-text-secondary)' }}
-          >
-            ₩
-          </span>
-          <input
-            {...register('amount')}
-            ref={(e) => {
-              register('amount').ref(e)
-              amountInputRef.current = e
-            }}
-            inputMode="decimal"
-            placeholder="0"
-            style={{
-              ...inputStyle,
-              paddingLeft: '40px',
-              fontSize: 'clamp(22px, 6vw, 28px)',
-              fontWeight: 'bold',
-            }}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/,/g, '')
-              const num = parseFloat(raw)
-              if (!isNaN(num)) {
-                setValue('amount', formatNumber(num))
-              } else {
-                setValue('amount', raw)
-              }
-            }}
-          />
+        <div>
+          <div className="relative">
+            <span
+              className="absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-lg"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              {currency === 'USD' ? '$' : '₩'}
+            </span>
+            <input
+              {...register('amount')}
+              ref={(e) => {
+                register('amount').ref(e)
+                amountInputRef.current = e
+              }}
+              inputMode="decimal"
+              placeholder="0"
+              style={{
+                ...inputStyle,
+                paddingLeft: '40px',
+                fontSize: 'clamp(22px, 6vw, 28px)',
+                fontWeight: 'bold',
+              }}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/,/g, '')
+                const num = parseFloat(raw)
+                if (currency === 'KRW') {
+                  if (!isNaN(num)) {
+                    setValue('amount', formatNumber(num))
+                  } else {
+                    setValue('amount', raw)
+                  }
+                } else {
+                  setValue('amount', raw)
+                }
+              }}
+            />
+          </div>
+          {convertedHint && amountNum > 0 && (
+            <p className="text-xs mt-1.5 pl-1" style={{ color: 'var(--color-text-secondary)' }}>
+              {convertedHint}
+            </p>
+          )}
+          {errors.amount && <p className="text-xs mt-1" style={{ color: 'var(--color-expense-base)' }}>{errors.amount.message}</p>}
         </div>
-        {errors.amount && <p className="text-xs" style={{ color: 'var(--color-expense-base)' }}>{errors.amount.message}</p>}
 
         {/* Description */}
         <div>
