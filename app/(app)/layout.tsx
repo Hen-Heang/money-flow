@@ -1,6 +1,7 @@
 import React from 'react'
-import TabBar from '@/components/layout/TabBar'
+import ChatBot from '@/components/ai/ChatBot'
 import Sidebar from '@/components/layout/Sidebar'
+import TabBar from '@/components/layout/TabBar'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -16,18 +17,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar />
 
-      <main
-        className="relative z-10 min-h-screen flex-1 px-0 md:ml-64 md:px-2 lg:px-4"
-        style={{
-          paddingTop: 'max(8px, env(safe-area-inset-top, 0px))',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7.25rem)',
-          overflowY: 'auto',
-          // iOS momentum scrolling — keeps 60fps flick-scroll on iPhone Safari
-          WebkitOverflowScrolling: 'touch',
-        } as React.CSSProperties}
-      >
-        {children}
-      </main>
+      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64">
+        <div
+          className="sticky top-0 z-30 px-4 pb-2 pt-3 md:px-6 lg:px-8"
+          style={{
+            paddingTop: 'max(12px, calc(env(safe-area-inset-top, 0px) + 12px))',
+            background:
+              'linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, transparent), color-mix(in srgb, var(--color-bg) 72%, transparent), transparent)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+          }}
+        >
+          <div className="flex justify-end">
+            <ChatBot />
+          </div>
+        </div>
+
+        <main
+          className="relative min-h-screen flex-1 px-0 md:px-2 lg:px-4"
+          style={{
+            paddingTop: 'max(4px, env(safe-area-inset-top, 0px))',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7.25rem)',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+          } as React.CSSProperties}
+        >
+          {children}
+        </main>
+      </div>
 
       <TabBar />
     </div>

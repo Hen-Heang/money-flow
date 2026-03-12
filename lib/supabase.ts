@@ -31,7 +31,7 @@ export const createClient = () => {
   if (typeof window === 'undefined') {
     return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   }
-
+  
   if (!browserClient) {
     browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { getInitials } from '@/lib/utils'
 
 interface AvatarProps {
@@ -14,7 +15,7 @@ export default function Avatar({ src, name, size = 48, className = '' }: AvatarP
 
   return (
     <div
-      className={`overflow-hidden rounded-full ${className}`}
+      className={`relative overflow-hidden rounded-full ${className}`}
       style={{
         width: `${size}px`,
         height: `${size}px`,
@@ -24,9 +25,11 @@ export default function Avatar({ src, name, size = 48, className = '' }: AvatarP
       }}
     >
       {src ? (
-        <img
+        <Image
           src={src}
           alt={name ? `${name} avatar` : 'User avatar'}
+          fill
+          unoptimized
           className="h-full w-full object-cover"
         />
       ) : (

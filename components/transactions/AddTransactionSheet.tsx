@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { format } from 'date-fns'
@@ -66,7 +66,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
   const supabase = createClient()
   const isEditing = !!editTransaction
 
-  const { register, handleSubmit, control, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, control, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: 'expense',
@@ -77,15 +77,16 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
     },
   })
 
-  const type = watch('type')
-  const currency = watch('currency')
-  const amountRaw = watch('amount')
+  const type = useWatch({ control, name: 'type' })
+  const currency = useWatch({ control, name: 'currency' })
+  const amountRaw = useWatch({ control, name: 'amount' })
+  const activeExchangeRate = editTransaction?.exchange_rate || exchangeRate
 
   // Convert preview: if entering USD show KRW equivalent, vice versa
   const amountNum = parseFloat((amountRaw || '0').replace(/,/g, '')) || 0
   const convertedHint = currency === 'USD'
-    ? `≈ ₩${formatNumber(Math.round(amountNum * exchangeRate))}`
-    : amountNum > 0 ? `≈ $${(amountNum / exchangeRate).toFixed(2)}` : ''
+    ? `≈ ₩${formatNumber(Math.round(amountNum * activeExchangeRate))}`
+    : amountNum > 0 ? `≈ $${(amountNum / activeExchangeRate).toFixed(2)}` : ''
 
   useEffect(() => {
     if (isOpen) {
@@ -121,7 +122,6 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
           payment_method_id: editTransaction.payment_method_id || '',
           note: editTransaction.note || '',
         })
-        if (editTransaction.exchange_rate) setExchangeRate(editTransaction.exchange_rate)
       } else {
         reset({
           type: 'expense',
@@ -152,10 +152,10 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
     let amountUsd: number
     if (data.currency === 'USD') {
       amountUsd = rawNum
-      amountKrw = Math.round(rawNum * exchangeRate)
+      amountKrw = Math.round(rawNum * activeExchangeRate)
     } else {
       amountKrw = rawNum
-      amountUsd = rawNum / exchangeRate
+      amountUsd = rawNum / activeExchangeRate
     }
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -169,7 +169,7 @@ export default function AddTransactionSheet({ isOpen, onClose, onSuccess, editTr
       description: data.description,
       amount_krw: amountKrw,
       amount_usd: amountUsd,
-      exchange_rate: exchangeRate,
+      exchange_rate: activeExchangeRate,
       payment_method_id: data.payment_method_id || null,
       note: data.note || null,
     }

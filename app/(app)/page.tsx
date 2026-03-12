@@ -135,17 +135,17 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true
 
-    const loadExchangeRate = async () => {
+    const loadExchangeRate = async (attempt = 0) => {
       try {
         const response = await fetch('/api/exchange-rate', { cache: 'no-store' })
         if (!response.ok) return
-
         const data = await response.json() as ExchangeRateInfo
-        if (active) {
-          setExchangeRateInfo(data)
+        if (active) setExchangeRateInfo(data)
+      } catch {
+        // Retry once after 1.5s — handles transient dev-server startup failures
+        if (active && attempt < 1) {
+          setTimeout(() => loadExchangeRate(attempt + 1), 1500)
         }
-      } catch (error) {
-        console.error(error)
       }
     }
 
