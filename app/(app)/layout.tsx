@@ -19,9 +19,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64">
         <div
-          className="sticky top-0 z-30 px-4 pb-2 pt-3 md:px-6 lg:px-8"
+          className="sticky top-0 z-30 px-4 pb-1.5 pt-2 md:px-6 md:pb-2 md:pt-3 lg:px-8"
           style={{
-            paddingTop: 'max(12px, calc(env(safe-area-inset-top, 0px) + 12px))',
+            paddingTop: 'max(8px, calc(env(safe-area-inset-top, 0px) + 8px))',
             background:
               'linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, transparent), color-mix(in srgb, var(--color-bg) 72%, transparent), transparent)',
             backdropFilter: 'blur(8px)',

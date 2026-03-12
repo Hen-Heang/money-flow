@@ -6,9 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
-  )
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
@@ -266,10 +264,10 @@ const SUGGESTIONS = [
   'Explain my recent spending pattern',
 ]
 
-function AIBadge({ small = false }: { small?: boolean }) {
+function AIBadge() {
   return (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-button ${small ? 'h-8 w-8' : 'h-10 w-10'}`}
+      className="relative h-8 w-8 shrink-0 overflow-hidden rounded-button sm:h-10 sm:w-10"
       style={{
         background:
           'linear-gradient(135deg, color-mix(in srgb, #8b5cf6 22%, var(--color-card-elevated-base)), color-mix(in srgb, #3b82f6 18%, var(--color-card-elevated-base)))',
@@ -278,7 +276,7 @@ function AIBadge({ small = false }: { small?: boolean }) {
       }}
     >
       <div
-        className={`absolute rounded-[10px] ${small ? 'inset-x-1.5 bottom-1.5 top-1.5' : 'inset-x-2 bottom-2 top-2'}`}
+        className="absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-[10px] sm:inset-x-2 sm:bottom-2 sm:top-2"
         style={{
           border: '2px solid transparent',
           borderColor: 'rgba(168,85,247,0.9)',
@@ -287,7 +285,7 @@ function AIBadge({ small = false }: { small?: boolean }) {
         }}
       />
       <div
-        className={`absolute font-semibold tracking-[-0.08em] ${small ? 'bottom-[5px] left-[8px] text-[15px]' : 'bottom-[7px] left-[11px] text-[19px]'}`}
+        className="absolute bottom-[5px] left-[8px] text-[15px] font-semibold tracking-[-0.08em] sm:bottom-[7px] sm:left-[11px] sm:text-[19px]"
         style={{
           background: 'linear-gradient(135deg, #a855f7 0%, #3b82f6 100%)',
           WebkitBackgroundClip: 'text',
@@ -296,7 +294,10 @@ function AIBadge({ small = false }: { small?: boolean }) {
       >
         Ai
       </div>
-      <Sparkles className={`absolute right-1 top-1 ${small ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} style={{ color: '#3b82f6' }} />
+      <Sparkles
+        className="absolute right-1 top-1 h-3 w-3 sm:h-3.5 sm:w-3.5"
+        style={{ color: '#3b82f6' }}
+      />
     </div>
   )
 }
@@ -705,7 +706,7 @@ export default function ChatBot() {
           WebkitBackdropFilter: 'blur(18px)',
         }}
       >
-        <AIBadge small={isMobile} />
+        <AIBadge />
         <div className="hidden min-w-0 text-left sm:block">
           <div
             className="text-[11px] uppercase tracking-[0.26em]"
