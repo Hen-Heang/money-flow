@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface BottomSheetProps {
   isOpen: boolean
@@ -14,6 +14,8 @@ interface BottomSheetProps {
 
 export default function BottomSheet({ isOpen, onClose, children, title, footer }: BottomSheetProps) {
   const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const [canDrag, setCanDrag] = useState(true)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [isDesktop, setIsDesktop] = useState(
     () => (typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : false)
   )
@@ -71,7 +73,7 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            drag="y"
+            drag={canDrag ? 'y' : false}
             dragConstraints={{ top: 0 }}
             dragElastic={{ top: 0, bottom: 0.5 }}
             onDragEnd={(_, info) => {
@@ -107,8 +109,13 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
               </div>
             )}
             <div
+              ref={scrollRef}
               className="flex-1 overflow-y-auto"
               style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              onScroll={() => {
+                const el = scrollRef.current
+                setCanDrag(!el || el.scrollTop === 0)
+              }}
             >
               {children}
             </div>

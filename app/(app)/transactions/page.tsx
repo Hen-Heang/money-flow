@@ -235,10 +235,10 @@ export default function TransactionsPage() {
   const supabase = createClient()
   const PAGE_SIZE = 20
 
-  const loadTransactions = useCallback(async (reset = false) => {
+  const loadTransactions = useCallback(async (reset = false, silent = false) => {
     if (loadingRef.current) return
     loadingRef.current = true
-    if (reset) setLoading(true)
+    if (reset && !silent) setLoading(true)
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -467,7 +467,7 @@ export default function TransactionsPage() {
       <AddTransactionSheet
         isOpen={showAddSheet}
         onClose={() => { setShowAddSheet(false); setEditingTransaction(undefined) }}
-        onSuccess={() => loadTransactions(true)}
+        onSuccess={() => loadTransactions(true, true)}
         editTransaction={editingTransaction}
       />
     </div>

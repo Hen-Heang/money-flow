@@ -20,7 +20,11 @@ export default function Sidebar() {
     <aside className="fade-up fixed left-0 top-0 hidden h-screen w-64 p-6 md:block">
       <div
         className="surface-card flex h-full flex-col p-4"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--color-card-base) 94%, transparent)' }}
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--color-card-base) 94%, transparent)',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+        }}
       >
         <div className="mb-8 flex items-center gap-3 rounded-button px-2 py-2">
           <Logo size={38} />

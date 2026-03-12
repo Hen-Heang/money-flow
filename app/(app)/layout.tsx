@@ -23,9 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           style={{
             paddingTop: 'max(8px, calc(env(safe-area-inset-top, 0px) + 8px))',
             background:
-              'linear-gradient(180deg, color-mix(in srgb, var(--color-bg) 96%, transparent), color-mix(in srgb, var(--color-bg) 72%, transparent), transparent)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
+              'linear-gradient(180deg, var(--color-bg) 40%, color-mix(in srgb, var(--color-bg) 80%, transparent), transparent)',
           }}
         >
           <div className="flex justify-end">
