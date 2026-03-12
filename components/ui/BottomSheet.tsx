@@ -14,6 +14,7 @@ interface BottomSheetProps {
 
 export default function BottomSheet({ isOpen, onClose, children, title, footer }: BottomSheetProps) {
   const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const [visibleHeight, setVisibleHeight] = useState<number | null>(null)
   const [canDrag, setCanDrag] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [isDesktop, setIsDesktop] = useState(
@@ -45,14 +46,17 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
     const handleChange = () => {
       const offset = window.innerHeight - vv.height - vv.offsetTop
       setKeyboardHeight(Math.max(0, offset))
+      setVisibleHeight(Math.round(vv.height))
     }
 
+    handleChange()
     vv.addEventListener('resize', handleChange)
     vv.addEventListener('scroll', handleChange)
     return () => {
       vv.removeEventListener('resize', handleChange)
       vv.removeEventListener('scroll', handleChange)
       setKeyboardHeight(0)
+      setVisibleHeight(null)
     }
   }, [isOpen])
 
@@ -90,8 +94,8 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
               backgroundColor: 'var(--color-card-base)',
               borderRadius: '24px 24px 0 0',
               width: 'min(100%, 32rem)',
-              maxHeight: keyboardHeight > 0
-                ? `calc(100dvh - ${keyboardHeight}px)`
+              maxHeight: keyboardHeight > 0 && visibleHeight
+                ? `${visibleHeight}px`
                 : 'min(82dvh, 760px)',
               overflow: 'hidden',
               paddingBottom: keyboardHeight > 0 || !isDesktop ? '8px' : 'env(safe-area-inset-bottom, 16px)',
