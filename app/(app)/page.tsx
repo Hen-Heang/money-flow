@@ -16,6 +16,7 @@ import { formatKRW, formatUSD, getDisplayName, getGreeting } from '@/lib/utils'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
 import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
+import ChatBot from '@/components/ai/ChatBot'
 
 interface Transaction {
   id: string
@@ -228,12 +229,12 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="pl-4 pr-16 pt-3 pb-6 md:px-4 max-w-2xl mx-auto overflow-x-hidden">
+    <div className="px-4 pt-3 pb-6 max-w-2xl mx-auto overflow-x-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex items-start justify-between gap-3"
+        className="mb-6 flex items-center justify-between gap-3"
       >
         <div className="flex min-w-0 items-center gap-3">
           <Avatar src={avatarUrl} name={userName} size={52} className="ring-1 ring-white/10 shadow-lg" />
@@ -244,28 +245,31 @@ export default function DashboardPage() {
             </h1>
           </div>
         </div>
-        <motion.button
-          whileTap={{ scale: 0.92 }}
-          onClick={() => setShowUSD(!showUSD)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 12px',
-            borderRadius: '999px',
-            background: 'rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            color: 'var(--color-text-primary)',
-            fontSize: '13px',
-            fontWeight: 600,
-            touchAction: 'manipulation',
-          }}
-        >
-          <span style={{ fontSize: '16px', lineHeight: 1 }}>{showUSD ? '🇺🇸' : '🇰🇷'}</span>
-          <span>{showUSD ? 'USD' : 'KRW'}</span>
-        </motion.button>
+        <div className="flex shrink-0 items-center gap-2">
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setShowUSD(!showUSD)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '999px',
+              background: 'rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              color: 'var(--color-text-primary)',
+              fontSize: '13px',
+              fontWeight: 600,
+              touchAction: 'manipulation',
+            }}
+          >
+            <span style={{ fontSize: '16px', lineHeight: 1 }}>{showUSD ? '🇺🇸' : '🇰🇷'}</span>
+            <span>{showUSD ? 'USD' : 'KRW'}</span>
+          </motion.button>
+          <ChatBot />
+        </div>
       </motion.div>
 
       {exchangeRateInfo && (
