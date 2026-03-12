@@ -329,7 +329,11 @@ export default function ChatBot() {
   useEffect(() => {
     if (!open) return
 
-    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as Node
       const isInsideTrigger = rootRef.current?.contains(target)
       const isInsidePanel = panelRef.current?.contains(target)
@@ -339,20 +343,19 @@ export default function ChatBot() {
       }
     }
 
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+    if (!isMobile) {
+      window.addEventListener('mousedown', handleMouseDown)
     }
 
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('touchstart', handlePointerDown, { passive: true })
     window.addEventListener('keydown', handleEscape)
 
     return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('touchstart', handlePointerDown)
+      if (!isMobile) {
+        window.removeEventListener('mousedown', handleMouseDown)
+      }
       window.removeEventListener('keydown', handleEscape)
     }
-  }, [open])
+  }, [isMobile, open])
 
   useEffect(() => {
     if (!open || isMobile) return
@@ -406,6 +409,9 @@ export default function ChatBot() {
           <motion.div
             ref={panelRef}
             key="panel"
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             initial={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -10, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -8, scale: 0.97 }}
