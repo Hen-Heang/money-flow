@@ -106,18 +106,20 @@ export default function AddTransactionSheet({
     if (!isOpen) return
 
     const loadData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
+      if (categories.length === 0 || paymentMethods.length === 0) {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
 
-      const [cats, methods] = await Promise.all([
-        supabase.from('categories').select('*'),
-        supabase.from('payment_methods').select('*'),
-      ])
+        const [cats, methods] = await Promise.all([
+          supabase.from('categories').select('*'),
+          supabase.from('payment_methods').select('*'),
+        ])
 
-      if (cats.data) setCategories(cats.data)
-      if (methods.data) setPaymentMethods(methods.data)
+        if (cats.data) setCategories(cats.data)
+        if (methods.data) setPaymentMethods(methods.data)
+      }
     }
 
     loadData()
@@ -239,20 +241,6 @@ export default function AddTransactionSheet({
     haptic('medium')
     toast.success(isEditing ? 'Transaction updated!' : 'Transaction saved!')
     onSuccess(saved)
-
-    if (!isEditing) {
-      const currentDate = data.date
-      const currentPaymentMethod = data.payment_method_id
-      reset({
-        type: 'expense',
-        currency: 'KRW',
-        date: currentDate,
-        amount: '',
-        description: '',
-        payment_method_id: currentPaymentMethod,
-      })
-    }
-
     onClose()
   }
 

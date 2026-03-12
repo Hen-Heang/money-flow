@@ -6,7 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+  )
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
@@ -78,7 +80,7 @@ function renderInline(text: string): React.ReactNode[] {
 }
 
 function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
-  if (isUser) return <span>{text}</span>
+  if (isUser) return <span className="text-base leading-7">{text}</span>
 
   const lines = text.split('\n')
   const elements: React.ReactNode[] = []
@@ -150,7 +152,7 @@ function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
     i++
   }
 
-  return <div className="space-y-0.5 text-sm leading-6">{elements}</div>
+  return <div className="space-y-0.5 text-base leading-7">{elements}</div>
 }
 
 function useStreamingChat(api: string) {
@@ -408,25 +410,17 @@ export default function ChatBot() {
   const hasMessages = messages.length > 0
   const lastMessage = messages[messages.length - 1]
   const showTyping = isLoading && lastMessage?.role === 'assistant' && lastMessage?.content === ''
-  const mobilePanelTop = 60
-  const mobilePanelBottom = 84
-  const mobilePanelHeight =
-    viewportHeight !== null
-      ? Math.max(viewportHeight - mobilePanelTop - mobilePanelBottom, 320)
-      : null
-
   const overlay = (
     <>
       <AnimatePresence>
-        {open && isMobile && (
+        {open && !isMobile && (
           <motion.div
             key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[90] bg-black/50"
-            style={{ WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}
+            className="fixed inset-0 z-90"
             onClick={() => setOpen(false)}
           />
         )}
@@ -440,23 +434,29 @@ export default function ChatBot() {
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            initial={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -10, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={isMobile ? { opacity: 0, y: 16, scale: 0.97 } : { opacity: 0, y: -8, scale: 0.97 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className={`z-[100] flex flex-col overflow-hidden rounded-[24px] ${
-              isMobile ? 'fixed left-3 right-3' : 'fixed right-4 md:right-6 lg:right-8'
+            initial={isMobile ? { y: '100%' } : { opacity: 0, y: -10, scale: 0.97 }}
+            animate={isMobile ? { y: 0 } : { opacity: 1, y: 0, scale: 1 }}
+            exit={isMobile ? { y: '100%' } : { opacity: 0, y: -8, scale: 0.97 }}
+            transition={
+              isMobile
+                ? { type: 'spring', damping: 32, stiffness: 280 }
+                : { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }
+            }
+            drag={isMobile ? 'y' : false}
+            dragConstraints={{ top: 0 }}
+            dragElastic={{ top: 0, bottom: 0.25 }}
+            onDragEnd={(_, info) => {
+              if (isMobile && info.offset.y > 80) setOpen(false)
+            }}
+            className={`z-[100] flex flex-col overflow-hidden ${
+              isMobile ? 'fixed inset-0' : 'fixed right-4 rounded-[24px] md:right-6 lg:right-8'
             }`}
             style={
               isMobile
                 ? {
-                    top: 'calc(env(safe-area-inset-top, 0px) + 68px)',
-                    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 90px)',
-                    height: mobilePanelHeight ? `${mobilePanelHeight}px` : undefined,
-                    maxHeight: mobilePanelHeight ? `${mobilePanelHeight}px` : undefined,
+                    height: viewportHeight ? `${viewportHeight}px` : '100dvh',
                     background: 'var(--color-card-base)',
-                    border: '1px solid var(--color-border-base)',
-                    boxShadow: '0 28px 80px rgba(2,6,23,0.52)',
+                    willChange: 'transform',
                   }
                 : {
                     width: 'min(calc(100vw - 32px), 420px)',
@@ -468,6 +468,18 @@ export default function ChatBot() {
                   }
             }
           >
+            {isMobile && (
+              <div
+                className="flex shrink-0 justify-center pb-1 pt-3"
+                style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}
+              >
+                <div
+                  className="h-1 w-9 rounded-full"
+                  style={{ background: 'var(--color-border-base)', opacity: 0.7 }}
+                />
+              </div>
+            )}
+
             <div
               className="relative shrink-0 overflow-hidden px-4 pb-3 pt-3 sm:pb-4 sm:pt-4"
               style={{ borderBottom: '1px solid var(--color-border-base)' }}
@@ -676,7 +688,9 @@ export default function ChatBot() {
               className="shrink-0 px-4 pt-2.5 sm:pt-3"
               style={{
                 borderTop: '1px solid var(--color-border-base)',
-                paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+                paddingBottom: isMobile
+                  ? 'max(20px, env(safe-area-inset-bottom, 20px))'
+                  : 'max(16px, env(safe-area-inset-bottom, 16px))',
               }}
             >
               <form onSubmit={handleSubmit} className="flex items-center gap-2">
@@ -736,25 +750,23 @@ export default function ChatBot() {
           boxShadow: open
             ? '0 16px 40px rgba(5,10,22,0.28), 0 0 0 1px color-mix(in srgb, #8b5cf6 28%, transparent)'
             : '0 8px 24px rgba(5,10,22,0.16)',
-          backdropFilter: 'blur(18px)',
-          WebkitBackdropFilter: 'blur(18px)',
         }}
       >
         <AIBadge />
         <div className="hidden min-w-0 text-left sm:block">
           <div
-            className="text-[11px] uppercase tracking-[0.26em]"
+            className="text-xs uppercase tracking-[0.28em]"
             style={{ color: 'var(--color-text-secondary)' }}
           >
             Money Flow
           </div>
           <div
-            className="mt-0.5 flex items-center gap-1 text-sm font-semibold"
+            className="mt-0.5 flex items-center gap-1 text-base font-semibold"
             style={{ color: 'var(--color-text-primary)' }}
           >
-            AI Brief
+            AI Chat Assistant
             <ChevronRight
-              className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+              className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
               style={{ color: 'var(--color-text-secondary)' }}
             />
           </div>
