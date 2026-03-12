@@ -239,7 +239,7 @@ export default function DashboardPage() {
         <div className="flex min-w-0 items-center gap-3">
           <Avatar src={avatarUrl} name={userName} size={52} className="ring-1 ring-white/10 shadow-lg" />
           <div className="min-w-0">
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{getGreeting()}</p>
+            <p className="text-base" style={{ color: 'var(--color-text-secondary)' }}>{getGreeting()}</p>
             <h1 className="truncate text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
               {userName}
             </h1>
