@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Check } from 'lucide-react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -291,7 +292,7 @@ export default function AddTransactionSheet({
       <form
         id="add-transaction-form"
         onSubmit={handleSubmit(onSubmit)}
-        className="space-y-5 px-4 pb-2 sm:px-6"
+        className="space-y-5 px-4 pb-6 sm:px-6"
       >
         <div
           className="flex rounded-xl p-1"
@@ -418,14 +419,46 @@ export default function AddTransactionSheet({
               <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
                 Category
               </p>
-              <select {...register('category_id')} style={inputStyle}>
-                <option value="">Select category</option>
-                {filteredCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.icon} {category.name}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="category_id"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                      type="button"
+                      onClick={() => { field.onChange(''); haptic('light') }}
+                      className="shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-all active:scale-95"
+                      style={{
+                        backgroundColor: !field.value ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
+                        color: !field.value ? 'white' : 'var(--color-text-secondary)',
+                        border: '1px solid var(--color-border-base)',
+                      }}
+                    >
+                      None
+                    </button>
+                    {filteredCategories.map((cat) => {
+                      const isSelected = field.value === cat.id
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => { field.onChange(cat.id); haptic('light') }}
+                          className="shrink-0 flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all active:scale-95"
+                          style={{
+                            backgroundColor: isSelected ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
+                            color: isSelected ? 'white' : 'var(--color-text-primary)',
+                            border: isSelected ? '1px solid transparent' : '1px solid var(--color-border-base)',
+                          }}
+                        >
+                          <span>{cat.icon}</span>
+                          <span>{cat.name}</span>
+                          {isSelected && <Check className="h-3.5 w-3.5" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              />
             </div>
           )}
 
@@ -434,14 +467,46 @@ export default function AddTransactionSheet({
               <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
                 Payment Method
               </p>
-              <select {...register('payment_method_id')} style={inputStyle}>
-                <option value="">Select payment method</option>
-                {paymentMethods.map((method) => (
-                  <option key={method.id} value={method.id}>
-                    {method.icon} {method.name}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="payment_method_id"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                      type="button"
+                      onClick={() => { field.onChange(''); haptic('light') }}
+                      className="shrink-0 rounded-full px-3 py-2 text-sm font-medium transition-all active:scale-95"
+                      style={{
+                        backgroundColor: !field.value ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
+                        color: !field.value ? 'white' : 'var(--color-text-secondary)',
+                        border: '1px solid var(--color-border-base)',
+                      }}
+                    >
+                      None
+                    </button>
+                    {paymentMethods.map((method) => {
+                      const isSelected = field.value === method.id
+                      return (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => { field.onChange(method.id); haptic('light') }}
+                          className="shrink-0 flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-all active:scale-95"
+                          style={{
+                            backgroundColor: isSelected ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
+                            color: isSelected ? 'white' : 'var(--color-text-primary)',
+                            border: isSelected ? '1px solid transparent' : '1px solid var(--color-border-base)',
+                          }}
+                        >
+                          <span>{method.icon}</span>
+                          <span>{method.name}</span>
+                          {isSelected && <Check className="h-3.5 w-3.5" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              />
             </div>
           )}
         </div>
@@ -483,8 +548,8 @@ export default function AddTransactionSheet({
             <textarea
               {...register('note')}
               placeholder="Optional note"
-              rows={3}
-              style={{ ...inputStyle, minHeight: '88px', resize: 'none' as const }}
+              rows={2}
+              style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
             />
           </div>
         </div>
