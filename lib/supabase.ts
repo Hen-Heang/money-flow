@@ -3,6 +3,28 @@ import { createBrowserClient } from '@supabase/ssr'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 
+// Bypass navigator.locks API which causes:
+//   AbortError: Lock broken by another request with the 'steal' option
+// in Safari / iOS WebKit when multiple tabs are open.
+function noopLock<R>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> {
+  return fn()
+}
+
+const browserClientOptions = {
+  auth: {
+    storageKey: 'money-flow-auth',
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce' as const,
+    lock: noopLock,
+  },
+}
+
 let browserClient: ReturnType<typeof createBrowserClient> | undefined
 
 export const createClient = () => {

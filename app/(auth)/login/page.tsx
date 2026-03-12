@@ -7,7 +7,6 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase'
 import { ensureUserProfile } from '@/lib/profile'
 import Logo from '@/components/ui/Logo'
-import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff } from 'lucide-react'
@@ -24,7 +23,6 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const supabase = createClient()
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
@@ -53,8 +51,9 @@ export default function LoginPage() {
         if (signInData.user) {
           await ensureUserProfile(supabase, signInData.user)
         }
-        router.push('/')
-        router.refresh()
+        // Use a full navigation instead of router.push + router.refresh to avoid
+        // the iOS Safari flash caused by the two-step soft-navigation.
+        window.location.href = '/'
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'An error occurred')
@@ -88,7 +87,7 @@ export default function LoginPage() {
               type="email"
               inputMode="email"
               placeholder="Email"
-              className="w-full rounded-[12px] px-4 py-4 text-base placeholder:opacity-50 focus:outline-none transition-colors"
+              className="w-full rounded-xl px-4 py-4 text-base placeholder:opacity-50 focus:outline-none transition-colors"
               style={{
                 backgroundColor: 'var(--color-card-base)',
                 border: '1px solid var(--color-border-base)',
@@ -103,7 +102,7 @@ export default function LoginPage() {
               {...register('password')}
               type={showPassword ? 'text' : 'password'}
               placeholder="Password"
-              className="w-full rounded-[12px] px-4 py-4 pr-12 text-base placeholder:opacity-50 focus:outline-none transition-colors"
+              className="w-full rounded-xl px-4 py-4 pr-12 text-base placeholder:opacity-50 focus:outline-none transition-colors"
               style={{
                 backgroundColor: 'var(--color-card-base)',
                 border: '1px solid var(--color-border-base)',
@@ -124,7 +123,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full text-white rounded-[14px] py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
+            className="w-full text-white rounded-button py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-income-base)' }}
           >
             {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
