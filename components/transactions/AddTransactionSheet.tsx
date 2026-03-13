@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
@@ -310,6 +310,13 @@ export default function AddTransactionSheet({
     outline: 'none',
   }
 
+  const selectStyle = {
+    ...inputStyle,
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const,
+    paddingRight: '40px',
+  }
+
   const sectionLabelStyle = {
     color: 'var(--color-text-secondary)',
     fontSize: '11px',
@@ -453,14 +460,17 @@ export default function AddTransactionSheet({
             <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
               Category
             </p>
-            <select {...register('category_id')} style={inputStyle}>
-              <option value="">Select category</option>
-              {filteredCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.icon} {category.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select {...register('category_id')} style={selectStyle}>
+                <option value="">Select category</option>
+                {filteredCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.icon} {category.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-text-secondary)' }} />
+            </div>
           </div>
         )}
 
@@ -469,14 +479,17 @@ export default function AddTransactionSheet({
             <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
               Payment Method
             </p>
-            <select {...register('payment_method_id')} style={inputStyle}>
-              <option value="">Select payment method</option>
-              {paymentMethods.map((method) => (
-                <option key={method.id} value={method.id}>
-                  {method.icon} {method.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select {...register('payment_method_id')} style={selectStyle}>
+                <option value="">Select payment method</option>
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>
+                    {method.icon} {method.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-text-secondary)' }} />
+            </div>
           </div>
         )}
       </div>
@@ -491,7 +504,7 @@ export default function AddTransactionSheet({
           <input
             {...register('date')}
             type="date"
-            style={{ ...inputStyle, padding: '12px 16px', fontSize: '15px' }}
+            style={{ ...inputStyle, padding: '12px 16px', fontSize: '16px' }}
           />
         </div>
       </div>
