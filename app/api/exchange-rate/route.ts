@@ -5,8 +5,8 @@ export async function GET() {
   try {
     const supabase = await createServerSupabaseClient()
 
-    // Check cache (less than 1 hour old)
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    // Check cache (less than 15 minutes old)
+    const oneHourAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString()
     const { data: cached } = await supabase
       .from('exchange_rates')
       .select('*')
