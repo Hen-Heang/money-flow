@@ -20,9 +20,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main
           className="relative min-h-screen flex-1 px-0 md:px-2 lg:px-4"
           style={{
-            paddingTop: 'max(4px, env(safe-area-inset-top, 0px))',
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7.25rem)',
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            // 88px (TabBar + margins) + bottom safe area
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
             overflowY: 'auto',
+            overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
           } as React.CSSProperties}
         >

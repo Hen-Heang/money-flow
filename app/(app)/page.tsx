@@ -1,9 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, ArrowRightLeft, AlertTriangle, Lightbulb } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays, parseISO } from 'date-fns'
+import { 
+  ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign, 
+  ArrowRightLeft, AlertTriangle, Lightbulb, Zap, Target, 
+  Coffee, Utensils, Bus, ShoppingBag, Plus, Sparkles, ChevronDown, PieChart as PieIcon,
+  FileText, X
+} from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -12,11 +17,12 @@ import {
 import { createClient } from '@/lib/supabase'
 import { getUserProfile } from '@/lib/profile'
 import Avatar from '@/components/ui/Avatar'
-import { formatKRW, formatUSD, getDisplayName, getGreeting } from '@/lib/utils'
+import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
 import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
 import ChatBot from '@/components/ai/ChatBot'
+import toast from 'react-hot-toast'
 
 interface Transaction {
   id: string
@@ -28,6 +34,13 @@ interface Transaction {
   category_id: string | null
   categories?: { name: string; icon: string; color: string } | null
 }
+
+const QUICK_TEMPLATES = [
+  { name: 'Coffee', icon: Coffee, amount: 5000, category: 'Food & Drink', iconEmoji: '☕️', color: '#10b981' },
+  { name: 'Lunch', icon: Utensils, amount: 12000, category: 'Food & Drink', iconEmoji: '🍱', color: '#3b82f6' },
+  { name: 'Bus/Subway', icon: Bus, amount: 1500, category: 'Transport', iconEmoji: '🚌', color: '#f59e0b' },
+  { name: 'Grocery', icon: ShoppingBag, amount: 30000, category: 'Shopping', iconEmoji: '🛒', color: '#ef4444' },
+]
 
 interface CategoryTotal {
   name: string
@@ -49,11 +62,20 @@ interface ExchangeRateInfo {
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
+interface Category {
+  id: string
+  name: string
+  icon: string
+  color: string
+}
+
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [budgetMap, setBudgetMap] = useState<Record<string, number>>({})
-  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; income: number; expense: number; savings: number }[]>([])
+  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; income: number; expense: number; savings: number; fullDate: Date }[]>([])
   const [loading, setLoading] = useState(true)
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -62,22 +84,20 @@ export default function DashboardPage() {
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
   const supabase = createClient()
 
-  const monthStart = startOfMonth(currentDate)
-  const monthEnd = endOfMonth(currentDate)
-
   const loadData = useCallback(async () => {
+    const monthStart = startOfMonth(currentDate)
+    const monthEnd = endOfMonth(currentDate)
     setLoading(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const profile = await getUserProfile(supabase, user)
-      // getUserProfile can return null if both ensure and fetch fail; guard here
       setUserName(getDisplayName(profile?.email, profile?.display_name))
       setAvatarUrl(profile?.avatar_url ?? null)
 
       const today = new Date()
-      const [{ data }, budgetsResult, { data: historical }] = await Promise.all([
+      const [{ data }, budgetsResult, { data: historical }, catsResult] = await Promise.all([
         supabase
           .from('transactions')
           .select('*, categories(name, icon, color)')
@@ -85,8 +105,6 @@ export default function DashboardPage() {
           .gte('date', format(monthStart, 'yyyy-MM-dd'))
           .lte('date', format(monthEnd, 'yyyy-MM-dd'))
           .order('date', { ascending: false }),
-        // budgets table may not exist in all deployments — catch so it never
-        // breaks the entire Promise.all and sets budgetMap to {} gracefully.
         supabase
           .from('budgets')
           .select('category_id, amount_krw')
@@ -99,9 +117,12 @@ export default function DashboardPage() {
           .eq('user_id', user.id)
           .gte('date', format(startOfMonth(subMonths(today, 5)), 'yyyy-MM-dd'))
           .lte('date', format(endOfMonth(today), 'yyyy-MM-dd')),
+        supabase.from('categories').select('*'),
       ])
 
       setTransactions((data as Transaction[]) || [])
+      if (catsResult.data) setCategories(catsResult.data)
+
       const buds = budgetsResult.data
       if (buds && !budgetsResult.error) {
         const map: Record<string, number> = {}
@@ -110,28 +131,41 @@ export default function DashboardPage() {
         })
         setBudgetMap(map)
       }
-      if (historical) {
+      if (historical && Array.isArray(historical)) {
         const months = []
         for (let i = 5; i >= 0; i--) {
           const m = subMonths(today, i)
           const prefix = format(m, 'yyyy-MM')
-          const txns = (historical as { date: string; type: string; amount_krw: number }[]).filter(t => t.date.startsWith(prefix))
+          const txns = (historical as { date: string; type: string; amount_krw: number }[]).filter(t => t.date && t.date.startsWith(prefix))
           const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
           const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
-          months.push({ month: format(m, 'MMM'), income, expense, savings: income - expense })
+          months.push({ 
+            month: format(m, 'MMM'), 
+            income, 
+            expense, 
+            savings: income - expense,
+            fullDate: m 
+          })
         }
         setMonthlyChartData(months)
       }
     } catch (err) {
-      console.error(err)
+      console.error('Detailed Dashboard loadData error:', err)
+      toast.error('Failed to sync dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [currentDate]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentDate, supabase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadData()
+    setSelectedDate(null) // Reset selection when month changes
   }, [loadData])
+
+  const filteredTransactions = useMemo(() => {
+    if (!selectedDate) return transactions
+    return transactions.filter(t => t.date === selectedDate)
+  }, [transactions, selectedDate])
 
   useEffect(() => {
     let active = true
@@ -157,11 +191,59 @@ export default function DashboardPage() {
     }
   }, [])
 
+  const handleQuickAdd = async (template: typeof QUICK_TEMPLATES[0]) => {
+    haptic('medium')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const category = categories.find(c => c.name === template.category)
+    const rate = exchangeRateInfo?.rate || 1300
+
+    const payload = {
+      user_id: user.id,
+      type: 'expense',
+      description: template.name,
+      amount_krw: template.amount,
+      amount_usd: template.amount / rate,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      category_id: category?.id || null,
+      currency: 'KRW'
+    }
+
+    const { error } = await supabase.from('transactions').insert(payload)
+    if (error) {
+      toast.error('Quick Add failed')
+      return
+    }
+
+    toast.success(`Logged ${template.iconEmoji} ${template.name}`)
+    loadData()
+  }
+
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
   const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
   const balance = totalIncome - totalExpense
-
   const liveRate = exchangeRateInfo?.rate || 1300
+
+  // Quick Insights Calculation
+  const insights = useMemo(() => {
+    const today = new Date()
+    let daysPassed: number
+    if (isSameMonth(currentDate, today)) {
+      daysPassed = today.getDate()
+    } else {
+      daysPassed = differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
+    }
+
+    const dailyAvg = totalExpense / Math.max(daysPassed, 1)
+    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
+    
+    return {
+      dailyAvg,
+      savingsRate,
+      isPositive: savingsRate >= 0
+    }
+  }, [totalExpense, totalIncome, currentDate])
 
   // Category breakdown for pie chart
   const categoryTotals: CategoryTotal[] = []
@@ -229,23 +311,23 @@ export default function DashboardPage() {
   ]
 
   return (
-    <div className="px-4 pt-3 pb-6 max-w-2xl mx-auto overflow-x-hidden">
+    <div className="mx-auto w-full max-w-2xl overflow-x-hidden px-mobile pt-4 pb-8">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 flex items-center justify-between gap-3"
+        className="mb-4 flex flex-col items-start gap-3 min-[431px]:flex-row min-[431px]:items-center min-[431px]:justify-between"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar src={avatarUrl} name={userName} size={52} className="ring-1 ring-white/10 shadow-lg" />
+          <Avatar src={avatarUrl} name={userName} size={48} className="ring-1 ring-white/10 shadow-lg" />
           <div className="min-w-0">
-            <p className="text-base" style={{ color: 'var(--color-text-secondary)' }}>{getGreeting()}</p>
-            <h1 className="truncate text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            <p className="text-[13px]" style={{ color: 'var(--color-text-secondary)' }}>{getGreeting()}</p>
+            <h1 className="truncate text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
               {userName}
             </h1>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex w-full items-center justify-between gap-2 min-[431px]:w-auto min-[431px]:shrink-0 min-[431px]:justify-end">
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => setShowUSD(!showUSD)}
@@ -260,112 +342,221 @@ export default function DashboardPage() {
               WebkitBackdropFilter: 'blur(12px)',
               border: '1px solid rgba(255,255,255,0.12)',
               color: 'var(--color-text-primary)',
-              fontSize: '13px',
+              fontSize: '12px',
               fontWeight: 600,
               touchAction: 'manipulation',
             }}
           >
-            <span style={{ fontSize: '16px', lineHeight: 1 }}>{showUSD ? '🇺🇸' : '🇰🇷'}</span>
+            <span style={{ fontSize: '15px', lineHeight: 1 }}>{showUSD ? '🇺🇸' : '🇰🇷'}</span>
             <span>{showUSD ? 'USD' : 'KRW'}</span>
           </motion.button>
           <ChatBot />
         </div>
       </motion.div>
 
-      {exchangeRateInfo && (
+      {/* Month Selector */}
+      <div className="mb-6 flex items-start justify-between gap-3 px-1">
+        <div className="min-w-0 flex flex-col">
+          <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
+            {format(currentDate, 'MMMM yyyy')}
+          </h2>
+          {exchangeRateInfo && (
+             <p className="truncate text-[11px] font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                1 USD = {formattedExchangeRate} KRW
+             </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }}
+            className="p-2 rounded-xl active:scale-90 transition-transform"
+            style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+          >
+            <ChevronLeft className="w-5 h-5" style={{ color: 'var(--color-text-primary)' }} />
+          </button>
+          <button
+            onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }}
+            className="p-2 rounded-xl active:scale-90 transition-transform"
+            style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+          >
+            <ChevronRight className="w-5 h-5" style={{ color: 'var(--color-text-primary)' }} />
+          </button>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="mb-6 space-y-3">
+        {loading ? (
+          <div className="grid grid-cols-1 gap-3">
+            <CardSkeleton />
+            <div className="grid grid-cols-2 gap-3">
+              <CardSkeleton />
+              <CardSkeleton />
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Primary: Balance */}
+            {(() => {
+              const balanceCard = summaryCards.find(c => c.label === 'Balance')!
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`${balanceCard.glassClass} relative overflow-hidden p-5 shadow-xl sm:p-6`}
+                  style={{ borderRadius: '28px' }}
+                >
+                  <div className="relative z-10 flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black mb-1 opacity-60 uppercase tracking-[0.2em]">Total Balance</p>
+                      <p
+                        className="break-words text-[clamp(2.25rem,10vw,4rem)] font-black leading-none tracking-tighter"
+                        style={{ color: balanceCard.color }}
+                      >
+                        {balanceCard.amount}
+                      </p>
+                    </div>
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+                      style={{ backgroundColor: balanceCard.iconBg }}
+                    >
+                      <balanceCard.icon className="w-6 h-6" style={{ color: balanceCard.color }} />
+                    </div>
+                  </div>
+                  <div className="absolute -right-4 -bottom-4 w-32 h-32 rounded-full opacity-10 blur-3xl" style={{ backgroundColor: balanceCard.color }} />
+                </motion.div>
+              )
+            })()}
+
+            {/* Secondary: Income & Expense */}
+            <div className="grid grid-cols-1 gap-3 min-[431px]:grid-cols-2">
+              {summaryCards.filter(c => c.label !== 'Balance').map(({ label, amount, icon: Icon, color, glassClass, iconBg }) => (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className={`${glassClass} min-w-0 p-4`}
+                  style={{ borderRadius: '24px' }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: iconBg }}
+                    >
+                      <Icon className="w-3.5 h-3.5" style={{ color }} />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{label}</p>
+                  </div>
+                  <p className="truncate text-[clamp(1.5rem,7vw,2rem)] font-black leading-none" style={{ color }}>
+                    {amount}
+                  </p>
+                </motion.div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Quick Add Row */}
+      {!loading && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <Sparkles size={14} className="text-blue-400" />
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-text-secondary)]">Quick Add</p>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar -mx-4 px-4">
+            {QUICK_TEMPLATES.map((t) => (
+              <motion.button
+                key={t.name}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => handleQuickAdd(t)}
+                className="flex flex-col items-center justify-center min-w-[92px] h-24 rounded-[28px] bg-[var(--color-card-base)] border border-[var(--color-border-base)] shadow-sm active:bg-blue-500/5 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: t.color + '15' }}>
+                  <t.icon size={20} style={{ color: t.color }} />
+                </div>
+                <span className="text-[11px] font-black tracking-tight">{t.name}</span>
+              </motion.button>
+            ))}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={() => setShowAddSheet(true)}
+              className="flex flex-col items-center justify-center min-w-[92px] h-24 rounded-[28px] border-2 border-dashed border-white/5 text-white/20"
+            >
+              <Plus size={24} />
+              <span className="text-[10px] font-black uppercase tracking-widest mt-1">More</span>
+            </motion.button>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Activity */}
+      {!loading && transactions.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-6 flex items-center justify-between gap-2 rounded-button px-4 py-2.5"
+          className="rounded-card mb-6 overflow-hidden border border-[var(--color-border-base)]"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--color-accent-base)' }} />
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>
-              1 USD = KRW {formattedExchangeRate ?? '-'}
-            </p>
+          <div className="px-5 py-4 flex items-center justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-text-secondary)]">Recent Activity</h3>
+            <a href="/transactions" className="text-xs font-bold text-[var(--color-accent-base)] hover:opacity-80 transition-opacity">View All</a>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <p className="text-[11px]" style={{ color: 'var(--color-text-secondary)' }}>
-              {format(new Date(exchangeRateInfo.fetched_at), 'MMM d, HH:mm')}
-            </p>
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              style={{
-                backgroundColor: exchangeRateInfo.fallback || exchangeRateInfo.error
-                  ? 'rgba(245,158,11,0.14)' : 'rgba(16,185,129,0.14)',
-                color: exchangeRateInfo.fallback || exchangeRateInfo.error
-                  ? 'var(--color-warning-base)' : 'var(--color-income-base)',
-              }}
-            >
-              {exchangeRateInfo.fallback || exchangeRateInfo.error ? 'Est' : exchangeRateInfo.cached ? 'Cached' : 'Live'}
-            </span>
+          <div className="divide-y divide-[var(--color-border-base)]">
+            {transactions.slice(0, 3).map(t => (
+              <div key={t.id} className="flex items-center gap-4 px-5 py-3.5 active:bg-white/[0.03] transition-colors">
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg shadow-sm"
+                  style={{
+                    backgroundColor: t.type === 'income'
+                      ? 'rgba(16, 185, 129, 0.12)'
+                      : 'rgba(239, 68, 68, 0.12)',
+                  }}
+                >
+                  {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold truncate text-[var(--color-text-primary)]">
+                    {t.description}
+                  </p>
+                  <p className="text-[11px] font-medium text-[var(--color-text-secondary)] mt-0.5">
+                    {format(new Date(t.date), 'MMM d')}
+                    {t.categories ? ` • ${t.categories.name}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p
+                    className="text-[14px] font-black"
+                    style={{ color: t.type === 'income' ? 'var(--color-income-base)' : 'var(--color-expense-base)' }}
+                  >
+                    {t.type === 'income' ? '+' : '-'}{showUSD ? formatUSD(t.amount_krw / liveRate) : formatKRW(t.amount_krw)}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </motion.div>
       )}
 
-      {/* Month Selector */}
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-          className="p-2 rounded-full active:scale-90 transition-transform"
-          style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
-        >
-          <ChevronLeft className="w-5 h-5" style={{ color: 'var(--color-text-primary)' }} />
-        </button>
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-          {format(currentDate, 'MMMM yyyy')}
-        </h2>
-        <button
-          onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-          className="p-2 rounded-full active:scale-90 transition-transform"
-          style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
-        >
-          <ChevronRight className="w-5 h-5" style={{ color: 'var(--color-text-primary)' }} />
-        </button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
-        {loading
-          ? [1, 2, 3].map(i => <CardSkeleton key={i} />)
-          : summaryCards.map(({ label, amount, icon: Icon, color, glassClass, iconBg }) => (
-            <motion.div
-              key={label}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`${glassClass} min-h-33 p-3 sm:p-4`}
-            >
-              <div
-                className="w-8 h-8 rounded-[10px] flex items-center justify-center mb-2"
-                style={{ backgroundColor: iconBg }}
-              >
-                <Icon className="w-4 h-4" style={{ color }} />
-              </div>
-              <p className="text-[10px] font-medium mb-1" style={{ color: 'var(--color-text-secondary)' }}>{label}</p>
-              <p className="wrap-break-word text-[13px] font-bold leading-tight sm:text-sm" style={{ color }}>
-                {amount}
-              </p>
-            </motion.div>
-          ))
-        }
-      </div>
-
-      {/* Budget Progress */}
+      {/* Budget Usage */}
       {totalExpense > 0 && totalIncome > 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="rounded-card p-5 mb-6"
+          className="rounded-card p-5 mb-6 border border-[var(--color-border-base)] shadow-sm"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Budget Usage</h3>
-            <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+            <div className="flex items-center gap-2">
+               <Target className="w-4 h-4 text-[var(--color-text-secondary)]" />
+               <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Monthly Budget Usage</h3>
+            </div>
+            <span className="text-xs font-black px-2 py-0.5 rounded-md bg-[var(--color-card-elevated-base)]" style={{ color: (totalExpense / totalIncome) > 0.8 ? 'var(--color-expense-base)' : 'var(--color-text-secondary)' }}>
               {Math.round((totalExpense / totalIncome) * 100)}%
             </span>
           </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
+          <div className="h-2.5 rounded-full overflow-hidden bg-[var(--color-card-elevated-base)]">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${Math.min((totalExpense / totalIncome) * 100, 100)}%` }}
@@ -375,149 +566,19 @@ export default function DashboardPage() {
                 backgroundColor: (totalExpense / totalIncome) > 0.8
                   ? 'var(--color-expense-base)'
                   : 'var(--color-income-base)',
+                boxShadow: `0 0 12px ${(totalExpense / totalIncome) > 0.8 ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`
               }}
             />
           </div>
-          <p className="text-xs mt-2" style={{ color: 'var(--color-text-secondary)' }}>
-            {formatKRW(totalExpense)} of {formatKRW(totalIncome)} spent
-          </p>
-        </motion.div>
-      )}
-
-      {/* Spending Insights */}
-      {!loading && categoryTotals.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-card p-5 mb-6"
-          style={{ backgroundColor: 'var(--color-card-base)' }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(245,158,11,0.15)' }}
-            >
-              <Lightbulb className="w-4 h-4" style={{ color: 'var(--color-warning-base)' }} />
-            </div>
-            <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Spending Insights</h3>
-          </div>
-
-          {/* Warning alert if overspending */}
-          {totalIncome > 0 && (totalExpense / totalIncome) > 0.7 && (
-            <div
-              className="mb-4 flex items-start gap-3 rounded-xl p-3"
-              style={{ backgroundColor: (totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)', border: `1px solid ${(totalExpense / totalIncome) > 1 ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}` }}
-            >
-              <AlertTriangle
-                className="w-4 h-4 mt-0.5 shrink-0"
-                style={{ color: (totalExpense / totalIncome) > 1 ? 'var(--color-expense-base)' : 'var(--color-warning-base)' }}
-              />
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
-                {(totalExpense / totalIncome) > 1
-                  ? `You've exceeded your income by ${formatKRW(totalExpense - totalIncome)} this month.`
-                  : `You've used ${Math.round((totalExpense / totalIncome) * 100)}% of your income. Watch your spending.`}
-              </p>
-            </div>
-          )}
-
-          {/* Top spending categories */}
-          <div className="space-y-3">
-            {categoryTotals.slice(0, 3).map((cat, index) => {
-              const pct = totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0
-              const isTop = index === 0
-              return (
-                <div key={cat.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-base leading-none">{cat.icon}</span>
-                      <span className="text-sm font-medium truncate" style={{ color: isTop ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                        {cat.name}
-                      </span>
-                      {isTop && (
-                        <span
-                          className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold shrink-0"
-                          style={{ backgroundColor: 'rgba(239,68,68,0.12)', color: 'var(--color-expense-base)' }}
-                        >
-                          TOP
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-2">
-                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>{Math.round(pct)}%</span>
-                      <span className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                        {fmt(cat.total)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.6, ease: 'easeOut', delay: index * 0.1 }}
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: cat.color || '#3b82f6' }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Budget Progress */}
-      {!loading && budgetedCategories.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-card p-5 mb-6"
-          style={{ backgroundColor: 'var(--color-card-base)' }}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>Monthly Budgets</h3>
-            <a href="/settings" className="text-xs" style={{ color: 'var(--color-accent-base)' }}>Edit</a>
-          </div>
-          <div className="space-y-4">
-            {budgetedCategories.map(cat => {
-              const pct = Math.min((cat.total / cat.budget!) * 100, 100)
-              const over = cat.total > cat.budget!
-              const warn = pct >= 80
-              const barColor = over ? 'var(--color-expense-base)' : warn ? 'var(--color-warning-base)' : 'var(--color-income-base)'
-              return (
-                <div key={cat.name}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-base leading-none">{cat.icon}</span>
-                      <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>
-                        {cat.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <span className="text-xs font-semibold" style={{ color: barColor }}>
-                        {fmt(cat.total)}
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-                        / {fmt(cat.budget!)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.7, ease: 'easeOut' }}
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: barColor }}
-                    />
-                  </div>
-                  {over && (
-                    <p className="text-[11px] mt-1" style={{ color: 'var(--color-expense-base)' }}>
-                      Over by {fmt(cat.total - cat.budget!)}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+          <div className="flex justify-between mt-3">
+             <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Spent</span>
+                <p className="text-[13px] font-black text-[var(--color-text-primary)]">{formatKRW(totalExpense)}</p>
+             </div>
+             <div className="flex flex-col text-right">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Total Budget</span>
+                <p className="text-[13px] font-black text-[var(--color-text-primary)]">{formatKRW(totalIncome)}</p>
+             </div>
           </div>
         </motion.div>
       )}
@@ -527,44 +588,64 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-card p-5 mb-6"
+          className="rounded-card p-5 mb-6 border border-[var(--color-border-base)]"
           style={{ backgroundColor: 'var(--color-card-base)' }}
         >
-          <h3 className="font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Daily Trend</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={dailyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-base)" />
-              <XAxis
-                dataKey="day"
-                tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }}
-                interval={4}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)' }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: 'var(--color-card-elevated-base)',
-                  border: '1px solid var(--color-border-base)',
-                  borderRadius: '12px',
-                  color: 'var(--color-text-primary)',
-                }}
-                formatter={(value) => [formatKRW(Number(value))]}
-              />
-              <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#expenseGrad)" strokeWidth={2} />
-              <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#incomeGrad)" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-6">
+             <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-purple-400" />
+                <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Daily Spending Flow</h3>
+             </div>
+             <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                   <div className="w-2 h-2 rounded-full bg-[var(--color-income-base)]" />
+                   <span className="text-[10px] font-bold uppercase tracking-tighter text-[var(--color-text-secondary)]">In</span>
+                </div>
+                <div className="flex items-center gap-1">
+                   <div className="w-2 h-2 rounded-full bg-[var(--color-expense-base)]" />
+                   <span className="text-[10px] font-bold uppercase tracking-tighter text-[var(--color-text-secondary)]">Out</span>
+                </div>
+             </div>
+          </div>
+          <div className="h-[160px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={dailyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border-base)" vertical={false} opacity={0.5} />
+                <XAxis
+                  dataKey="day"
+                  tick={{ fontSize: 10, fill: 'var(--color-text-secondary)', fontWeight: 700 }}
+                  interval={4}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--color-text-secondary)', fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--color-card-elevated-base)',
+                    border: '1px solid var(--color-border-base)',
+                    borderRadius: '12px',
+                    color: 'var(--color-text-primary)',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.2)'
+                  }}
+                  formatter={(value) => [formatKRW(Number(value))]}
+                />
+                <Area type="monotone" dataKey="expense" stroke="#ef4444" fill="url(#expenseGrad)" strokeWidth={3} />
+                <Area type="monotone" dataKey="income" stroke="#10b981" fill="url(#incomeGrad)" strokeWidth={3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </motion.div>
       )}
 
