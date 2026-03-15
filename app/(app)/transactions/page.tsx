@@ -18,6 +18,8 @@ interface Transaction {
   description: string
   amount_krw: number
   amount_usd: number
+  currency?: string
+  exchange_rate?: number
   category_id: string | null
   payment_method_id: string | null
   note: string | null
@@ -212,7 +214,7 @@ function SwipeableRow({
             {showUSD ? formatUSD(transaction.amount_krw / liveRate) : formatKRW(transaction.amount_krw)}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-            {format(parseISO(transaction.date), 'h:mm a')}
+            {format(parseISO(transaction.date), 'MMM d')}
           </p>
         </div>
       </motion.div>
@@ -231,6 +233,7 @@ export default function TransactionsPage() {
     const timer = setTimeout(() => setDebouncedSearch(search), 400)
     return () => clearTimeout(timer)
   }, [search])
+
   const [filter, setFilter] = useState<FilterType>('all')
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -260,7 +263,7 @@ export default function TransactionsPage() {
         .range(reset ? 0 : page * PAGE_SIZE, (reset ? 0 : page) * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (filter !== 'all') query = query.eq('type', filter)
-      if (search) query = query.ilike('description', `%${search}%`)
+      if (debouncedSearch) query = query.ilike('description', `%${debouncedSearch}%`)
 
       const { data, error } = await query
       if (error) throw error
@@ -280,11 +283,11 @@ export default function TransactionsPage() {
       setLoading(false)
       loadingRef.current = false
     }
-  }, [filter, search, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadTransactions(true)
-  }, [filter, search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch('/api/exchange-rate')
@@ -438,7 +441,11 @@ export default function TransactionsPage() {
                           liveRate={liveRate}
                           onDelete={handleDelete}
                           onEdit={(t) => {
-                            setEditingTransaction(t)
+                            setEditingTransaction({
+                              ...t,
+                              currency: t.currency,
+                              exchange_rate: t.exchange_rate,
+                            })
                             setShowAddSheet(true)
                           }}
                         />
