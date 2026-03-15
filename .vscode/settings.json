@@ -1,4 +1,5 @@
 {
+  "languageTool.enabled": false,
   "cSpell.enabledLanguageIds": [
     "javascript",
     "javascriptreact",

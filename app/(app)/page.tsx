@@ -429,7 +429,7 @@ export default function DashboardPage() {
             })()}
 
             {/* Secondary: Income & Expense */}
-            <div className="grid grid-cols-1 gap-3 min-[431px]:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3">
               {summaryCards.filter(c => c.label !== 'Balance').map(({ label, amount, icon: Icon, color, glassClass, iconBg }) => (
                 <motion.div
                   key={label}
@@ -448,7 +448,7 @@ export default function DashboardPage() {
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{label}</p>
                   </div>
-                  <p className="truncate text-[clamp(1.5rem,7vw,2rem)] font-black leading-none" style={{ color }}>
+                  <p className="truncate text-[clamp(1rem,4.5vw,1.35rem)] font-black leading-none" style={{ color }}>
                     {amount}
                   </p>
                 </motion.div>
