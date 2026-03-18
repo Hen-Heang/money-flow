@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(node -e \"const {createBrowserClient} = require\\(''@supabase/ssr''\\); try { createBrowserClient\\(''https://placeholder.supabase.co'', ''placeholder-key''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERROR:'', e.message\\); }\")"
+      "Bash(node -e \"const {createBrowserClient} = require\\(''@supabase/ssr''\\); try { createBrowserClient\\(''https://placeholder.supabase.co'', ''placeholder-key''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERROR:'', e.message\\); }\")",
+      "Bash(npx tsc:*)"
     ]
   }
 }

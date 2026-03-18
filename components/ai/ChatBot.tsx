@@ -433,7 +433,7 @@ export default function ChatBot() {
             exit={isMobile ? { y: '100%' } : { opacity: 0, y: -8, scale: 0.97 }}
             transition={
               isMobile
-                ? { type: 'spring', damping: 32, stiffness: 280 }
+                ? { type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }
                 : { duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }
             }
             drag={isMobile ? 'y' : false}
@@ -448,7 +448,7 @@ export default function ChatBot() {
             style={
               isMobile
                 ? {
-                    background: 'var(--color-card-base)',
+                    background: 'var(--color-bg)',
                     willChange: 'transform',
                   }
                 : {
@@ -467,14 +467,14 @@ export default function ChatBot() {
                 style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}
               >
                 <div
-                  className="h-1 w-9 rounded-full"
-                  style={{ background: 'var(--color-border-base)', opacity: 0.7 }}
+                  className="h-1.5 w-10 rounded-full"
+                  style={{ background: 'var(--color-border-base)', opacity: 0.5 }}
                 />
               </div>
             )}
 
             <div
-              className="relative shrink-0 overflow-hidden px-4 pb-3 pt-3 sm:pb-4 sm:pt-4"
+              className="relative shrink-0 overflow-hidden px-5 pb-4 pt-3"
               style={{ borderBottom: '1px solid var(--color-border-base)' }}
             >
               <div
@@ -485,130 +485,96 @@ export default function ChatBot() {
                 }}
               />
 
-              <div className="relative flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+              <div className="relative flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <AIBadge />
                   <div className="min-w-0">
                     <div
-                      className="text-[11px] uppercase tracking-[0.26em]"
+                      className="text-[10px] font-bold uppercase tracking-[0.2em]"
                       style={{ color: 'var(--color-text-secondary)' }}
                     >
                       Finance assistant
                     </div>
                     <h2
-                      className="truncate text-[15px] font-semibold sm:text-base"
+                      className="truncate text-lg font-black tracking-tight"
                       style={{ color: 'var(--color-text-primary)' }}
                     >
-                      Ask better money questions
+                      Money AI
                     </h2>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-2">
                   {hasMessages && (
                     <button
                       type="button"
                       onClick={clearMessages}
-                      className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-black/10 dark:hover:bg-white/10"
-                      style={{
-                        color: 'var(--color-text-secondary)',
-                        border: '1px solid var(--color-border-base)',
-                        background: 'var(--color-card-elevated-base)',
-                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)] active:scale-90 transition-transform"
                     >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>New Chat</span>
+                      <RotateCcw className="h-4 w-4" />
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-black/10 dark:hover:bg-white/10"
-                    style={{ color: 'var(--color-text-secondary)' }}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)] active:scale-90 transition-transform"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
-
-              <p
-                className="relative mt-2 max-w-[34ch] text-[13px] leading-6 sm:mt-2.5 sm:text-sm"
-                style={{ color: 'var(--color-text-secondary)' }}
-              >
-                Quick reads, spending explanations, and cleaner guidance for your monthly decisions.
-              </p>
-
-              {showSuggestions && (
-                <div className="relative mt-3 grid grid-cols-1 gap-2 sm:mt-3.5 sm:grid-cols-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => append(s)}
-                      className="rounded-button px-3 py-2.5 text-left text-xs leading-5 transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-                      style={{
-                        background: 'var(--color-card-elevated-base)',
-                        border: '1px solid var(--color-border-base)',
-                        color: 'var(--color-text-primary)',
-                      }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3.5 sm:py-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               {!hasMessages ? (
                 <div
-                  className="rounded-[18px] p-4"
+                  className="rounded-2xl p-5"
                   style={{
                     background: 'var(--color-card-elevated-base)',
                     border: '1px solid var(--color-border-base)',
                   }}
                 >
                   <div
-                    className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.22em]"
-                    style={{ color: 'var(--color-text-secondary)' }}
+                    className="mb-2.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]"
+                    style={{ color: 'var(--color-accent-base)' }}
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     Start here
                   </div>
-                  <p className="text-sm leading-6" style={{ color: 'var(--color-text-primary)' }}>
+                  <p className="text-sm font-medium leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
                     Try asking for a monthly summary, an explanation of unusual spending, or a simple action plan for next month.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {messages.map((message) => {
                     const isUser = message.role === 'user'
                     return (
                       <motion.div
                         key={message.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className={`flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                        className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
                       >
                         {!isUser && (
                           <div
-                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                            className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl shadow-lg"
                             style={{ background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)' }}
                           >
-                            <Bot className="h-3.5 w-3.5 text-white" />
+                            <Bot className="h-4 w-4 text-white" />
                           </div>
                         )}
 
                         <div
-                          className={`max-w-[84%] rounded-[18px] px-4 py-2.5 ${
-                            isUser ? 'rounded-tr-md' : 'rounded-tl-md'
+                          className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm ${
+                            isUser ? 'rounded-tr-none' : 'rounded-tl-none'
                           } ${message.error ? 'opacity-70' : ''}`}
                           style={
                             isUser
                               ? {
                                   background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)',
                                   color: '#eff6ff',
-                                  boxShadow: '0 8px 20px rgba(29,78,216,0.22)',
+                                  boxShadow: '0 8px 24px rgba(29,78,216,0.25)',
                                 }
                               : {
                                   background: 'var(--color-card-elevated-base)',
@@ -623,37 +589,28 @@ export default function ChatBot() {
                             <button
                               type="button"
                               onClick={retry}
-                              className="mt-2 flex items-center gap-1.5 text-xs font-medium opacity-80 transition-opacity hover:opacity-100"
+                              className="mt-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
                               style={{ color: 'var(--color-accent-base)' }}
                             >
-                              <RotateCcw className="h-3 w-3" />
+                              <RotateCcw className="h-3.5 w-3.5" />
                               Retry
                             </button>
                           )}
                         </div>
-
-                        {isUser && (
-                          <div
-                            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                            style={{ background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)' }}
-                          >
-                            <User className="h-3.5 w-3.5 text-white" />
-                          </div>
-                        )}
                       </motion.div>
                     )
                   })}
 
                   {showTyping && (
-                    <div className="flex gap-2.5">
+                    <div className="flex gap-3">
                       <div
-                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                        className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
                         style={{ background: 'linear-gradient(135deg, #8b5cf6, #3b82f6)' }}
                       >
-                        <Bot className="h-3.5 w-3.5 text-white" />
+                        <Bot className="h-4 w-4 text-white" />
                       </div>
                       <div
-                        className="flex items-center gap-1 rounded-[18px] rounded-tl-md px-4 py-3"
+                        className="flex items-center gap-1.5 rounded-2xl rounded-tl-none px-5 py-4"
                         style={{
                           background: 'var(--color-card-elevated-base)',
                           border: '1px solid var(--color-border-base)',
@@ -664,7 +621,7 @@ export default function ChatBot() {
                             key={i}
                             className="h-1.5 w-1.5 rounded-full"
                             style={{ background: 'var(--color-accent-base)' }}
-                            animate={{ opacity: [0.25, 1, 0.25], y: [0, -2, 0] }}
+                            animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
                             transition={{ duration: 1, repeat: Infinity, delay: i * 0.15 }}
                           />
                         ))}
@@ -672,30 +629,30 @@ export default function ChatBot() {
                     </div>
                   )}
 
-                  <div ref={messagesEndRef} />
+                  <div ref={messagesEndRef} className="h-4" />
                 </div>
               )}
             </div>
 
             <div
-              className="shrink-0 px-4 pt-2.5 sm:pt-3"
+              className="shrink-0 px-5 pt-3 glass-ios"
               style={{
                 borderTop: '1px solid var(--color-border-base)',
                 paddingBottom: isMobile && keyboardOffset > 0
-                  ? `${keyboardOffset + 8}px`
+                  ? `${keyboardOffset + 12}px`
                   : isMobile
-                    ? 'max(20px, env(safe-area-inset-bottom, 20px))'
-                    : 'max(16px, env(safe-area-inset-bottom, 16px))',
+                    ? 'max(24px, env(safe-area-inset-bottom, 24px))'
+                    : 'max(20px, env(safe-area-inset-bottom, 20px))',
               }}
             >
-              <form onSubmit={handleSubmit} className="flex items-center gap-2">
+              <form onSubmit={handleSubmit} className="flex items-center gap-2.5">
                 <input
                   ref={inputRef}
                   value={input}
                   onChange={handleInputChange}
-                  placeholder="Ask about budget, savings, or spending..."
+                  placeholder="Ask anything..."
                   disabled={isLoading}
-                  className="flex-1 rounded-button px-4 py-2.5 text-sm outline-none disabled:opacity-50"
+                  className="flex-1 rounded-2xl px-4 py-3 text-[15px] font-medium outline-none disabled:opacity-50"
                   style={{
                     background: 'var(--color-card-elevated-base)',
                     border: '1px solid var(--color-border-base)',
@@ -710,15 +667,15 @@ export default function ChatBot() {
                 />
                 <motion.button
                   type="submit"
-                  whileTap={{ scale: 0.94 }}
+                  whileTap={{ scale: 0.9 }}
                   disabled={isLoading || !input.trim()}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
                   style={{
                     background: 'linear-gradient(135deg, var(--color-accent-base), #1d4ed8)',
-                    boxShadow: '0 8px 20px rgba(37,99,235,0.28)',
+                    boxShadow: '0 8px 24px rgba(37,99,235,0.3)',
                   }}
                 >
-                  <Send className="h-4 w-4 text-white" />
+                  <Send className="h-5 w-5 text-white" />
                 </motion.button>
               </form>
             </div>

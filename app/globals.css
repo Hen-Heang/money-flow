@@ -15,25 +15,34 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  --radius-card: 20px;
-  --radius-button: 14px;
-  --radius-input: 12px;
-  --radius-sheet: 24px;
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-full: 9999px;
 
+  --spacing-mobile: clamp(16px, 5vw, 24px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  
   --breakpoint-xs: 375px;
 }
 
 html {
   scroll-behavior: smooth;
+  height: -webkit-fill-available;
 }
 
 :root {
   --color-bg: #0a0f1a;
   --color-card-base: #111827;
   --color-card-elevated-base: #1a2332;
-  --color-text-primary: #e2e8f0;
+  --color-text-primary: #f8fafc;
   --color-text-secondary: #94a3b8;
-  --color-border-base: #1e293b;
+  --color-border-base: rgba(255, 255, 255, 0.08);
   --color-income-base: #10b981;
   --color-expense-base: #ef4444;
   --color-accent-base: #3b82f6;
@@ -60,22 +69,40 @@ html {
 
 body {
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(900px 420px at -10% -10%, color-mix(in srgb, var(--color-accent-base) 16%, transparent), transparent 60%),
-    radial-gradient(700px 340px at 120% -20%, color-mix(in srgb, var(--color-income-base) 14%, transparent), transparent 60%);
+    radial-gradient(900px 420px at -10% -10%, color-mix(in srgb, var(--color-accent-base) 12%, transparent), transparent 70%),
+    radial-gradient(700px 340px at 120% -20%, color-mix(in srgb, var(--color-income-base) 10%, transparent), transparent 70%);
   color: var(--color-text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
-  transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+/* Base Typography */
+p, span, div {
+  font-size: 14px;
+}
+
+.text-tiny { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+.text-xs { font-size: 12px; }
+.text-sm { font-size: 14px; }
+.text-base { font-size: 16px; }
+.text-lg { font-size: 18px; }
+.text-xl { font-size: 20px; }
+.text-2xl { font-size: 24px; }
 
 button, a {
   touch-action: manipulation;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active {
+  transform: scale(0.96);
 }
 
 input, select, textarea {
@@ -83,13 +110,40 @@ input, select, textarea {
   font-size: 16px !important;
 }
 
-/* Safe area utilities */
-.pt-safe-top { padding-top: env(safe-area-inset-top, 0px); }
-.pb-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
-.pl-safe-left { padding-left: env(safe-area-inset-left, 0px); }
-.pr-safe-right { padding-right: env(safe-area-inset-right, 0px); }
-.mt-safe-top { margin-top: env(safe-area-inset-top, 0px); }
-.mb-safe-bottom { margin-bottom: env(safe-area-inset-bottom, 0px); }
+/* Layout Utilities */
+.px-mobile {
+  padding-left: calc(16px + var(--safe-left));
+  padding-right: calc(16px + var(--safe-right));
+}
+
+.pt-safe { padding-top: var(--safe-top); }
+.pb-safe { padding-bottom: var(--safe-bottom); }
+
+.mb-home { margin-bottom: var(--safe-bottom); }
+.pb-home { padding-bottom: var(--safe-bottom); }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Components ── */
+.rounded-button {
+  border-radius: var(--radius-md);
+}
+
+.card-premium {
+  background: var(--color-card-base);
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.glass-morphic {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
 
 /* Skeleton shimmer */
 @keyframes shimmer {
@@ -106,7 +160,9 @@ input, select, textarea {
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s linear infinite;
+  border-radius: var(--radius-sm);
 }
+
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
@@ -133,6 +189,21 @@ input, select, textarea {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.glass-ios {
+  background: color-mix(in srgb, var(--color-card-base) 70%, transparent);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 12px);
 }
 
 .surface-card {

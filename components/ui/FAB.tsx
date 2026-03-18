@@ -11,21 +11,28 @@ interface FABProps {
 export default function FAB({ onClick }: FABProps) {
   return (
     <motion.button
-      whileTap={{ scale: 0.9 }}
-      whileHover={{ scale: 1.04, y: -1 }}
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      whileTap={{ scale: 0.94 }}
+      whileHover={{ scale: 1.05, y: -1 }}
+      transition={{ 
+        type: 'spring', 
+        stiffness: 500, 
+        damping: 30,
+        mass: 0.8
+      }}
       onClick={onClick}
-      className="fixed z-60 flex items-center justify-center"
+      className="fixed z-60 flex items-center justify-center shadow-[0_12px_30px_rgba(0,0,0,0.3)] active:shadow-none"
       style={{
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 86px)',
-        right: 'max(16px, env(safe-area-inset-right, 0px))',
-        width: '60px',
-        height: '60px',
-        borderRadius: '50%',
-        background: 'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
-        boxShadow: '0 12px 32px color-mix(in srgb, var(--color-accent-base) 45%, transparent)',
-        border: '1px solid color-mix(in srgb, white 40%, transparent)',
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+        right: 'var(--spacing-mobile)',
+        width: '56px',
+        height: '56px',
+        borderRadius: '20px', // Modern squircle-like radius
+        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3)',
         touchAction: 'manipulation',
-        WebkitTapHighlightColor: 'transparent',
       } as React.CSSProperties}
       aria-label="Add transaction"
     >
