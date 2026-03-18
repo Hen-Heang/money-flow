@@ -6,7 +6,7 @@ import { format, parseISO } from 'date-fns'
 import { Search, X, Trash2, Edit3 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
-import { formatKRW, formatUSD } from '@/lib/utils'
+import { formatKRW, formatUSD, haptic } from '@/lib/utils'
 import { TransactionSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
 import AddTransactionSheet, { EditTransaction } from '@/components/transactions/AddTransactionSheet'
@@ -18,6 +18,8 @@ interface Transaction {
   description: string
   amount_krw: number
   amount_usd: number
+  currency?: string
+  exchange_rate?: number
   category_id: string | null
   payment_method_id: string | null
   note: string | null
@@ -212,7 +214,7 @@ function SwipeableRow({
             {showUSD ? formatUSD(transaction.amount_krw / liveRate) : formatKRW(transaction.amount_krw)}
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-            {format(parseISO(transaction.date), 'h:mm a')}
+            {format(parseISO(transaction.date), 'MMM d')}
           </p>
         </div>
       </motion.div>
@@ -224,6 +226,14 @@ export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  // Debounce search input for production performance
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400)
+    return () => clearTimeout(timer)
+  }, [search])
+
   const [filter, setFilter] = useState<FilterType>('all')
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
@@ -253,7 +263,7 @@ export default function TransactionsPage() {
         .range(reset ? 0 : page * PAGE_SIZE, (reset ? 0 : page) * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (filter !== 'all') query = query.eq('type', filter)
-      if (search) query = query.ilike('description', `%${search}%`)
+      if (debouncedSearch) query = query.ilike('description', `%${debouncedSearch}%`)
 
       const { data, error } = await query
       if (error) throw error
@@ -273,11 +283,11 @@ export default function TransactionsPage() {
       setLoading(false)
       loadingRef.current = false
     }
-  }, [filter, search, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadTransactions(true)
-  }, [filter, search]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch('/api/exchange-rate')
@@ -314,7 +324,7 @@ export default function TransactionsPage() {
     <div className="max-w-2xl mx-auto overflow-x-hidden">
       {/* Header */}
       <div
-        className="sticky top-0 z-20 px-4 pt-4 pb-4"
+        className="sticky top-0 z-20 px-mobile pt-4 pb-4"
         style={{
           backgroundColor: 'color-mix(in srgb, var(--color-bg) 92%, transparent)',
           backdropFilter: 'blur(14px)',
@@ -322,17 +332,15 @@ export default function TransactionsPage() {
         }}
       >
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Transactions</h1>
+          <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Transactions</h1>
           <button
-            onClick={() => setShowUSD(!showUSD)}
-            className="px-3 py-1.5 rounded-full text-lg leading-none"
+            onClick={() => { haptic('light'); setShowUSD(!showUSD) }}
+            className="px-3 py-1.5 rounded-full text-lg leading-none transition-transform active:scale-90"
             style={{
               backgroundColor: 'var(--color-card-elevated-base)',
               color: 'var(--color-accent-base)',
               border: '1px solid var(--color-border-base)',
             }}
-            aria-label={showUSD ? 'Switch to KRW' : 'Switch to USD'}
-            title={showUSD ? 'USD mode' : 'KRW mode'}
           >
             {showUSD ? '🇺🇸' : '🇰🇷'}
           </button>
@@ -361,12 +369,12 @@ export default function TransactionsPage() {
         </div>
 
         {/* Filter chips */}
-        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {filters.map(f => (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
-              className="shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all active:scale-95"
+              onClick={() => { haptic('light'); setFilter(f.value) }}
+              className="shrink-0 px-4 py-1.5 rounded-full text-sm font-black uppercase tracking-widest transition-all active:scale-95"
               style={{
                 backgroundColor: filter === f.value ? 'var(--color-income-base)' : 'var(--color-card-elevated-base)',
                 color: filter === f.value ? 'white' : 'var(--color-text-secondary)',
@@ -381,17 +389,17 @@ export default function TransactionsPage() {
       {/* Transaction list */}
       <div className="pb-4">
         {loading ? (
-          <div className="space-y-1">
+          <div className="space-y-1 px-mobile">
             {[1, 2, 3, 4, 5].map(i => <TransactionSkeleton key={i} />)}
           </div>
         ) : transactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+          <div className="flex flex-col items-center justify-center py-20 text-center px-mobile">
             <div className="text-5xl mb-4">🔍</div>
-            <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>
-              No transactions found
+            <h3 className="text-xl font-black mb-2" style={{ color: 'var(--color-text-primary)' }}>
+              No data
             </h3>
-            <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-              {search ? 'Try a different search term' : 'Add your first transaction using the + button'}
+            <p className="text-sm font-bold opacity-50 uppercase tracking-widest">
+              {search ? 'No matches' : 'Add something new'}
             </p>
           </div>
         ) : (
@@ -404,13 +412,13 @@ export default function TransactionsPage() {
                 <div key={date} className="mb-4">
                   {/* Date header */}
                   <div
-                    className="flex items-center justify-between px-4 py-2"
+                    className="flex items-center justify-between px-mobile py-2"
                     style={{ backgroundColor: 'var(--color-bg)' }}
                   >
-                    <p className="text-xs font-semibold" style={{ color: 'var(--color-text-secondary)' }}>
+                    <p className="text-[11px] font-black uppercase tracking-widest opacity-50">
                       {format(parseISO(date), 'EEEE, MMM d')}
                     </p>
-                    <div className="flex gap-3 text-xs">
+                    <div className="flex gap-3 text-[11px] font-black tracking-tight">
                       {dayIncome > 0 && (
                         <span style={{ color: 'var(--color-income-base)' }}>+{formatKRW(dayIncome)}</span>
                       )}
@@ -421,11 +429,11 @@ export default function TransactionsPage() {
                   </div>
 
                   {/* Transactions for this date */}
-                  <div className="mx-4 overflow-hidden rounded-2xl" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                  <div className="mx-mobile overflow-hidden rounded-[24px] border border-[var(--color-border-base)] shadow-sm" style={{ backgroundColor: 'var(--color-card-base)' }}>
                     {txns.map((t, i) => (
                       <div key={t.id}>
                         {i > 0 && (
-                          <div className="mx-4 h-px" style={{ backgroundColor: 'var(--color-border-base)' }} />
+                          <div className="mx-4 h-px opacity-50" style={{ backgroundColor: 'var(--color-border-base)' }} />
                         )}
                         <SwipeableRow
                           transaction={t}
@@ -433,7 +441,11 @@ export default function TransactionsPage() {
                           liveRate={liveRate}
                           onDelete={handleDelete}
                           onEdit={(t) => {
-                            setEditingTransaction(t)
+                            setEditingTransaction({
+                              ...t,
+                              currency: t.currency,
+                              exchange_rate: t.exchange_rate,
+                            })
                             setShowAddSheet(true)
                           }}
                         />
@@ -446,14 +458,10 @@ export default function TransactionsPage() {
 
             {/* Load more */}
             {hasMore && (
-              <div className="flex justify-center py-4">
+              <div className="flex justify-center py-6">
                 <button
                   onClick={() => loadTransactions()}
-                  className="px-6 py-2 rounded-full text-sm font-medium"
-                  style={{
-                    backgroundColor: 'var(--color-card-elevated-base)',
-                    color: 'var(--color-accent-base)',
-                  }}
+                  className="px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest bg-[var(--color-card-elevated-base)] text-[var(--color-accent-base)] border border-[var(--color-border-base)] active:scale-95 transition-all"
                 >
                   Load more
                 </button>

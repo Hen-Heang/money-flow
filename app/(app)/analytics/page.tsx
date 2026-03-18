@@ -99,7 +99,7 @@ export default function AnalyticsPage() {
   }
 
   return (
-    <div className="px-4 py-6 max-w-2xl mx-auto">
+    <div className="px-mobile py-6 max-w-2xl mx-auto">
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}

@@ -86,6 +86,11 @@ ${recentTx}
 `
       : 'No transaction data available yet.'
 
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
+  if (!apiKey || apiKey === 'YOUR_GOOGLE_AI_API_KEY') {
+    return new Response('Google AI API Key is missing. Please set GOOGLE_GENERATIVE_AI_API_KEY in your .env file.', { status: 500 })
+  }
+
   const result = streamText({
     model: google(DEFAULT_GEMINI_MODEL),
     system: `You are a friendly and insightful personal finance assistant for the Money Flow app.

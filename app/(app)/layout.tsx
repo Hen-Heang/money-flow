@@ -4,7 +4,7 @@ import TabBar from '@/components/layout/TabBar'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="relative flex min-h-screen overflow-x-clip">
+    <div className="relative flex min-h-screen w-full overflow-x-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 -top-35 h-75"
@@ -16,14 +16,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <Sidebar />
 
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64">
+      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64 w-full">
         <main
-          className="relative min-h-screen flex-1 px-0 md:px-2 lg:px-4"
+          className="relative flex-1 w-full"
           style={{
-            paddingTop: 'max(4px, env(safe-area-inset-top, 0px))',
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7.25rem)',
-            overflowY: 'auto',
-            WebkitOverflowScrolling: 'touch',
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
           } as React.CSSProperties}
         >
           {children}
