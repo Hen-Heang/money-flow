@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, X, Delete } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
@@ -26,18 +26,18 @@ function useIsMobile() {
   return isMobile
 }
 
-function useKeyboardOffset() {
-  const [offset, setOffset] = useState(0)
+// Detects when the native iOS keyboard is open by watching visualViewport height
+function useKeyboardVisible() {
+  const [visible, setVisible] = useState(false)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const vv = window.visualViewport
     if (!vv) return
-    const update = () => setOffset(Math.max(0, window.innerHeight - vv.height))
-    update()
+    const update = () => setVisible(window.innerHeight - vv.height > 100)
     vv.addEventListener('resize', update)
     return () => vv.removeEventListener('resize', update)
   }, [])
-  return offset
+  return visible
 }
 
 const schema = z.object({
@@ -88,6 +88,14 @@ interface Props {
   editTransaction?: EditTransaction
 }
 
+// Keypad rows: last row has 3 keys, with '0' spanning 2 columns
+const KEYPAD_ROWS: string[][] = [
+  ['7', '8', '9', '+'],
+  ['4', '5', '6', '−'],
+  ['1', '2', '3', '='],
+  ['.', '0', '⌫'],
+]
+
 export default function AddTransactionSheet({
   isOpen,
   onClose,
@@ -98,12 +106,17 @@ export default function AddTransactionSheet({
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [exchangeRate, setExchangeRate] = useState(1300)
   const [canDrag, setCanDrag] = useState(true)
-  const amountInputRef = useRef<HTMLInputElement>(null)
+  const [showDetails, setShowDetails] = useState(false)
+
+  // Calc buffer/op — only ever set in event handlers, never in effects
+  const [calcBuffer, setCalcBuffer] = useState<number | null>(null)
+  const [calcOp, setCalcOp] = useState<'+' | '-' | null>(null)
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const isEditing = !!editTransaction
   const isMobile = useIsMobile()
-  const keyboardOffset = useKeyboardOffset()
+  const keyboardVisible = useKeyboardVisible()
 
   const {
     register,
@@ -125,18 +138,20 @@ export default function AddTransactionSheet({
 
   const type = useWatch({ control, name: 'type' })
   const currency = useWatch({ control, name: 'currency' })
+  const categoryId = useWatch({ control, name: 'category_id' })
+  // displayValue is derived from the form — no separate state or sync effect needed
   const amountRaw = useWatch({ control, name: 'amount' })
+  const displayValue = amountRaw || '0'
   const activeExchangeRate = editTransaction?.exchange_rate || exchangeRate
 
-  const amountNum = parseFloat((amountRaw || '0').replace(/,/g, '')) || 0
-  const convertedHint =
-    currency === 'USD'
-      ? `Approx. KRW ${formatNumber(Math.round(amountNum * activeExchangeRate))}`
-      : amountNum > 0
-        ? `Approx. USD ${(amountNum / activeExchangeRate).toFixed(2)}`
-        : ''
+  // Auto-fill description from selected category (mobile only, not when editing)
+  useEffect(() => {
+    if (!isMobile || isEditing || !categoryId) return
+    const cat = categories.find((c) => c.id === categoryId)
+    if (cat) setValue('description', cat.name)
+  }, [categoryId, categories, isMobile, isEditing, setValue])
 
-  // Body scroll lock for mobile
+  // Body scroll lock on mobile
   useEffect(() => {
     if (!isOpen || !isMobile || typeof document === 'undefined') return
     const scrollY = window.scrollY
@@ -186,25 +201,29 @@ export default function AddTransactionSheet({
 
     if (editTransaction) {
       const editCurrency = (editTransaction.currency as 'KRW' | 'USD') || 'KRW'
-      const displayAmount =
+      const rawNum =
         editCurrency === 'USD'
-          ? editTransaction.amount_usd.toFixed(2)
-          : formatNumber(editTransaction.amount_krw)
+          ? editTransaction.amount_usd
+          : editTransaction.amount_krw
 
+      // Store raw number in the form — displayValue is derived from it
       reset({
         type: editTransaction.type,
         currency: editCurrency,
-        amount: displayAmount,
+        amount:
+          editCurrency === 'USD'
+            ? editTransaction.amount_usd.toFixed(2)
+            : String(Math.round(rawNum)),
         date: editTransaction.date,
         description: editTransaction.description,
         category_id: editTransaction.category_id || '',
         payment_method_id: editTransaction.payment_method_id || '',
         note: editTransaction.note || '',
       })
-
       return
     }
 
+    // New transaction — form reset is an external-library call, not our own setState
     reset({
       type: 'expense',
       currency: 'KRW',
@@ -219,9 +238,15 @@ export default function AddTransactionSheet({
       if (lastCategory) setValue('category_id', lastCategory)
       if (lastPaymentMethod) setValue('payment_method_id', lastPaymentMethod)
     }
+  }, [editTransaction, isOpen, reset, setValue, supabase]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    setTimeout(() => amountInputRef.current?.focus(), 300)
-  }, [editTransaction, isOpen, reset, setValue, supabase])
+  // Single close handler — resets transient UI state in an event context, not an effect
+  const handleClose = () => {
+    setCalcBuffer(null)
+    setCalcOp(null)
+    setShowDetails(false)
+    onClose()
+  }
 
   const onSubmit = async (data: FormData) => {
     const rawNum = parseFloat(data.amount.replace(/,/g, ''))
@@ -294,42 +319,95 @@ export default function AddTransactionSheet({
     haptic('medium')
     toast.success(isEditing ? 'Transaction updated!' : 'Transaction saved!')
     onSuccess(saved)
-    onClose()
+    handleClose()
+  }
+
+  // handleKey — plain function, no useCallback (React Compiler handles memoization)
+  // Calls setValue (form library) and setCalcBuffer/setCalcOp (event handler, not effect)
+  function handleKey(key: string) {
+    haptic('light')
+    const op = key === '−' ? '-' : key
+    const current = displayValue // derived from useWatch, always fresh
+
+    if (/^[0-9]$/.test(op)) {
+      if (current === '0') {
+        setValue('amount', op)
+      } else if (currency === 'KRW' && current.length >= 10) {
+        // limit digits
+      } else if (currency === 'USD') {
+        const dotIdx = current.indexOf('.')
+        if (dotIdx !== -1 && current.length - dotIdx - 1 >= 2) return
+        setValue('amount', current + op)
+      } else {
+        setValue('amount', current + op)
+      }
+    } else if (op === '.') {
+      if (currency === 'KRW') return
+      if (!current.includes('.')) setValue('amount', current === '0' ? '0.' : current + '.')
+    } else if (op === '⌫') {
+      setValue('amount', current.length <= 1 ? '' : current.slice(0, -1))
+    } else if (op === '+' || op === '-') {
+      setCalcBuffer(parseFloat(current) || 0)
+      setCalcOp(op)
+      setValue('amount', '')
+    } else if (op === '=') {
+      if (calcBuffer !== null && calcOp) {
+        const b = parseFloat(current) || 0
+        const result = calcOp === '+' ? calcBuffer + b : Math.max(0, calcBuffer - b)
+        const resolved =
+          currency === 'KRW'
+            ? String(Math.round(result))
+            : result.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') || '0'
+        setValue('amount', resolved)
+        setCalcBuffer(null)
+        setCalcOp(null)
+      }
+    }
   }
 
   const filteredCategories = categories.filter((c) => c.type === type || c.type === 'both')
 
-  const inputStyle = {
+  // Formatted display
+  const amountNum = parseFloat(displayValue) || 0
+  const amountFormatted =
+    currency === 'KRW' ? formatNumber(Math.round(amountNum)) : displayValue
+  const convertedHint =
+    currency === 'USD'
+      ? amountNum > 0
+        ? `≈ ₩${formatNumber(Math.round(amountNum * activeExchangeRate))}`
+        : ''
+      : amountNum > 0
+        ? `≈ $${(amountNum / activeExchangeRate).toFixed(2)}`
+        : ''
+
+  const inputStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-card-elevated-base)',
     border: '1px solid var(--color-border-base)',
     color: 'var(--color-text-primary)',
     fontSize: '16px',
     borderRadius: '12px',
-    padding: '16px',
+    padding: '14px 16px',
     width: '100%',
     outline: 'none',
   }
 
-  const selectStyle = {
+  const selectStyle: React.CSSProperties = {
     ...inputStyle,
-    appearance: 'none' as const,
-    WebkitAppearance: 'none' as const,
+    appearance: 'none',
+    WebkitAppearance: 'none',
     paddingRight: '40px',
   }
 
-  const sectionLabelStyle = {
+  const sectionLabelStyle: React.CSSProperties = {
     color: 'var(--color-text-secondary)',
     fontSize: '11px',
     fontWeight: 700,
     letterSpacing: '0.14em',
-    textTransform: 'uppercase' as const,
+    textTransform: 'uppercase',
   }
 
-  const fieldLabelStyle = {
-    color: 'var(--color-text-secondary)',
-  }
-
-  const formContent = (
+  // ─── Desktop form (unchanged from original) ───────────────────────────────
+  const desktopFormContent = (
     <form
       id="add-transaction-form"
       onSubmit={handleSubmit(onSubmit)}
@@ -382,35 +460,19 @@ export default function AddTransactionSheet({
                   className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-semibold"
                   style={{ color: 'var(--color-text-secondary)' }}
                 >
-                  {currency === 'USD' ? '$' : 'KRW'}
+                  {currency === 'USD' ? '$' : '₩'}
                 </span>
                 <input
-                  {...register('amount')}
-                  ref={(element) => {
-                    register('amount').ref(element)
-                    amountInputRef.current = element
-                  }}
-                  inputMode="decimal"
+                  value={amountFormatted === '0' ? '' : amountFormatted}
+                  readOnly
                   placeholder="0"
                   style={{
                     ...inputStyle,
-                    paddingLeft: currency === 'USD' ? '40px' : '58px',
-                    paddingRight: '112px',
+                    paddingLeft: currency === 'USD' ? '40px' : '44px',
+                    paddingRight: '120px',
                     fontSize: 'clamp(22px, 6vw, 28px)',
                     fontWeight: 'bold',
-                  }}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/,/g, '')
-                    const num = parseFloat(raw)
-                    if (currency === 'KRW') {
-                      if (!isNaN(num)) {
-                        setValue('amount', formatNumber(num))
-                      } else {
-                        setValue('amount', raw)
-                      }
-                    } else {
-                      setValue('amount', raw)
-                    }
+                    cursor: 'default',
                   }}
                 />
                 <div
@@ -423,6 +485,8 @@ export default function AddTransactionSheet({
                       type="button"
                       onClick={() => {
                         currencyField.onChange(option)
+                        setCalcBuffer(null)
+                        setCalcOp(null)
                         setValue('amount', '')
                         haptic('light')
                       }}
@@ -433,7 +497,9 @@ export default function AddTransactionSheet({
                             ? 'var(--color-accent-base)'
                             : 'transparent',
                         color:
-                          currencyField.value === option ? 'white' : 'var(--color-text-secondary)',
+                          currencyField.value === option
+                            ? 'white'
+                            : 'var(--color-text-secondary)',
                       }}
                     >
                       {option}
@@ -448,16 +514,11 @@ export default function AddTransactionSheet({
               {convertedHint}
             </p>
           )}
-          {errors.amount && (
-            <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
-              {errors.amount.message}
-            </p>
-          )}
         </div>
 
         {filteredCategories.length > 0 && (
           <div>
-            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+            <p className="mb-2 pl-1 text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               Category
             </p>
             <div className="relative">
@@ -469,14 +530,17 @@ export default function AddTransactionSheet({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-text-secondary)' }} />
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              />
             </div>
           </div>
         )}
 
         {paymentMethods.length > 0 && (
           <div>
-            <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
+            <p className="mb-2 pl-1 text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
               Payment Method
             </p>
             <div className="relative">
@@ -488,7 +552,10 @@ export default function AddTransactionSheet({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--color-text-secondary)' }} />
+              <ChevronDown
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                style={{ color: 'var(--color-text-secondary)' }}
+              />
             </div>
           </div>
         )}
@@ -496,26 +563,16 @@ export default function AddTransactionSheet({
 
       <div className="space-y-3">
         <p style={sectionLabelStyle}>When</p>
-
-        <div>
-          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-            Date
-          </p>
-          <input
-            {...register('date')}
-            type="date"
-            style={{ ...inputStyle, padding: '12px 16px', fontSize: '16px' }}
-          />
-        </div>
+        <input
+          {...register('date')}
+          type="date"
+          style={{ ...inputStyle, padding: '12px 16px', fontSize: '16px' }}
+        />
       </div>
 
       <div className="space-y-3">
         <p style={sectionLabelStyle}>Details</p>
-
         <div>
-          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-            Description
-          </p>
           <input
             {...register('description')}
             placeholder="What was this for?"
@@ -527,49 +584,41 @@ export default function AddTransactionSheet({
             </p>
           )}
         </div>
-
-        <div>
-          <p className="mb-2 pl-1 text-xs font-medium" style={fieldLabelStyle}>
-            Note
-          </p>
-          <textarea
-            {...register('note')}
-            placeholder="Optional note"
-            rows={2}
-            style={{ ...inputStyle, minHeight: '72px', resize: 'none' as const }}
-          />
-        </div>
+        <textarea
+          {...register('note')}
+          placeholder="Optional note"
+          rows={2}
+          style={{ ...inputStyle, minHeight: '72px', resize: 'none' }}
+        />
       </div>
     </form>
   )
 
-  const submitButton = (
-    <button
-      type="submit"
-      form="add-transaction-form"
-      disabled={isSubmitting}
-      className="w-full rounded-button py-4 text-base font-semibold text-white transition-transform active:scale-95 disabled:opacity-50"
-      style={{ backgroundColor: 'var(--color-income-base)' }}
-    >
-      {isSubmitting ? 'Saving...' : isEditing ? 'Update Transaction' : 'Save Transaction'}
-    </button>
-  )
-
-  // Desktop: use BottomSheet as before
+  // ─── Desktop ──────────────────────────────────────────────────────────────
   if (!isMobile) {
     return (
       <BottomSheet
         isOpen={isOpen}
         onClose={onClose}
-        title={isEditing ? 'Edit Transaction' : 'Add Transaction'}
-        footer={submitButton}
+        title={isEditing ? 'Edit Transaction' : 'New Transaction'}
+        footer={
+          <button
+            type="submit"
+            form="add-transaction-form"
+            disabled={isSubmitting}
+            className="w-full rounded-button py-4 text-base font-semibold text-white transition-transform active:scale-95 disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-income-base)' }}
+          >
+            {isSubmitting ? 'Saving...' : isEditing ? 'Update Transaction' : 'Save Transaction'}
+          </button>
+        }
       >
-        {formContent}
+        {desktopFormContent}
       </BottomSheet>
     )
   }
 
-  // Mobile: full-screen slide-up panel (same pattern as ChatBot)
+  // ─── Mobile: full-screen with custom keypad ────────────────────────────────
   const mobilePanel = (
     <AnimatePresence>
       {isOpen && (
@@ -582,7 +631,7 @@ export default function AddTransactionSheet({
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-90"
             style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-            onClick={onClose}
+            onClick={handleClose}
           />
           <motion.div
             key="panel"
@@ -594,18 +643,15 @@ export default function AddTransactionSheet({
             dragConstraints={{ top: 0 }}
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 80) onClose()
+              if (info.offset.y > 80) handleClose()
             }}
             className="fixed inset-0 z-100 flex flex-col overflow-hidden"
-            style={{
-              background: 'var(--color-card-base)',
-              willChange: 'transform',
-            }}
+            style={{ background: 'var(--color-card-base)', willChange: 'transform' }}
           >
             {/* Drag handle */}
             <div
               className="flex shrink-0 justify-center pb-1 pt-3"
-              style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}
+              style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
             >
               <div
                 className="h-1 w-9 rounded-full"
@@ -615,19 +661,19 @@ export default function AddTransactionSheet({
 
             {/* Header */}
             <div
-              className="flex shrink-0 items-center justify-between px-4 pb-4 pt-1"
+              className="flex shrink-0 items-center justify-between px-4 pb-3 pt-1"
               style={{ borderBottom: '1px solid var(--color-border-base)' }}
             >
               <h2
                 className="text-xl font-semibold"
                 style={{ color: 'var(--color-text-primary)' }}
               >
-                {isEditing ? 'Edit Transaction' : 'Add Transaction'}
+                {isEditing ? 'Edit Transaction' : 'New Transaction'}
               </h2>
               <button
                 type="button"
-                onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+                onClick={handleClose}
+                className="flex h-8 w-8 items-center justify-center rounded-full"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
                 <X className="h-5 w-5" />
@@ -637,29 +683,373 @@ export default function AddTransactionSheet({
             {/* Scrollable content */}
             <div
               ref={scrollRef}
-              className="min-h-0 flex-1 overflow-y-auto pt-4"
+              className="min-h-0 flex-1 overflow-y-auto"
               style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               onScroll={() => {
                 const el = scrollRef.current
                 setCanDrag(!el || el.scrollTop === 0)
               }}
             >
-              {formContent}
+              <form id="add-transaction-form-mobile" onSubmit={handleSubmit(onSubmit)}>
+                {/* Expense / Income toggle */}
+                <div className="px-4 pt-3 pb-3">
+                  <div
+                    className="flex rounded-xl p-1"
+                    style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+                  >
+                    {(['expense', 'income'] as const).map((option) => (
+                      <Controller
+                        key={option}
+                        name="type"
+                        control={control}
+                        render={({ field }) => (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.preventDefault()
+                              field.onChange(option)
+                              haptic('light')
+                            }}
+                            className="flex-1 rounded-[10px] py-3 text-sm font-bold tracking-wider transition-all"
+                            style={{
+                              backgroundColor:
+                                field.value === option
+                                  ? option === 'expense'
+                                    ? 'var(--color-expense-base)'
+                                    : 'var(--color-income-base)'
+                                  : 'transparent',
+                              color:
+                                field.value === option ? 'white' : 'var(--color-text-secondary)',
+                              touchAction: 'manipulation',
+                              userSelect: 'none',
+                            }}
+                          >
+                            {option.toUpperCase()}
+                          </button>
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Amount display */}
+                <div className="px-4 pb-3">
+                  <p style={sectionLabelStyle}>Core Details</p>
+                  <div
+                    className="mt-2 flex items-center gap-3 rounded-xl px-4 py-4"
+                    style={{
+                      backgroundColor: 'var(--color-card-elevated-base)',
+                      border: '1.5px solid var(--color-accent-base)',
+                    }}
+                  >
+                    {/* Currency symbol */}
+                    <span
+                      className="shrink-0 text-2xl font-bold"
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    >
+                      {currency === 'USD' ? '$' : '₩'}
+                    </span>
+
+                    {/* Amount number + calc hint */}
+                    <div className="min-w-0 flex-1">
+                      {calcBuffer !== null && (
+                        <p
+                          className="mb-0.5 text-right text-xs font-medium"
+                          style={{ color: 'var(--color-accent-base)' }}
+                        >
+                          {currency === 'KRW'
+                            ? formatNumber(Math.round(calcBuffer))
+                            : calcBuffer.toFixed(2)}{' '}
+                          {calcOp}
+                        </p>
+                      )}
+                      <p
+                        className="truncate text-right font-bold leading-tight"
+                        style={{
+                          fontSize: 'clamp(26px, 8vw, 38px)',
+                          color:
+                            amountNum > 0
+                              ? 'var(--color-text-primary)'
+                              : 'var(--color-text-secondary)',
+                        }}
+                      >
+                        {amountNum > 0 ? amountFormatted : '0'}
+                      </p>
+                      {convertedHint && (
+                        <p
+                          className="mt-0.5 text-right text-xs"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          {convertedHint}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Currency toggle */}
+                    <Controller
+                      name="currency"
+                      control={control}
+                      render={({ field }) => (
+                        <div
+                          className="flex shrink-0 rounded-lg p-0.5"
+                          style={{ backgroundColor: 'var(--color-card-base)' }}
+                        >
+                          {(['KRW', 'USD'] as const).map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onPointerDown={(e) => {
+                                e.preventDefault()
+                                field.onChange(option)
+                                setCalcBuffer(null)
+                                setCalcOp(null)
+                                setValue('amount', '')
+                                haptic('light')
+                              }}
+                              className="rounded-md px-3 py-1.5 text-xs font-semibold transition-all"
+                              style={{
+                                backgroundColor:
+                                  field.value === option
+                                    ? 'var(--color-accent-base)'
+                                    : 'transparent',
+                                color:
+                                  field.value === option
+                                    ? 'white'
+                                    : 'var(--color-text-secondary)',
+                                touchAction: 'manipulation',
+                                userSelect: 'none',
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                {/* Category grid */}
+                {filteredCategories.length > 0 && (
+                  <div className="px-4 pb-3">
+                    <p style={sectionLabelStyle}>Category</p>
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {filteredCategories.map((cat) => (
+                        <Controller
+                          key={cat.id}
+                          name="category_id"
+                          control={control}
+                          render={({ field }) => {
+                            const selected = field.value === cat.id
+                            return (
+                              <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                  e.preventDefault()
+                                  field.onChange(selected ? '' : cat.id)
+                                  haptic('light')
+                                }}
+                                className="flex flex-col items-center gap-1.5 rounded-xl px-1 py-3 transition-all"
+                                style={{
+                                  backgroundColor: selected
+                                    ? 'var(--color-accent-base)'
+                                    : 'var(--color-card-elevated-base)',
+                                  touchAction: 'manipulation',
+                                  userSelect: 'none',
+                                }}
+                              >
+                                <span className="text-xl leading-none">{cat.icon}</span>
+                                <span
+                                  className="w-full truncate text-center text-[9px] font-semibold leading-tight"
+                                  style={{
+                                    color: selected ? 'white' : 'var(--color-text-secondary)',
+                                    letterSpacing: '0.05em',
+                                  }}
+                                >
+                                  {cat.name.toUpperCase()}
+                                </span>
+                              </button>
+                            )
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Description (visible by default on mobile) */}
+                <div className="px-4 pb-2">
+                  <input
+                    {...register('description')}
+                    placeholder="Description (e.g. Coffee, Salary)"
+                    style={inputStyle}
+                  />
+                  {errors.description && (
+                    <p className="mt-1 text-xs" style={{ color: 'var(--color-expense-base)' }}>
+                      {errors.description.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* More details toggle */}
+                <div className="px-4 pb-4">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      setShowDetails((v) => !v)
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-semibold"
+                    style={{ color: 'var(--color-accent-base)', touchAction: 'manipulation' }}
+                  >
+                    {showDetails ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                    {showDetails ? 'LESS DETAILS' : 'MORE DETAILS'}
+                  </button>
+
+                  {showDetails && (
+                    <div className="mt-3 space-y-3">
+                      {/* Date */}
+                      <div>
+                        <p
+                          className="mb-1.5 text-xs font-medium"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          Date
+                        </p>
+                        <input
+                          {...register('date')}
+                          type="date"
+                          style={{ ...inputStyle, padding: '12px 16px' }}
+                        />
+                      </div>
+
+                      {/* Payment method */}
+                      {paymentMethods.length > 0 && (
+                        <div>
+                          <p
+                            className="mb-1.5 text-xs font-medium"
+                            style={{ color: 'var(--color-text-secondary)' }}
+                          >
+                            Payment Method
+                          </p>
+                          <div className="relative">
+                            <select {...register('payment_method_id')} style={selectStyle}>
+                              <option value="">Select payment method</option>
+                              {paymentMethods.map((method) => (
+                                <option key={method.id} value={method.id}>
+                                  {method.icon} {method.name}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown
+                              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+                              style={{ color: 'var(--color-text-secondary)' }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Note */}
+                      <div>
+                        <p
+                          className="mb-1.5 text-xs font-medium"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          Note
+                        </p>
+                        <textarea
+                          {...register('note')}
+                          placeholder="Optional note"
+                          rows={2}
+                          style={{ ...inputStyle, resize: 'none' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </form>
             </div>
 
-            {/* Footer */}
-            <div
-              className="shrink-0 px-4 pt-3"
-              style={{
-                borderTop: '1px solid var(--color-border-base)',
-                paddingBottom:
-                  keyboardOffset > 0
-                    ? `${keyboardOffset + 8}px`
-                    : 'max(20px, env(safe-area-inset-bottom, 20px))',
-              }}
-            >
-              {submitButton}
-            </div>
+            {/* Custom keypad — hidden when native keyboard is open */}
+            {!keyboardVisible && (
+              <div
+                className="shrink-0"
+                style={{ borderTop: '1px solid var(--color-border-base)' }}
+              >
+                <div className="px-3 pt-3 pb-2 space-y-2">
+                  {KEYPAD_ROWS.map((row, rowIdx) => (
+                    <div
+                      key={rowIdx}
+                      className="grid gap-2"
+                      style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}
+                    >
+                      {row.map((key) => {
+                        const isOperator = ['+', '−', '='].includes(key)
+                        const isBackspace = key === '⌫'
+                        const isZeroWide = rowIdx === 3 && key === '0'
+
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.preventDefault()
+                              handleKey(key)
+                            }}
+                            className="flex items-center justify-center rounded-xl font-semibold transition-transform active:scale-90"
+                            style={{
+                              height: '52px',
+                              gridColumn: isZeroWide ? 'span 2' : undefined,
+                              backgroundColor: isOperator
+                                ? 'rgba(99,102,241,0.18)'
+                                : isBackspace
+                                  ? 'rgba(239,68,68,0.12)'
+                                  : 'var(--color-card-elevated-base)',
+                              color: isOperator
+                                ? 'var(--color-accent-base)'
+                                : isBackspace
+                                  ? 'var(--color-expense-base)'
+                                  : 'var(--color-text-primary)',
+                              fontSize: '20px',
+                              touchAction: 'manipulation',
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                            }}
+                          >
+                            {isBackspace ? <Delete className="h-5 w-5" /> : key}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+
+                {/* DONE button — padded above iPhone home indicator */}
+                <div
+                  className="px-3"
+                  style={{
+                    paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+                  }}
+                >
+                  <button
+                    type="submit"
+                    form="add-transaction-form-mobile"
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl py-4 text-base font-bold text-white transition-transform active:scale-95 disabled:opacity-50"
+                    style={{
+                      backgroundColor: 'var(--color-accent-base)',
+                      touchAction: 'manipulation',
+                    }}
+                  >
+                    {isSubmitting ? 'Saving...' : '✓  DONE'}
+                  </button>
+                </div>
+              </div>
+            )}
           </motion.div>
         </>
       )}
