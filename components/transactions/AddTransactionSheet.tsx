@@ -109,7 +109,6 @@ export default function AddTransactionSheet({
     control,
     reset,
     setValue,
-    getValues,
     watch,
     formState: { errors, isSubmitting },
   } = form
@@ -119,15 +118,7 @@ export default function AddTransactionSheet({
   const amountRaw = watch('amount')
   const activeExchangeRate = editTransaction?.exchange_rate || liveRate
 
-  // Smart Placeholder Logic: Suggest description only if empty
-  const handleCategorySelect = (categoryId: string) => {
-    if (!categoryId) return
-    const currentDesc = getValues('description')
-    if (!currentDesc || currentDesc.trim() === '') {
-      const cat = categories.find(c => c.id === categoryId)
-      if (cat) setValue('description', cat.name)
-    }
-  }
+  const handleCategorySelect = () => {}
 
   const amountFormatted = (() => {
     if (!amountRaw) return '0'
