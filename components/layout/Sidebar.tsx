@@ -54,6 +54,12 @@ export default function Sidebar() {
             )
           })}
         </nav>
+
+        <div className="mt-auto pt-4">
+          <p className="text-center text-[10px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+            © 2026 MoneyFlow by Hen Heang
+          </p>
+        </div>
       </div>
     </aside>
   )

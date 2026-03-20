@@ -7,61 +7,16 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import Avatar from '@/components/ui/Avatar'
 import { getUserProfile } from '@/lib/profile'
+import type { Category, PaymentMethod, Budget } from '@/lib/types'
 import {
   CreditCard, Tag, Download, LogOut, ChevronRight,
-  Plus, Trash2, Moon, Sun, Camera, Target, Check, Pencil, X, BookOpen, Sparkles, ExternalLink
+  Plus, Trash2, Moon, Sun, Camera, Target, Check, Pencil, X, BookOpen, Sparkles, ExternalLink,
+  FileJson, FileText
 } from 'lucide-react'
-import { formatNumber, haptic, getDisplayName, resizeImageToDataUrl } from '@/lib/utils'
+import { formatNumber, haptic, getDisplayName, resizeImageToBlob } from '@/lib/utils'
+import { MONEY_TIPS } from '@/shared/data'
 
-const MONEY_TIPS = [
-  {
-    emoji: '📊',
-    title: '50 / 30 / 20 Rule',
-    desc: 'Split every paycheck: 50% on needs, 30% on wants, 20% to savings.',
-    tag: 'Framework',
-    tagColor: '#3b82f6',
-  },
-  {
-    emoji: '🤖',
-    title: 'Pay Yourself First',
-    desc: 'Transfer your savings target the moment your salary lands.',
-    tag: 'Habit',
-    tagColor: '#10b981',
-  },
-  {
-    emoji: '🚨',
-    title: 'Emergency Fund',
-    desc: 'Save 3 months of living expenses before investing.',
-    tag: 'Priority',
-    tagColor: '#ef4444',
-  },
-  {
-    emoji: '🚇',
-    title: 'Use T-money',
-    desc: 'Save up to ₩100k/month vs taxis in Seoul.',
-    tag: 'Seoul',
-    tagColor: '#06b6d4',
-  },
-]
 
-interface Category {
-  id: string
-  name: string
-  icon: string
-  color: string
-  type: 'income' | 'expense' | 'both'
-}
-
-interface PaymentMethod {
-  id: string
-  name: string
-  icon: string
-}
-
-interface Budget {
-  category_id: string
-  amount_krw: number
-}
 
 interface UserProfile {
   display_name: string | null
@@ -82,6 +37,9 @@ export default function SettingsPage() {
   const [isAddingCategory, setIsAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryIcon, setNewCategoryIcon] = useState('📦')
+  const [newCategoryType, setNewCategoryType] = useState<'income' | 'expense'>('expense')
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editingDisplayName, setEditingDisplayName] = useState('')
   const [activeSection, setActiveSection] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(() =>
     typeof document !== 'undefined' ? !document.documentElement.classList.contains('light') : true
@@ -134,24 +92,33 @@ export default function SettingsPage() {
     setIsUploadingAvatar(true)
 
     try {
-      const avatarUrl = await resizeImageToDataUrl(file, 256, 0.82)
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('You are not signed in')
 
-      const { data: updatedProfileData, error } = await supabase
+      const blob = await resizeImageToBlob(file, 256, 0.82)
+      const path = `${user.id}/avatar.jpg`
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(path)
+
+      // Bust the CDN cache so the new image loads immediately
+      const avatarUrl = `${publicUrl}?t=${Date.now()}`
+
+      const { error: updateError } = await supabase
         .from('users')
         .update({ avatar_url: avatarUrl })
         .eq('id', user.id)
-        .select('*')
-        .single()
 
-      const data = updatedProfileData as UserProfile | null
+      if (updateError) throw updateError
 
-      if (error) throw error
-
-      setProfile((current) => {
-        return data || current
-      })
+      setProfile((current) => current ? { ...current, avatar_url: avatarUrl } : current)
       toast.success('Profile photo updated')
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Failed to update photo')
@@ -167,18 +134,94 @@ export default function SettingsPage() {
     router.refresh()
   }
 
-  const handleExportCSV = async () => {
+  const saveDisplayName = async () => {
+    const name = editingDisplayName.trim()
+    if (!name) { toast.error('Name cannot be empty'); return }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { error } = await supabase.from('users').update({ display_name: name }).eq('id', user.id)
+    if (error) { toast.error('Failed to update name'); return }
+    setProfile(prev => prev ? { ...prev, display_name: name } : prev)
+    setIsEditingName(false)
+    toast.success('Name updated')
+  }
+
+  const triggerDownload = async (format: 'csv' | 'json') => {
     haptic('light')
     try {
-      const response = await fetch('/api/export')
+      const response = await fetch(`/api/export?format=${format}`)
+      if (!response.ok) throw new Error()
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `money-flow-${new Date().toISOString().split('T')[0]}.csv`
+      a.download = `money-flow-${new Date().toISOString().split('T')[0]}.${format}`
       a.click()
       URL.revokeObjectURL(url)
-      toast.success('Exported successfully!')
+      toast.success(`${format.toUpperCase()} exported!`)
+    } catch {
+      toast.error('Export failed')
+    }
+  }
+
+  const handleExportCSV  = () => triggerDownload('csv')
+  const handleExportJSON = () => triggerDownload('json')
+
+  const handleExportPDF = async () => {
+    haptic('light')
+    try {
+      const response = await fetch('/api/export?format=json')
+      if (!response.ok) throw new Error()
+      const { transactions } = await response.json() as {
+        transactions: Array<{
+          date: string; type: string; description: string
+          amount_krw: number; amount_usd: number; category: string | null
+          payment_method: string | null; note: string | null
+        }>
+      }
+
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      const rows = transactions.map(t => `
+        <tr>
+          <td>${t.date}</td>
+          <td class="${t.type}">${t.type}</td>
+          <td>${t.description}</td>
+          <td>${t.category ?? '—'}</td>
+          <td class="amount">${t.type === 'income' ? '+' : '-'}₩${Math.round(t.amount_krw).toLocaleString()}</td>
+          <td class="amount">$${t.amount_usd.toFixed(2)}</td>
+          ${t.note ? `<td><em>${t.note}</em></td>` : '<td>—</td>'}
+        </tr>`).join('')
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Money Flow Export — ${dateStr}</title>
+        <style>
+          body { font-family: -apple-system, sans-serif; font-size: 11px; color: #111; margin: 32px; }
+          h1 { font-size: 20px; margin-bottom: 4px; }
+          p.sub { color: #666; margin-bottom: 24px; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #f4f4f4; text-align: left; padding: 6px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e0e0e0; }
+          td { padding: 5px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+          td.income { color: #10b981; font-weight: 700; }
+          td.expense { color: #ef4444; font-weight: 700; }
+          td.amount { font-variant-numeric: tabular-nums; text-align: right; }
+          tr:nth-child(even) td { background: #fafafa; }
+          @media print { body { margin: 16px; } }
+        </style>
+      </head><body>
+        <h1>Money Flow — Transaction History</h1>
+        <p class="sub">Exported ${dateStr} · ${transactions.length} transactions</p>
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Category</th><th style="text-align:right">KRW</th><th style="text-align:right">USD</th><th>Note</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body></html>`
+
+      const win = window.open('', '_blank')
+      if (!win) { toast.error('Allow popups to export PDF'); return }
+      win.document.write(html)
+      win.document.close()
+      win.focus()
+      setTimeout(() => win.print(), 400)
     } catch {
       toast.error('Export failed')
     }
@@ -232,7 +275,7 @@ export default function SettingsPage() {
 
     const { data, error } = await supabase
       .from('categories')
-      .insert({ user_id: user.id, name, icon, color, type: 'expense' })
+      .insert({ user_id: user.id, name, icon, color, type: newCategoryType })
       .select()
       .single()
 
@@ -240,6 +283,8 @@ export default function SettingsPage() {
     if (data) {
       setCategories(prev => [...prev, data])
       setNewCategoryName('')
+      setNewCategoryIcon('📦')
+      setNewCategoryType('expense')
       setIsAddingCategory(false)
     }
     toast.success('Category added')
@@ -344,7 +389,30 @@ export default function SettingsPage() {
           </button>
           <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
         </div>
-        <h1 className="text-2xl font-black tracking-tight">{getDisplayName(profile?.email, profile?.display_name)}</h1>
+        {isEditingName ? (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              autoFocus
+              value={editingDisplayName}
+              onChange={e => setEditingDisplayName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveDisplayName(); if (e.key === 'Escape') setIsEditingName(false) }}
+              className="bg-[var(--color-card-base)] border-2 border-[var(--color-accent-base)] rounded-xl px-4 py-2 text-lg font-black text-center outline-none"
+              placeholder="Your name"
+            />
+            <button onClick={saveDisplayName} className="w-9 h-9 rounded-xl bg-[var(--color-income-base)] flex items-center justify-center text-white"><Check size={16} strokeWidth={3} /></button>
+            <button onClick={() => setIsEditingName(false)} className="w-9 h-9 rounded-xl bg-[var(--color-card-base)] border border-[var(--color-border-base)] flex items-center justify-center"><X size={16} /></button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mt-1">
+            <h1 className="text-2xl font-black tracking-tight">{getDisplayName(profile?.email, profile?.display_name)}</h1>
+            <button
+              onClick={() => { setEditingDisplayName(profile?.display_name || ''); setIsEditingName(true) }}
+              className="p-1.5 rounded-lg bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)]"
+            >
+              <Pencil size={13} strokeWidth={2.5} />
+            </button>
+          </div>
+        )}
         <p className="text-[13px] font-bold opacity-50 uppercase tracking-widest mt-1.5">{profile?.email}</p>
         
         <div className="mt-4 flex gap-2">
@@ -415,11 +483,41 @@ export default function SettingsPage() {
                   {isAddingCategory ? 'Cancel' : 'Add New Category'}
                 </button>
                 {isAddingCategory && (
-                  <div className="px-5 pb-5 pt-2">
+                  <div className="px-5 pb-5 pt-2 space-y-3">
+                    {/* Type toggle */}
+                    <div className="flex rounded-xl overflow-hidden border border-[var(--color-border-base)]">
+                      {(['expense', 'income'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => setNewCategoryType(t)}
+                          className="flex-1 py-2 text-xs font-black uppercase tracking-widest transition-all"
+                          style={{
+                            backgroundColor: newCategoryType === t ? (t === 'income' ? 'var(--color-income-base)' : 'var(--color-expense-base)') : 'transparent',
+                            color: newCategoryType === t ? 'white' : 'var(--color-text-secondary)',
+                          }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Icon + Name + Save */}
                     <div className="flex gap-2">
-                      <input value={newCategoryIcon} onChange={e => setNewCategoryIcon(e.target.value)} className="w-14 bg-[var(--color-card-base)] border border-[var(--color-border-base)] rounded-xl text-center text-xl" maxLength={2} />
-                      <input value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} placeholder="Name" className="flex-1 bg-[var(--color-card-base)] border border-[var(--color-border-base)] rounded-xl px-4 text-sm font-bold outline-none focus:border-[var(--color-accent-base)]" />
-                      <button onClick={addCategory} className="w-10 h-10 rounded-xl bg-[var(--color-income-base)] flex items-center justify-center text-white"><Check size={18} strokeWidth={3}/></button>
+                      <input
+                        value={newCategoryIcon}
+                        onChange={e => setNewCategoryIcon(e.target.value)}
+                        className="w-14 h-11 bg-[var(--color-card-base)] border border-[var(--color-border-base)] rounded-xl text-center text-xl"
+                        maxLength={2}
+                      />
+                      <input
+                        value={newCategoryName}
+                        onChange={e => setNewCategoryName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') addCategory() }}
+                        placeholder="Category name"
+                        className="flex-1 h-11 bg-[var(--color-card-base)] border border-[var(--color-border-base)] rounded-xl px-4 text-sm font-bold outline-none focus:border-[var(--color-accent-base)]"
+                      />
+                      <button onClick={addCategory} className="w-11 h-11 rounded-xl bg-[var(--color-income-base)] flex items-center justify-center text-white shrink-0">
+                        <Check size={18} strokeWidth={3} />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -568,9 +666,23 @@ export default function SettingsPage() {
         <Row
           icon={Download}
           color="#8b5cf6"
-          title="Export Data"
-          subtitle="Download CSV backup"
+          title="Export CSV"
+          subtitle="Spreadsheet-compatible backup"
           onClick={handleExportCSV}
+        />
+        <Row
+          icon={FileJson}
+          color="#06b6d4"
+          title="Export JSON"
+          subtitle="Full data for developers"
+          onClick={handleExportJSON}
+        />
+        <Row
+          icon={FileText}
+          color="#f59e0b"
+          title="Print / Save PDF"
+          subtitle="Opens print dialog"
+          onClick={handleExportPDF}
         />
         <Row
           icon={LogOut}

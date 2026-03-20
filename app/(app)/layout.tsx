@@ -1,6 +1,8 @@
 import React from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import TabBar from '@/components/layout/TabBar'
+import OfflineBanner from '@/components/ui/OfflineBanner'
+import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,11 +26,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
           } as React.CSSProperties}
         >
+          <ErrorBoundary>
           {children}
+        </ErrorBoundary>
+          <p className="md:hidden text-center text-[10px] pb-2" style={{ color: 'var(--color-text-secondary)' }}>
+            © 2026 MoneyFlow by Hen Heang
+          </p>
         </main>
       </div>
 
       <TabBar />
+      <OfflineBanner />
     </div>
   )
 }

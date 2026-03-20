@@ -56,7 +56,7 @@ export function getInitials(name?: string | null): string {
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('')
 }
 
-export async function resizeImageToDataUrl(file: File, size = 256, quality = 0.82): Promise<string> {
+export async function resizeImageToBlob(file: File, size = 256, quality = 0.82): Promise<Blob> {
   const imageUrl = URL.createObjectURL(file)
 
   try {
@@ -72,18 +72,32 @@ export async function resizeImageToDataUrl(file: File, size = 256, quality = 0.8
     canvas.height = size
 
     const context = canvas.getContext('2d')
-    if (!context) {
-      throw new Error('Canvas is not available')
-    }
+    if (!context) throw new Error('Canvas is not available')
 
     const sourceSize = Math.min(image.width, image.height)
     const sourceX = (image.width - sourceSize) / 2
     const sourceY = (image.height - sourceSize) / 2
-
     context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size)
 
-    return canvas.toDataURL('image/jpeg', quality)
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('Failed to encode image'))),
+        'image/jpeg',
+        quality,
+      ),
+    )
   } finally {
     URL.revokeObjectURL(imageUrl)
   }
+}
+
+/** @deprecated Use resizeImageToBlob + Supabase Storage instead */
+export async function resizeImageToDataUrl(file: File, size = 256, quality = 0.82): Promise<string> {
+  const blob = await resizeImageToBlob(file, size, quality)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read image'))
+    reader.readAsDataURL(blob)
+  })
 }

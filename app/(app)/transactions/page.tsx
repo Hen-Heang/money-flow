@@ -1,33 +1,24 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { usePullToRefresh } from '@/hooks/usePullToRefresh'
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
-import { Search, X, Trash2, Edit3 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Square, CheckCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import { formatKRW, formatUSD, haptic } from '@/lib/utils'
+import type { Transaction } from '@/lib/types'
 import { TransactionSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
 import AddTransactionSheet, { EditTransaction } from '@/components/transactions/AddTransactionSheet'
+import RecurringSheet from '@/components/transactions/RecurringSheet'
 
-interface Transaction {
-  id: string
-  date: string
-  type: 'income' | 'expense'
-  description: string
-  amount_krw: number
-  amount_usd: number
-  currency?: string
-  exchange_rate?: number
-  category_id: string | null
-  payment_method_id: string | null
-  note: string | null
-  categories?: { name: string; icon: string; color: string } | null
-  payment_methods?: { name: string; icon: string } | null
-}
 
 type FilterType = 'all' | 'income' | 'expense'
+type SortOption = 'date' | 'amount_desc' | 'amount_asc'
 
 function SwipeableRow({
   transaction,
@@ -35,12 +26,18 @@ function SwipeableRow({
   liveRate,
   onDelete,
   onEdit,
+  selectMode,
+  selected,
+  onSelect,
 }: {
   transaction: Transaction
   showUSD: boolean
   liveRate: number
   onDelete: (id: string) => void
   onEdit: (t: Transaction) => void
+  selectMode?: boolean
+  selected?: boolean
+  onSelect?: (id: string) => void
 }) {
   const [offset, setOffset] = useState(0)
   const [deleting, setDeleting] = useState(false)
@@ -69,6 +66,10 @@ function SwipeableRow({
   }
 
   const handleTap = () => {
+    if (selectMode) {
+      onSelect?.(transaction.id)
+      return
+    }
     if (offset !== 0) {
       setOffset(0)
       return
@@ -161,22 +162,29 @@ function SwipeableRow({
       </div>
 
       <motion.div
-        drag="x"
+        drag={selectMode ? false : 'x'}
         dragConstraints={{ left: -120, right: 0 }}
         dragElastic={0.1}
-        onDragStart={() => { isDragging.current = true }}
-        onDragEnd={handleDragEnd}
+        onDragStart={() => { if (!selectMode) isDragging.current = true }}
+        onDragEnd={selectMode ? undefined : handleDragEnd}
         onTap={handleTap}
-        onPointerDown={handlePointerDown}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        onPointerDown={selectMode ? undefined : handlePointerDown}
+        onPointerUp={selectMode ? undefined : handlePointerUp}
+        onPointerLeave={selectMode ? undefined : handlePointerUp}
         onHoverStart={() => setHovered(true)}
         onHoverEnd={() => setHovered(false)}
-        animate={{ x: offset, opacity: deleting ? 0 : 1 }}
+        animate={{ x: selectMode ? 0 : offset, opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className="flex items-center gap-4 px-4 py-3 relative cursor-pointer"
-        style={{ backgroundColor: 'var(--color-card-base)' }}
+        style={{
+          backgroundColor: selected ? 'color-mix(in srgb, var(--color-accent-base) 12%, var(--color-card-base))' : 'var(--color-card-base)',
+        }}
       >
+        {selectMode && (
+          <div className="shrink-0" style={{ color: selected ? 'var(--color-accent-base)' : 'var(--color-text-secondary)' }}>
+            {selected ? <CheckSquare size={20} /> : <Square size={20} />}
+          </div>
+        )}
         <div
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-button text-xl"
           style={{
@@ -222,28 +230,94 @@ function SwipeableRow({
   )
 }
 
-export default function TransactionsPage() {
+function TransactionsPageInner() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('txSearchHistory') || '[]') } catch { return [] }
+  })
+  const [showHistory, setShowHistory] = useState(false)
+
+  const addToSearchHistory = (term: string) => {
+    if (!term.trim()) return
+    const updated = [term, ...searchHistory.filter(h => h !== term)].slice(0, 6)
+    setSearchHistory(updated)
+    localStorage.setItem('txSearchHistory', JSON.stringify(updated))
+  }
 
   // Debounce search input for production performance
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 400)
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      if (search.trim()) addToSearchHistory(search.trim())
+    }, 400)
     return () => clearTimeout(timer)
   }, [search])
 
   const [filter, setFilter] = useState<FilterType>('all')
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
+  const [showRecurring, setShowRecurring] = useState(false)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
   const [liveRate, setLiveRate] = useState(1300)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const PAGE_SIZE = 20
+
+  // Advanced filters
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [filterAmountMin, setFilterAmountMin] = useState('')
+  const [filterAmountMax, setFilterAmountMax] = useState('')
+  const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+  const [selectMode, setSelectMode] = useState(false)
+  const [sort, setSort] = useState<SortOption>('date')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const exitSelectMode = () => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return
+    haptic('heavy')
+    const ids = Array.from(selectedIds)
+    const { error } = await supabase.from('transactions').delete().in('id', ids)
+    if (error) {
+      toast.error('Bulk delete failed')
+    } else {
+      toast.success(`Deleted ${ids.length} transaction${ids.length > 1 ? 's' : ''}`)
+      setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)))
+      exitSelectMode()
+    }
+  }
+
+  const activeFilterCount = [filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax].filter(Boolean).length
+
+  const clearFilters = () => {
+    setFilterDateFrom('')
+    setFilterDateTo('')
+    setFilterCategory('')
+    setFilterAmountMin('')
+    setFilterAmountMax('')
+  }
 
   const loadTransactions = useCallback(async (reset = false, silent = false) => {
     if (loadingRef.current) return
@@ -264,6 +338,11 @@ export default function TransactionsPage() {
 
       if (filter !== 'all') query = query.eq('type', filter)
       if (debouncedSearch) query = query.ilike('description', `%${debouncedSearch}%`)
+      if (filterDateFrom) query = query.gte('date', filterDateFrom)
+      if (filterDateTo) query = query.lte('date', filterDateTo)
+      if (filterCategory) query = query.eq('category_id', filterCategory)
+      if (filterAmountMin) query = query.gte('amount_krw', Number(filterAmountMin.replace(/,/g, '')))
+      if (filterAmountMax) query = query.lte('amount_krw', Number(filterAmountMax.replace(/,/g, '')))
 
       const { data, error } = await query
       if (error) throw error
@@ -283,18 +362,66 @@ export default function TransactionsPage() {
       setLoading(false)
       loadingRef.current = false
     }
-  }, [filter, debouncedSearch, page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, page, filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     loadTransactions(true)
-  }, [filter, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setEditingTransaction(undefined)
+      setShowAddSheet(true)
+    }
+  }, [searchParams])
 
   useEffect(() => {
+    supabase.from('categories').select('id, name, icon').then(({ data }) => {
+      if (data) setCategories(data)
+    })
+
     fetch('/api/exchange-rate')
       .then(r => r.json())
       .then(d => { if (d.rate) setLiveRate(d.rate) })
       .catch(() => {})
-  }, [])
+
+    // Auto-apply any due recurring transactions silently on page load
+    fetch('/api/recurring/apply', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.applied > 0) {
+          toast.success(`${d.applied} recurring transaction${d.applied > 1 ? 's' : ''} applied`)
+          loadTransactions(true, true)
+        }
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Infinite scroll — trigger next page when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingRef.current) {
+          loadTransactions()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loadTransactions])
+
+  const { pulling, pullDistance, ready: pullReady } = usePullToRefresh(() => loadTransactions(true, true))
+
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  useKeyboardShortcuts([
+    { key: 'n', action: () => { setEditingTransaction(undefined); setShowAddSheet(true) }, description: 'New transaction' },
+    { key: '/', action: () => searchInputRef.current?.focus(), description: 'Focus search' },
+    { key: 'Escape', action: () => { setShowAddSheet(false); setShowRecurring(false); exitSelectMode() }, description: 'Close' },
+  ])
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from('transactions').delete().eq('id', id)
@@ -306,8 +433,15 @@ export default function TransactionsPage() {
     }
   }
 
-  // Group by date
-  const grouped = transactions.reduce<Record<string, Transaction[]>>((acc, t) => {
+  // Sort transactions
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    if (sort === 'amount_desc') return b.amount_krw - a.amount_krw
+    if (sort === 'amount_asc') return a.amount_krw - b.amount_krw
+    return 0 // 'date' — DB already sorted by date desc
+  })
+
+  // Group by date (preserving sort order for amount sorts)
+  const grouped = sortedTransactions.reduce<Record<string, Transaction[]>>((acc, t) => {
     const key = t.date
     if (!acc[key]) acc[key] = []
     acc[key].push(t)
@@ -318,6 +452,12 @@ export default function TransactionsPage() {
     { label: 'All', value: 'all' },
     { label: 'Income', value: 'income' },
     { label: 'Expense', value: 'expense' },
+  ]
+
+  const sorts: { label: string; value: SortOption }[] = [
+    { label: 'Date', value: 'date' },
+    { label: '↓ Amount', value: 'amount_desc' },
+    { label: '↑ Amount', value: 'amount_asc' },
   ]
 
   return (
@@ -333,42 +473,225 @@ export default function TransactionsPage() {
       >
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Transactions</h1>
+          <div className="flex items-center gap-2">
+            {!selectMode ? (
+              <>
+                <button
+                  onClick={() => { haptic('light'); setShowRecurring(true) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-transform active:scale-90"
+                  style={{
+                    backgroundColor: 'var(--color-card-elevated-base)',
+                    color: 'var(--color-accent-base)',
+                    border: '1px solid var(--color-border-base)',
+                  }}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Recurring
+                </button>
+                <button
+                  onClick={() => { haptic('light'); setSelectMode(true) }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-transform active:scale-90"
+                  style={{
+                    backgroundColor: 'var(--color-card-elevated-base)',
+                    color: 'var(--color-text-secondary)',
+                    border: '1px solid var(--color-border-base)',
+                  }}
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Select
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => { haptic('light'); exitSelectMode() }}
+                className="px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-transform active:scale-90"
+                style={{
+                  backgroundColor: 'var(--color-card-elevated-base)',
+                  color: 'var(--color-text-secondary)',
+                  border: '1px solid var(--color-border-base)',
+                }}
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={() => { haptic('light'); setShowUSD(!showUSD) }}
+              className="px-3 py-1.5 rounded-full text-lg leading-none transition-transform active:scale-90"
+              style={{
+                backgroundColor: 'var(--color-card-elevated-base)',
+                color: 'var(--color-accent-base)',
+                border: '1px solid var(--color-border-base)',
+              }}
+            >
+              {showUSD ? '🇺🇸' : '🇰🇷'}
+            </button>
+          </div>
+        </div>
+
+        {/* Search + Filter button */}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
+            <input
+              ref={searchInputRef}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onFocus={() => setShowHistory(true)}
+              onBlur={() => setTimeout(() => setShowHistory(false), 150)}
+              placeholder="Search transactions... (press / to focus)"
+              className="w-full rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none"
+              style={{
+                backgroundColor: 'var(--color-card-elevated-base)',
+                border: '1px solid var(--color-border-base)',
+                color: 'var(--color-text-primary)',
+                fontSize: '16px',
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
+              </button>
+            )}
+          </div>
+          <AnimatePresence>
+            {showHistory && !search && searchHistory.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute top-full left-0 right-0 mt-1 rounded-2xl overflow-hidden shadow-xl z-30"
+                style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+              >
+                <p className="px-4 pt-3 pb-1 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: 'var(--color-text-secondary)' }}>Recent</p>
+                {searchHistory.map(h => (
+                  <button
+                    key={h}
+                    onMouseDown={() => { setSearch(h); setShowHistory(false) }}
+                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-left hover:bg-white/5 transition-colors"
+                    style={{ color: 'var(--color-text-primary)' }}
+                  >
+                    <Search className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                    {h}
+                  </button>
+                ))}
+                <button
+                  onMouseDown={() => { setSearchHistory([]); localStorage.removeItem('txSearchHistory'); setShowHistory(false) }}
+                  className="w-full px-4 py-2.5 text-[10px] font-black uppercase tracking-wider border-t text-center"
+                  style={{ color: 'var(--color-text-secondary)', borderColor: 'var(--color-border-base)' }}
+                >
+                  Clear history
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button
-            onClick={() => { haptic('light'); setShowUSD(!showUSD) }}
-            className="px-3 py-1.5 rounded-full text-lg leading-none transition-transform active:scale-90"
+            onClick={() => { haptic('light'); setShowFilterPanel(v => !v) }}
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform active:scale-90"
             style={{
-              backgroundColor: 'var(--color-card-elevated-base)',
-              color: 'var(--color-accent-base)',
+              backgroundColor: showFilterPanel || activeFilterCount > 0 ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
               border: '1px solid var(--color-border-base)',
+              color: showFilterPanel || activeFilterCount > 0 ? 'white' : 'var(--color-text-secondary)',
             }}
           >
-            {showUSD ? '🇺🇸' : '🇰🇷'}
+            <SlidersHorizontal className="h-4 w-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-black text-white"
+                style={{ backgroundColor: 'var(--color-expense-base)' }}>
+                {activeFilterCount}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search transactions..."
-            className="w-full rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none"
-            style={{
-              backgroundColor: 'var(--color-card-elevated-base)',
-              border: '1px solid var(--color-border-base)',
-              color: 'var(--color-text-primary)',
-              fontSize: '16px',
-            }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-              <X className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
-            </button>
-          )}
-        </div>
+        {/* Advanced filter panel */}
+        <AnimatePresence>
+          {showFilterPanel && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-3 overflow-hidden"
+            >
+              <div
+                className="rounded-2xl p-4 space-y-3"
+                style={{ backgroundColor: 'var(--color-card-base)', border: '1px solid var(--color-border-base)' }}
+              >
+                {/* Date range */}
+                <div>
+                  <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Date Range</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={e => setFilterDateFrom(e.target.value)}
+                      className="rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
+                    />
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={e => setFilterDateTo(e.target.value)}
+                      className="rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
+                    />
+                  </div>
+                </div>
 
-        {/* Filter chips */}
+                {/* Amount range */}
+                <div>
+                  <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Amount Range (₩)</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={filterAmountMin}
+                      onChange={e => setFilterAmountMin(e.target.value)}
+                      className="rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={filterAmountMax}
+                      onChange={e => setFilterAmountMax(e.target.value)}
+                      className="rounded-xl px-3 py-2 text-sm outline-none"
+                      style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Category</p>
+                  <select
+                    value={filterCategory}
+                    onChange={e => setFilterCategory(e.target.value)}
+                    className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+                    style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
+                  >
+                    <option value="">All categories</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear */}
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { clearFilters(); haptic('light') }}
+                    className="w-full rounded-xl py-2 text-xs font-black uppercase tracking-wider"
+                    style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--color-expense-base)' }}
+                  >
+                    Clear {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Filter + Sort chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {filters.map(f => (
             <button
@@ -383,8 +706,34 @@ export default function TransactionsPage() {
               {f.label}
             </button>
           ))}
+          <div className="w-px self-stretch my-1 rounded-full" style={{ backgroundColor: 'var(--color-border-base)' }} />
+          {sorts.map(s => (
+            <button
+              key={s.value}
+              onClick={() => { haptic('light'); setSort(s.value) }}
+              className="shrink-0 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+              style={{
+                backgroundColor: sort === s.value ? 'var(--color-accent-base)' : 'var(--color-card-elevated-base)',
+                color: sort === s.value ? 'white' : 'var(--color-text-secondary)',
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* Pull-to-refresh indicator */}
+      {pulling && (
+        <div className="flex justify-center py-2 transition-all" style={{ height: Math.min(pullDistance * 0.6, 44) }}>
+          <div className={`flex items-center gap-2 text-xs font-bold transition-all ${pullReady ? 'text-green-400' : 'text-[var(--color-text-secondary)]'}`}>
+            <svg className={`w-4 h-4 transition-transform duration-200 ${pullReady ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12l7 7 7-7" />
+            </svg>
+            {pullReady ? 'Release to refresh' : 'Pull to refresh'}
+          </div>
+        </div>
+      )}
 
       {/* Transaction list */}
       <div className="pb-4">
@@ -448,6 +797,9 @@ export default function TransactionsPage() {
                             })
                             setShowAddSheet(true)
                           }}
+                          selectMode={selectMode}
+                          selected={selectedIds.has(t.id)}
+                          onSelect={toggleSelect}
                         />
                       </div>
                     ))}
@@ -456,28 +808,85 @@ export default function TransactionsPage() {
               )
             })}
 
-            {/* Load more */}
-            {hasMore && (
-              <div className="flex justify-center py-6">
-                <button
-                  onClick={() => loadTransactions()}
-                  className="px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest bg-[var(--color-card-elevated-base)] text-[var(--color-accent-base)] border border-[var(--color-border-base)] active:scale-95 transition-all"
-                >
-                  Load more
-                </button>
-              </div>
-            )}
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="flex justify-center py-6">
+              {hasMore && (
+                <div className="flex items-center gap-2 text-xs font-bold opacity-40" style={{ color: 'var(--color-text-secondary)' }}>
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Loading
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
 
-      {!showAddSheet && <FAB onClick={() => { setEditingTransaction(undefined); setShowAddSheet(true) }} />}
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {selectMode && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-20 md:bottom-6 left-0 right-0 flex justify-center z-30 px-5"
+          >
+            <div
+              className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
+              style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+            >
+              <button
+                onClick={() => {
+                  haptic('light')
+                  if (selectedIds.size === transactions.length) {
+                    setSelectedIds(new Set())
+                  } else {
+                    setSelectedIds(new Set(transactions.map(t => t.id)))
+                  }
+                }}
+                className="text-xs font-black uppercase tracking-wider"
+                style={{ color: 'var(--color-accent-base)' }}
+              >
+                {selectedIds.size === transactions.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <div className="w-px h-4" style={{ backgroundColor: 'var(--color-border-base)' }} />
+              <span className="text-xs font-bold" style={{ color: 'var(--color-text-secondary)' }}>
+                {selectedIds.size} selected
+              </span>
+              <div className="w-px h-4" style={{ backgroundColor: 'var(--color-border-base)' }} />
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 disabled:opacity-30"
+                style={{ backgroundColor: 'var(--color-expense-base)', color: 'white' }}
+              >
+                <Trash2 size={13} />
+                Delete {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!showAddSheet && !showRecurring && !selectMode && (
+        <FAB onClick={() => { setEditingTransaction(undefined); setShowAddSheet(true) }} />
+      )}
       <AddTransactionSheet
         isOpen={showAddSheet}
         onClose={() => { setShowAddSheet(false); setEditingTransaction(undefined) }}
         onSuccess={() => loadTransactions(true, true)}
         editTransaction={editingTransaction}
       />
+      <RecurringSheet
+        isOpen={showRecurring}
+        onClose={() => setShowRecurring(false)}
+      />
     </div>
   )
+}
+
+export default function TransactionsPage() {
+  return <Suspense><TransactionsPageInner /></Suspense>
 }

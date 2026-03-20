@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useExchangeRate } from '@/hooks/useExchangeRate'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -39,8 +40,8 @@ export function evaluateExpression(expr: string): number {
 }
 
 export function useTransactionForm(initialData?: Partial<TransactionFormData>) {
-  const [exchangeRate, setExchangeRate] = useState(1350)
-  
+  const exchangeRate = useExchangeRate()
+
   const form = useForm<TransactionFormData>({
     resolver: zodResolver(transactionSchema),
     defaultValues: initialData || {
@@ -59,12 +60,6 @@ export function useTransactionForm(initialData?: Partial<TransactionFormData>) {
   const amountNum = evaluateExpression(amountRaw || '0')
   const hasExpression = !!(amountRaw && (amountRaw.includes('+') || amountRaw.includes('-')))
 
-  useEffect(() => {
-    fetch('/api/exchange-rate')
-      .then(r => r.json())
-      .then(d => { if (d.rate) setExchangeRate(d.rate) })
-      .catch(() => {})
-  }, [])
 
   const handleKeypadInput = useCallback((val: string) => {
     const current = amountRaw || ''

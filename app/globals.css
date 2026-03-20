@@ -36,6 +36,14 @@ html {
   height: -webkit-fill-available;
 }
 
+:root,
+:root.light {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.2s ease;
+}
+
 :root {
   --color-bg: #0a0f1a;
   --color-card-base: #111827;
@@ -65,6 +73,13 @@ html {
 * {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
+}
+
+/* Smooth colour transitions for all themed elements */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.25s;
+  transition-timing-function: ease;
 }
 
 body {
@@ -124,6 +139,12 @@ input, select, textarea {
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Don't slow down motion animations with color transitions */
+[data-framer-motion],
+.motion-safe\:transition-none {
+  transition-property: none !important;
+}
 
 /* ── Components ── */
 .rounded-button {

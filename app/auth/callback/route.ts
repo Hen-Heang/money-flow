@@ -26,6 +26,17 @@ export async function GET(request: Request) {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
+      const meta = user.user_metadata ?? {}
+      const displayName: string | null =
+        typeof meta.full_name === 'string' ? meta.full_name :
+        typeof meta.name === 'string' ? meta.name :
+        typeof meta.display_name === 'string' ? meta.display_name :
+        null
+      const avatarUrl: string | null =
+        typeof meta.avatar_url === 'string' ? meta.avatar_url :
+        typeof meta.picture === 'string' ? meta.picture :
+        null
+
       const { data: existingProfile } = await supabase
         .from('users')
         .select('id, email')
@@ -35,7 +46,10 @@ export async function GET(request: Request) {
       if (existingProfile) {
         await supabase
           .from('users')
-          .update({ email: user.email || '' })
+          .update({
+            email: user.email || '',
+            ...(avatarUrl && { avatar_url: avatarUrl }),
+          })
           .eq('id', user.id)
       } else {
         await supabase
@@ -43,9 +57,8 @@ export async function GET(request: Request) {
           .insert({
             id: user.id,
             email: user.email || '',
-            display_name: typeof user.user_metadata?.display_name === 'string'
-              ? user.user_metadata.display_name
-              : null,
+            display_name: displayName,
+            avatar_url: avatarUrl,
             default_currency: 'KRW',
           })
       }

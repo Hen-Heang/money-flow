@@ -70,58 +70,67 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-[100] flex items-end justify-center md:items-center p-0 md:p-6">
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50"
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)' }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-[6px]"
           />
+
+          {/* Main Modal/Sheet */}
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            drag={canDrag ? 'y' : false}
+            initial={isDesktop ? { opacity: 0, scale: 0.95, y: 10 } : { y: '100%' }}
+            animate={isDesktop ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }}
+            exit={isDesktop ? { opacity: 0, scale: 0.95, y: 10 } : { y: '100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            drag={!isDesktop && canDrag ? 'y' : false}
             dragConstraints={{ top: 0 }}
             dragElastic={{ top: 0, bottom: 0.5 }}
             onDragEnd={(_, info) => {
               if (info.offset.y > 100) onClose()
             }}
-            className="fixed left-0 right-0 z-50 mx-auto flex flex-col"
+            className={`
+              relative flex flex-col overflow-hidden glass-card shadow-2xl
+              ${isDesktop 
+                ? 'w-[32rem] rounded-[28px] border border-white/10' 
+                : 'w-full rounded-t-[32px] border-t border-white/10'
+              }
+            `}
             style={{
-              bottom: keyboardHeight > 0
-                ? keyboardHeight
-                : isDesktop
-                  ? 0
-                  : 'calc(80px + env(safe-area-inset-bottom, 0px))',
-              transition: 'bottom 0.25s ease-out',
+              bottom: !isDesktop && keyboardHeight > 0 ? keyboardHeight : 0,
               backgroundColor: 'var(--color-card-base)',
-              borderRadius: '24px 24px 0 0',
-              width: 'min(100%, 32rem)',
-              maxHeight: keyboardHeight > 0 && visibleHeight
+              maxHeight: !isDesktop && keyboardHeight > 0 && visibleHeight
                 ? `${visibleHeight}px`
-                : 'min(82dvh, 760px)',
-              overflow: 'hidden',
-              paddingBottom: keyboardHeight > 0 || !isDesktop ? '8px' : 'env(safe-area-inset-bottom, 16px)',
+                : isDesktop ? 'min(85vh, 760px)' : 'min(92dvh, 760px)',
+              paddingBottom: isDesktop ? '24px' : 'calc(env(safe-area-inset-bottom, 16px) + 8px)',
             }}
           >
-            <div className="flex items-center justify-center py-3 shrink-0">
-              <div
-                className="w-10 rounded-full"
-                style={{ height: '5px', backgroundColor: 'var(--color-text-secondary)', opacity: 0.5 }}
-              />
-            </div>
-            {title && (
-              <div className="px-6 pb-4">
-                <h2 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</h2>
+            {/* Handle Bar (Mobile Only) */}
+            {!isDesktop && (
+              <div className="flex items-center justify-center py-3 shrink-0">
+                <div
+                  className="w-10 rounded-full h-1.5"
+                  style={{ backgroundColor: 'var(--color-text-secondary)', opacity: 0.3 }}
+                />
               </div>
             )}
+
+            {/* Title Header */}
+            {title && (
+              <div className={`px-6 shrink-0 ${isDesktop ? 'pt-7 pb-4' : 'pb-4'}`}>
+                <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+                  {title}
+                </h2>
+              </div>
+            )}
+
+            {/* Scrollable Content */}
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto"
+              className="flex-1 overflow-y-auto px-6 custom-scrollbar"
               style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
               onScroll={() => {
                 const el = scrollRef.current
@@ -130,13 +139,15 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
             >
               {children}
             </div>
+
+            {/* Footer */}
             {footer && (
-              <div className="shrink-0 px-4 pb-2 pt-3" style={{ borderTop: '1px solid var(--color-border-base)' }}>
+              <div className="shrink-0 px-6 pb-2 pt-4 mt-2" style={{ borderTop: '1px solid var(--color-border-base)' }}>
                 {footer}
               </div>
             )}
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   )

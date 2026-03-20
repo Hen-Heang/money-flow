@@ -1,54 +1,113 @@
 # Money Flow
 
-Money Flow is a mobile-first personal finance tracker built with Next.js 16, React 19, Tailwind CSS 4, and Supabase.
+Money Flow is a personal finance tracker built with **Next.js 16**, **React 19**, and **Supabase**. It combines a glassmorphic design with AI capabilities for a seamless wealth management experience.
 
-It includes:
-- Email/password authentication with Supabase
-- Dashboard summary for income, expense, balance, and category breakdown
-- Transaction list with search, filters, pagination, and swipe-to-delete
-- Analytics charts built with Recharts
-- Settings page with profile photo upload, categories, payment methods, theme toggle, and CSV export
-- PWA metadata for mobile install support
+## Features
+
+### AI-Powered Intelligence
+- **Category Suggestion**: Uses Google Gemini 1.5 Flash to auto-suggest categories as you type
+- **Financial Chatbot**: AI assistant with awareness of your spending habits
+- **Smart Insights**: Monthly burn rate analysis and automated savings tips
+
+### Transactions
+- Add, edit, delete transactions (KRW / USD)
+- Swipe to delete, bulk select and delete
+- Search by description with history
+- Filter by income / expense, sort by date or amount
+- Pull-to-refresh on mobile
+- Keyboard shortcuts: `N` new, `/` search, `Esc` close
+
+### Dashboard
+- Monthly income, expense, balance summary
+- Budget usage bars with overspend alerts
+- Daily trend area chart
+- Spending by category pie chart
+- Quick-add templates (Coffee, Lunch, Bus, Grocery)
+
+### Analytics
+- Income vs expense bar chart (1M / 3M / 6M periods)
+- Net cash flow line chart
+- Category breakdown with budget comparison
+- Export current period as CSV
+
+### Savings Goals
+- Create goals with target amount, icon, and color
+- Track progress with deposit history
+- Confetti animation on goal completion
+
+### Recurring Transactions
+- Define daily / weekly / monthly / yearly rules
+- One-tap apply to generate real transactions
+
+### Settings
+- Edit display name inline
+- Upload profile photo (stored in Supabase Storage)
+- Light / dark theme toggle
+- Manage categories (income + expense) and payment methods
+- Monthly budget limits per category
+- Export data as CSV, JSON, or PDF
+- Sign out
+
+### Auth
+- Email + password sign-up and sign-in
+- **Google Sign-In** (OAuth via Supabase)
+- New users get default categories and payment methods seeded automatically
+
+### PWA
+- Installable on iOS and Android
+- Offline banner when connection is lost
+- Manifest shortcuts for Add Transaction, Savings, Analytics
+- Safe-area support for notched devices
 
 ## Tech Stack
 
-- Next.js 16.1.6
-- React 19.2.3
-- TypeScript
-- Tailwind CSS 4
-- Supabase Auth + Database
-- React Hook Form + Zod
-- Framer Motion
-- Recharts
+| Layer | Library |
+|---|---|
+| Framework | Next.js 16.1.6 (App Router) |
+| UI | React 19, Tailwind CSS 4, Framer Motion |
+| Auth + DB | Supabase (Auth, PostgreSQL, Storage, RLS) |
+| Forms | React Hook Form + Zod |
+| Charts | Recharts |
+| AI | Google Gemini 1.5 Flash |
+| Icons | Lucide React |
 
 ## Project Structure
 
 ```text
 app/
-  (app)/                Authenticated app pages
-  (auth)/login/         Login and signup UI
-  api/                  Route handlers for exchange rate, export, summary, transactions
-  auth/callback/        Supabase auth callback route
+  (app)/                Authenticated pages (dashboard, transactions, analytics, savings, settings)
+  (auth)/login/         Login / sign-up UI
+  api/                  Route handlers (exchange-rate, export, summary, transactions, recurring, chat, ai)
+  auth/callback/        OAuth callback — exchanges code, creates user profile + seeds defaults
 components/
+  ai/                   ChatBot
   layout/               Sidebar and bottom tab bar
-  transactions/         Add transaction bottom sheet
-  ui/                   FAB, avatar, skeleton, bottom sheet
+  transactions/         AddTransactionSheet, CategoryGrid, RecurringSheet
+  ui/                   Avatar, BottomSheet, ErrorBoundary, FAB, OfflineBanner, Skeleton
+hooks/
+  useExchangeRate.ts    Shared exchange rate fetch hook
+  useIsMobile.ts        Shared mobile breakpoint hook
+  useKeyboardShortcuts.ts
+  usePullToRefresh.ts
+  useTransactionForm.ts
 lib/
-  profile.ts            Sync and load user profile from public.users
-  supabase.ts           Browser Supabase client + database types
+  constants.ts          CHART_COLORS and other shared constants
+  profile.ts            User profile sync + default data seeding
+  supabase.ts           Browser Supabase client
   supabase-server.ts    Server Supabase client
+  types.ts              Shared TypeScript interfaces (Transaction, Category, PaymentMethod, Budget, ExchangeRateInfo)
   utils.ts              Formatting, haptics, image resize helpers
 public/
-  manifest.json         PWA manifest
+  manifest.json         PWA manifest with shortcuts
 supabase/migrations/
-  20260311_users_profile_update.sql
+  *.sql                 Schema migrations
 ```
 
 ## Requirements
 
 - Node.js 20+
-- npm
 - Supabase project
+- Google Cloud project (for Google Sign-In and Gemini AI)
 - Optional: ExchangeRate API key
 
 ## Environment Variables
@@ -58,12 +117,13 @@ Create `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+GEMINI_API_KEY=your_gemini_api_key
 EXCHANGE_RATE_API_KEY=your_exchange_rate_api_key
 ```
 
-Notes:
-- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required.
-- `EXCHANGE_RATE_API_KEY` is optional, but without it the exchange-rate route will not return live data.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required
+- `GEMINI_API_KEY` is required for AI features
+- `EXCHANGE_RATE_API_KEY` is optional — without it the exchange rate route uses a fallback value
 
 ## Install and Run
 
@@ -73,8 +133,6 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
-
-Other scripts:
 
 ```bash
 npm run lint
@@ -86,24 +144,29 @@ npm run start
 
 ### 1. Auth
 
-Enable Email auth in Supabase.
+Enable **Email** and **Google** providers in Supabase → Authentication → Providers.
 
-This app uses Supabase Auth as the source of identity, then syncs profile data into `public.users`.
+For Google Sign-In:
+1. Create OAuth credentials in Google Cloud Console
+2. Add `https://<your-ref>.supabase.co/auth/v1/callback` as an authorised redirect URI
+3. Paste Client ID and Secret into Supabase → Authentication → Providers → Google
+4. Add your app URL to Supabase → Authentication → URL Configuration → Redirect URLs
 
 ### 2. Core Tables
 
-You should have these tables:
-- `users`
-- `transactions`
-- `categories`
-- `payment_methods`
-- `exchange_rates`
+```text
+users
+transactions
+categories
+payment_methods
+budgets
+savings_goals
+recurring_transactions
+transaction_templates
+exchange_rates
+```
 
 ### 3. Users Table
-
-The app expects `public.users.id` to match `auth.users.id`.
-
-Recommended schema:
 
 ```sql
 create table public.users (
@@ -116,166 +179,64 @@ create table public.users (
 );
 ```
 
-If you already created `public.users` with a random UUID default, run the migration in:
+### 4. RLS Policies
 
-[`supabase/migrations/20260311_users_profile_update.sql`](./supabase/migrations/20260311_users_profile_update.sql)
-
-It does:
-- remove the default UUID generation from `users.id`
-- add `avatar_url`
-- add the foreign key to `auth.users(id)`
-
-If PostgREST does not detect the new column immediately, run:
-
-```sql
-notify pgrst, 'reload schema';
-```
-
-### 4. Existing Users Table Data
-
-If your existing row IDs in `public.users` do not match `auth.users.id`, you must fix them.
-
-Check auth users:
-
-```sql
-select id, email from auth.users;
-```
-
-Then update or recreate the matching row in `public.users` using the same `id`.
-
-## Recommended RLS Policies
-
-Enable RLS on `public.users`:
+Enable RLS on all tables. Example for `public.users`:
 
 ```sql
 alter table public.users enable row level security;
-```
 
-Recommended policies:
-
-```sql
 create policy "Users can read own profile"
-on public.users
-for select
-to authenticated
-using (auth.uid() = id);
+  on public.users for select to authenticated using (auth.uid() = id);
 
 create policy "Users can update own profile"
-on public.users
-for update
-to authenticated
-using (auth.uid() = id);
+  on public.users for update to authenticated using (auth.uid() = id);
 
 create policy "Users can insert own profile"
-on public.users
-for insert
-to authenticated
-with check (auth.uid() = id);
+  on public.users for insert to authenticated with check (auth.uid() = id);
 ```
 
-You should apply similar ownership policies to:
-- `transactions`
-- `categories`
-- `payment_methods`
+Apply equivalent ownership policies to `transactions`, `categories`, `payment_methods`, `budgets`, `savings_goals`, and `recurring_transactions`.
 
-## How Profile Sync Works
+### 5. Storage
 
-- User signs up or signs in with Supabase Auth
-- The app ensures a matching row exists in `public.users`
-- Dashboard and settings read profile data from `public.users`
-- Avatar upload stores a base64 image string in `public.users.avatar_url`
+Create a `avatars` bucket in Supabase Storage for profile photo uploads.
 
-Relevant files:
-- [`lib/profile.ts`](./lib/profile.ts)
-- [`app/(auth)/login/page.tsx`](./app/(auth)/login/page.tsx)
-- [`app/auth/callback/route.ts`](./app/auth/callback/route.ts)
-- [`app/(app)/settings/page.tsx`](./app/(app)/settings/page.tsx)
+## How New User Onboarding Works
 
-## Main Features
-
-### Dashboard
-
-- Greeting and profile avatar
-- Monthly income, expense, and balance
-- Budget usage bar
-- Daily trend chart
-- Spending by category chart
-- Recent transactions preview
-
-### Transactions
-
-- Add transaction bottom sheet
-- Search by description
-- Filter by income/expense
-- Pagination
-- Swipe left to reveal delete action
-
-### Analytics
-
-- 6-month income vs expense
-- Net cash flow line chart
-- Category distribution
-- Summary cards
-
-### Settings
-
-- Profile photo upload
-- Theme toggle
-- Category management
-- Payment method management
-- CSV export
-- Sign out
+1. User signs up (email or Google) → Supabase Auth creates `auth.users` record
+2. `app/auth/callback/route.ts` exchanges the OAuth code for a session
+3. `lib/profile.ts → ensureUserProfile()` inserts a row into `public.users`
+4. `seedDefaultUserData()` inserts 12 default categories (income + expense) and 4 payment methods for the new user
+5. User lands on the dashboard with a fully populated app
 
 ## API Routes
 
-- `GET /api/exchange-rate`
-  Returns exchange rate data
-
-- `GET /api/export`
-  Exports user transactions to CSV
-
-- `GET /api/summary`
-  Returns summary data
-
-- `GET|POST|PATCH|DELETE /api/transactions`
-  Transaction CRUD
-
-## Mobile / PWA Notes
-
-- PWA metadata is defined in:
-  - [`app/layout.tsx`](./app/layout.tsx)
-  - [`public/manifest.json`](./public/manifest.json)
-- Icons are in:
-  - [`public/icon.png`](./public/icon.png)
-  - [`public/apple-icon.png`](./public/apple-icon.png)
-- Layout is optimized for mobile with safe-area support and bottom navigation
-
-## Known Notes
-
-- Avatar images are currently stored as a base64 string in `public.users.avatar_url`.
-  This is simple for now, but Supabase Storage is a better long-term choice.
-
-- `npm run lint` currently passes without errors, but there are still some warnings in unrelated files.
+| Method | Route | Description |
+|---|---|---|
+| GET | `/api/exchange-rate` | Live KRW/USD rate |
+| GET | `/api/export` | Export transactions as CSV or JSON |
+| GET | `/api/summary` | Monthly summary |
+| GET/POST/PATCH/DELETE | `/api/transactions` | Transaction CRUD |
+| GET/POST/DELETE | `/api/recurring` | Recurring rules CRUD |
+| POST | `/api/recurring/apply` | Apply recurring rules to generate transactions |
+| POST | `/api/chat` | AI chatbot (Gemini) |
+| POST | `/api/ai/suggest-category` | AI category suggestion |
 
 ## Deployment
 
-Typical flow:
+1. Create a Supabase project and apply schema + RLS policies
+2. Create a `avatars` storage bucket
+3. Configure Google OAuth in Google Cloud Console and Supabase
+4. Set all environment variables in your hosting platform
+5. Deploy the Next.js app (Vercel recommended)
 
-1. Create a Supabase project
-2. Apply schema and policies
-3. Set environment variables
-4. Build and deploy the Next.js app
+Add your production URL to:
+- Supabase → Authentication → URL Configuration → Redirect URLs
+- Google Cloud → OAuth 2.0 Client → Authorised JavaScript origins + Redirect URIs
 
-For production:
-- use real Supabase credentials
-- enable proper RLS policies
-- consider moving avatar uploads to Supabase Storage
-- review exchange-rate API usage and limits
+## Repository
 
-## Git
-
-Repository remote:
-
-```text
+```
 https://github.com/Hen-Heang/money-flow.git
 ```

@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
-  Lightbulb, Coffee, Utensils, Bus, ShoppingBag, Sparkles, ChevronRight as ChevronIcon
+  Lightbulb, Sparkles, ChevronRight as ChevronIcon,
+  AlertTriangle, X
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -13,6 +14,8 @@ import {
 } from 'recharts'
 import { createClient } from '@/lib/supabase'
 import { getUserProfile } from '@/lib/profile'
+import type { Transaction, Category, ExchangeRateInfo } from '@/lib/types'
+import { CHART_COLORS } from '@/lib/constants'
 import Avatar from '@/components/ui/Avatar'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import FAB from '@/components/ui/FAB'
@@ -20,24 +23,7 @@ import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
 import ChatBot from '@/components/ai/ChatBot'
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
-
-interface Transaction {
-  id: string
-  date: string
-  type: 'income' | 'expense'
-  description: string
-  amount_krw: number
-  amount_usd: number
-  category_id: string | null
-  categories?: { name: string; icon: string; color: string } | null
-}
-
-const QUICK_TEMPLATES = [
-  { name: 'Coffee', icon: Coffee, amount: 5000, category: 'Food & Drink', iconEmoji: '☕️', color: '#10b981' },
-  { name: 'Lunch', icon: Utensils, amount: 12000, category: 'Food & Drink', iconEmoji: '🍱', color: '#3b82f6' },
-  { name: 'Bus/Subway', icon: Bus, amount: 1500, category: 'Transport', iconEmoji: '🚌', color: '#f59e0b' },
-  { name: 'Grocery', icon: ShoppingBag, amount: 30000, category: 'Shopping', iconEmoji: '🛒', color: '#ef4444' },
-]
+import { QUICK_TEMPLATES } from '@/shared/data'
 
 interface CategoryTotal {
   name: string;
@@ -47,24 +33,7 @@ interface CategoryTotal {
   budget?: number;
 }
 
-interface ExchangeRateInfo {
-  rate: number
-  base_currency: string
-  target_currency: string
-  fetched_at: string
-  cached?: boolean
-  fallback?: boolean
-  error?: boolean
-}
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
-
-interface Category {
-  id: string
-  name: string
-  icon: string
-  color: string
-}
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -76,13 +45,30 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
+  const [alertsDismissed, setAlertsDismissed] = useState(false)
+  const [budgetReviewDismissed, setBudgetReviewDismissed] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    return localStorage.getItem('budgetReviewDismissed') === currentMonth
+  })
+
+  const dismissBudgetReview = () => {
+    const currentMonth = new Date().toISOString().slice(0, 7)
+    localStorage.setItem('budgetReviewDismissed', currentMonth)
+    setBudgetReviewDismissed(true)
+  }
+
+  const showBudgetReview = !budgetReviewDismissed && new Date().getDate() <= 5 && isSameMonth(currentDate, new Date())
   const [userName, setUserName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
   const supabase = createClient()
+  
+  const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    setAlertsDismissed(false)
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
@@ -177,10 +163,14 @@ export default function DashboardPage() {
 
   const insights = useMemo(() => {
     const today = new Date()
-    const daysPassed = isSameMonth(currentDate, today) ? today.getDate() : differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
+    const isCurrentMonth = isSameMonth(currentDate, today)
+    const daysPassed = isCurrentMonth ? today.getDate() : differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
+    const daysInMonthTotal = differenceInDays(endOfMonth(currentDate), startOfMonth(currentDate)) + 1
+    const daysRemaining = isCurrentMonth ? Math.max(daysInMonthTotal - today.getDate(), 0) : 0
     const dailyAvg = totalExpense / Math.max(daysPassed, 1)
+    const projectedExpense = isCurrentMonth ? totalExpense + dailyAvg * daysRemaining : totalExpense
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
-    return { dailyAvg, savingsRate }
+    return { dailyAvg, savingsRate, projectedExpense, daysRemaining, isCurrentMonth }
   }, [totalExpense, totalIncome, currentDate])
 
   const categoryTotals: CategoryTotal[] = []
@@ -191,6 +181,19 @@ export default function DashboardPage() {
     else categoryTotals.push({ name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget: t.category_id ? budgetMap[t.category_id] : undefined })
   })
   categoryTotals.sort((a, b) => b.total - a.total)
+
+  const budgetAlerts = isSameMonth(currentDate, new Date())
+    ? categoryTotals
+        .filter(c => c.budget && c.budget > 0 && c.total >= c.budget * 0.8)
+        .map(c => ({
+          name: c.name,
+          icon: c.icon,
+          spent: c.total,
+          budget: c.budget!,
+          over: c.total >= c.budget!,
+          pct: Math.round((c.total / c.budget!) * 100),
+        }))
+    : []
 
   const dailyData: { day: string; expense: number; income: number }[] = []
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
@@ -207,256 +210,298 @@ export default function DashboardPage() {
   const fmt = (amount: number) => showUSD ? formatUSD(amount / liveRate) : formatKRW(amount)
 
   return (
-    <div className="w-full max-w-full md:max-w-3xl md:mx-auto pt-4 pb-24 md:pt-10 overflow-x-hidden">
-      {/* Header */}
-      <div className="px-5 mb-6 flex items-center justify-between gap-3">
+    <div className="w-full max-w-full lg:max-w-6xl xl:max-w-7xl mx-auto pt-4 pb-24 md:pt-10 px-0 sm:px-5 lg:px-8 overflow-x-hidden">
+      {/* ─── Top Header (Always Full Width) ─── */}
+      <div className="px-5 sm:px-0 mb-8 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar src={avatarUrl} name={userName} size={36} className="ring-2 ring-[var(--color-border-base)] shadow-xl shrink-0 sm:w-12 sm:h-12" />
+          <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-[var(--color-border-base)] shadow-xl shrink-0 sm:w-14 sm:h-14" />
           <div className="min-w-0">
-            <p className="text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.15em] truncate opacity-80">{getGreeting()}</p>
-            <h1 className="text-sm sm:text-lg font-black tracking-tight truncate">{userName}</h1>
+            <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.2em] truncate opacity-70 font-bold">{getGreeting()}</p>
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">{userName}</h1>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-           <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-3 py-1.5 rounded-full glass-morphic text-[9px] font-bold active:scale-95 transition-all">
+        <div className="flex shrink-0 items-center gap-3">
+           <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-4 py-2 rounded-xl glass-morphic text-[10px] font-black active:scale-95 transition-all flex items-center gap-2">
              {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
            </button>
            <ChatBot />
         </div>
       </div>
 
-      {/* Main Stats */}
-      <div className="px-5 mb-6">
-        <div className="flex flex-col gap-3 mb-6">
-          <div className="min-w-0">
-            <p className="text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.2em] font-black mb-1 opacity-60">Available Balance</p>
-            <h2 className={`text-3xl sm:text-5xl font-black tracking-tighter truncate leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
-              {fmt(balance)}
-            </h2>
-          </div>
-          <div className="flex items-center justify-between border-t border-white/10 pt-4">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black tracking-tight uppercase">{format(currentDate, 'MMMM yyyy')}</p>
-              {exchangeRateInfo && (
-                <p className="text-[9px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-60">
-                  1 USD = {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW
-                </p>
-              )}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg"><ChevronLeft size={16} /></button>
-              <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg"><ChevronRight size={16} /></button>
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-4 rounded-[var(--radius-lg)] bg-[var(--color-income-base)]/10 border border-[var(--color-income-base)]/20 min-w-0">
-             <div className="flex items-center gap-2 mb-1 opacity-60"><TrendingUp size={12} /><span className="text-[9px] font-black uppercase tracking-wider">Income</span></div>
-             <p className="text-base font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
-          </div>
-          <div className="p-4 rounded-[var(--radius-lg)] bg-[var(--color-expense-base)]/10 border border-[var(--color-expense-base)]/20 min-w-0">
-             <div className="flex items-center gap-2 mb-1 opacity-60"><TrendingDown size={12} /><span className="text-[9px] font-black uppercase tracking-wider">Expense</span></div>
-             <p className="text-base font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Smart Insight Card */}
-      <div className="px-5 mb-8">
-        {!loading && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            className="p-5 sm:p-6 rounded-[24px] bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-white/10 shadow-xl relative overflow-hidden group"
-          >
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform"><Sparkles size={36} className="sm:w-12 sm:h-12" /></div>
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400"><Lightbulb size={12} /></div>
-                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">AI Smart Insight</span>
-                </div>
+      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_360px] lg:gap-10 xl:gap-14">
+        
+        {/* ─── LEFT COLUMN: Main Stats & Charts ─── */}
+        <div className="space-y-8">
+          
+          {/* Main Balance Card */}
+          <div className="px-5 sm:px-0">
+            <div className="flex flex-col gap-4 mb-8">
+              <div className="min-w-0">
+                <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.25em] font-black mb-1.5 opacity-60">Available Balance</p>
+                <h2 className={`text-4xl sm:text-6xl font-black tracking-tighter truncate leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
+                  {fmt(balance)}
+                </h2>
               </div>
               
-              <div className="space-y-3 mb-4 pr-6">
-                <p className="text-xs font-bold leading-snug">
-                  {insights.savingsRate > 30 
-                    ? "Excellent financial health! Your savings rate is top tier. Consider investing the surplus." 
-                    : insights.savingsRate > 15
-                    ? "You're building solid wealth. Keep this pace up to reach your goals faster."
-                    : insights.dailyAvg > 100000 
-                    ? `Daily spending is high at ${fmt(insights.dailyAvg)}. Your ${categoryTotals[0]?.name || 'top'} category is driving this.`
-                    : balance < 0
-                    ? "Balance is negative. Let's look for small wins to cut back this week."
-                    : "Your cash flow is stable. A good time to save or review your monthly budgets."}
-                </p>
-
-                {/* Secondary Smart Hint */}
-                {categoryTotals.length > 0 && (
-                  <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-secondary)] font-medium">
-                    <span className="shrink-0">💡</span>
-                    <p className="truncate">
-                      {categoryTotals[0].budget && categoryTotals[0].total > categoryTotals[0].budget
-                        ? `You've exceeded your ${categoryTotals[0].name} budget.`
-                        : `Most of your budget is going to ${categoryTotals[0].name} this month.`}
+              <div className="flex items-center justify-between border-t border-white/10 pt-5">
+                <div className="min-w-0">
+                  <p className="text-xs font-black tracking-tight uppercase opacity-80">{format(currentDate, 'MMMM yyyy')}</p>
+                  {exchangeRateInfo && (
+                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-50 mt-0.5">
+                      Live Rate: 1 USD = {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW
                     </p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                <p className="text-[10px] sm:text-xs text-[var(--color-text-secondary)] font-medium">
-                  Status: <span className={`${balance >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-black`}>{balance >= 0 ? 'POSITIVE' : 'OVERSPENT'}</span>
-                </p>
-                <button 
-                  onClick={() => {
-                    haptic('medium');
-                    toast.success('Open Chat Assistant for a deep dive!');
-                  }}
-                  className="flex items-center gap-1 text-[10px] font-black text-blue-400 uppercase tracking-wider"
-                >
-                  Analyze <ChevronIcon size={12} />
-                </button>
+                  )}
+                </div>
+                <div className="flex gap-2.5 shrink-0">
+                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2.5 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg hover:bg-white/5"><ChevronLeft size={18} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2.5 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg hover:bg-white/5"><ChevronRight size={18} /></button>
+                </div>
               </div>
             </div>
-          </motion.div>
-        )}
-      </div>
 
-      {/* Quick Add - Edge to Edge Swiping */}
-      {!loading && (
-        <div className="mb-10 overflow-x-auto no-scrollbar -mx-0">
-          <div className="flex gap-3 px-5 py-1">
-            {QUICK_TEMPLATES.map(t => (
-              <motion.button key={t.name} whileTap={{ scale: 0.94 }} onClick={() => handleQuickAdd(t)} className="flex items-center gap-3 px-5 py-3.5 rounded-full bg-[var(--color-card-elevated-base)] border border-white/5 shadow-lg shrink-0 active:bg-blue-500/10 transition-colors">
-                <span className="text-xl">{t.iconEmoji}</span>
-                <span className="text-sm font-black whitespace-nowrap uppercase tracking-wider">{t.name}</span>
-              </motion.button>
-            ))}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-5 rounded-[24px] bg-[var(--color-income-base)]/10 border border-[var(--color-income-base)]/20 shadow-sm">
+                 <div className="flex items-center gap-2 mb-2 opacity-60"><TrendingUp size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Income</span></div>
+                 <p className="text-xl font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
+              </div>
+              <div className="p-5 rounded-[24px] bg-[var(--color-expense-base)]/10 border border-[var(--color-expense-base)]/20 shadow-sm">
+                 <div className="flex items-center gap-2 mb-2 opacity-60"><TrendingDown size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Expense</span></div>
+                 <p className="text-xl font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Analytics Tabs - Full Width Scrollable */}
-      <div className="px-5 mb-8">
-        <div className="flex gap-6 sm:gap-10 border-b border-white/5 mb-8 overflow-x-auto no-scrollbar">
-          {(['overview', 'trends', 'categories'] as const).map(tab => (
-            <button key={tab} onClick={() => { haptic('light'); setActiveTab(tab) }} className={`pb-4 text-[11px] font-black uppercase tracking-[0.2em] relative transition-all whitespace-nowrap ${activeTab === tab ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)] opacity-40'}`}>
-              {tab}
-              {activeTab === tab && <motion.div layoutId="tab-line" className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-accent-base)] rounded-full shadow-[0_0_8px_var(--color-accent-base)]" />}
-            </button>
-          ))}
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div key={activeTab} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
-            {activeTab === 'overview' && (
-              <div className="space-y-8">
-                {/* Unified Recent Activity */}
-                <div className="card-premium shadow-2xl">
-                  <div className="p-6 flex items-center justify-between border-b border-white/5">
-                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] opacity-50">Recent Activity</h3>
-                    <button onClick={() => router.push('/transactions')} className="text-[10px] font-black text-[var(--color-accent-base)] uppercase tracking-[0.1em] px-3 py-1 rounded-lg bg-blue-500/10">VIEW ALL</button>
+          {/* New-month budget review prompt (Responsive) */}
+          <AnimatePresence>
+            {showBudgetReview && !loading && (
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="px-5 sm:px-0">
+                <div className="rounded-[24px] border p-4 sm:p-5 flex items-center gap-4 bg-blue-500/10 border-blue-500/25 shadow-xl">
+                  <span className="text-3xl shrink-0">📅</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-black" style={{ color: 'var(--color-text-primary)' }}>Review {format(new Date(), 'MMMM')} budgets</p>
+                    <p className="text-[11px] mt-0.5 opacity-60 font-medium">Monthly check-in is recommended.</p>
                   </div>
-                  <div className="divide-y divide-white/5">
-                    {transactions.slice(0, 5).map(t => (
-                      <div key={t.id} className="p-6 flex items-center gap-4 hover:bg-white/[0.02] transition-colors active:bg-white/[0.04]">
-                        <div className={`w-12 h-12 rounded-button flex items-center justify-center text-2xl shadow-inner shrink-0 ${t.type === 'income' ? 'bg-[var(--color-income-base)]/10' : 'bg-[var(--color-expense-base)]/10'}`}>
-                          {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-bold text-base truncate">{t.description}</p>
-                          <p className="text-[11px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider opacity-60">{format(new Date(t.date), 'MMM d')} • {t.categories?.name}</p>
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <p className={`font-black text-base ${t.type === 'income' ? 'text-[var(--color-income-base)]' : 'text-[var(--color-text-primary)]'}`}>
-                            {t.type === 'income' ? '+' : ''}{fmt(t.amount_krw)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => { haptic('light'); router.push('/settings') }} className="px-4 py-2 rounded-xl text-[11px] font-black text-white bg-blue-500 hover:bg-blue-600 transition-colors shadow-lg">Review</button>
+                    <button onClick={() => { haptic('light'); dismissBudgetReview() }} className="p-1.5 rounded-full hover:bg-white/10 transition-colors opacity-50"><X size={16} /></button>
                   </div>
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-                {/* Simple Budget Pill */}
-                {totalIncome > 0 && (
-                  <div className="p-6 rounded-[32px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[11px] font-black uppercase tracking-[0.2em] opacity-50">Monthly Budget Usage</span>
-                      <span className="text-sm font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}%</span>
+          {/* Analytics Area */}
+          <div className="px-5 sm:px-0">
+            <div className="flex gap-8 sm:gap-12 border-b border-white/5 mb-8 overflow-x-auto no-scrollbar pt-2">
+              {(['overview', 'trends', 'categories'] as const).map(tab => (
+                <button key={tab} onClick={() => { haptic('light'); setActiveTab(tab) }} className={`pb-4 text-[11px] font-black uppercase tracking-[0.25em] relative transition-all whitespace-nowrap ${activeTab === tab ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)] opacity-40 hover:opacity-100'}`}>
+                  {tab}
+                  {activeTab === tab && <motion.div layoutId="tab-line" className="absolute bottom-0 left-0 right-0 h-1 bg-[var(--color-accent-base)] rounded-full shadow-[0_0_12px_var(--color-accent-base)]" />}
+                </button>
+              ))}
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                {activeTab === 'overview' && (
+                  <div className="space-y-8">
+                    {/* Mobile-only activity (hidden on desktop because it's in the right column) */}
+                    <div className="lg:hidden">
+                       <RecentActivity transactions={transactions} router={router} fmt={fmt} />
                     </div>
-                    <div className="h-3 rounded-full bg-black/30 overflow-hidden p-0.5 border border-white/5">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((totalExpense / totalIncome) * 100, 100)}%` }} className={`h-full rounded-full shadow-[0_0_12px_rgba(0,0,0,0.5)] ${totalExpense/totalIncome > 0.8 ? 'bg-[var(--color-expense-base)]' : 'bg-[var(--color-accent-base)]'}`} />
-                    </div>
+
+                    {/* Budget Usage Pill */}
+                    {totalIncome > 0 && (
+                      <div className="p-8 rounded-[32px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl">
+                        <div className="flex items-center justify-between mb-5">
+                          <span className="text-[12px] font-black uppercase tracking-[0.25em] opacity-50">Budget Performance</span>
+                          <span className="text-lg font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
+                        </div>
+                        <div className="h-4 rounded-full bg-black/30 overflow-hidden p-1 border border-white/5">
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((totalExpense / totalIncome) * 100, 100)}%` }} className={`h-full rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${totalExpense/totalIncome > 0.8 ? 'bg-[var(--color-expense-base)]' : 'bg-[var(--color-accent-base)]'}`} />
+                        </div>
+                        <p className="mt-4 text-[11px] text-[var(--color-text-secondary)] font-medium text-center">Remaining free cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}</p>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-            )}
 
-            {activeTab === 'trends' && (
-              <div className="card-premium p-6 sm:p-8">
-                <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 opacity-50 text-center">Daily Spending Flow</h3>
-                <div className="h-[260px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData}>
-                      <defs>
-                        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--color-accent-base)" stopOpacity={0.4} />
-                          <stop offset="95%" stopColor="var(--color-accent-base)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-base)" opacity={0.3} />
-                      <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--color-text-secondary)' }} interval={4} />
-                      <YAxis
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--color-text-secondary)' }}
-                        width={40}
-                        tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}K` : String(v)}
-                      />
-                      <Tooltip contentStyle={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', fontWeight: 900 }} />
-                      <Area type="monotone" dataKey="expense" stroke="var(--color-accent-base)" strokeWidth={5} fill="url(#trendGrad)" animationDuration={1500} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'categories' && (
-              <div className="card-premium p-6 sm:p-8">
-                 <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-8 opacity-50 text-center">Spending Breakdown</h3>
-                 <div className="flex flex-col items-center gap-10">
-                    <div className="w-full h-[240px]">
+                {activeTab === 'trends' && (
+                  <div className="card-premium p-6 sm:p-10 min-h-[400px]">
+                    <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-10 opacity-50 text-center">Cash Flow Trendline</h3>
+                    <div className="h-[300px] sm:h-[350px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={categoryTotals} dataKey="total" nameKey="name" innerRadius={70} outerRadius={95} paddingAngle={8} animationBegin={0} animationDuration={1200}>
-                            {categoryTotals.map((entry, index) => <Cell key={entry.name} fill={entry.color || COLORS[index % COLORS.length]} stroke="none" className="hover:opacity-80 transition-opacity outline-none" />)}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
+                        <AreaChart data={dailyData}>
+                          <defs>
+                            <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--color-accent-base)" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="var(--color-accent-base)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-base)" opacity={0.2} />
+                          <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--color-text-secondary)' }} interval={isDesktop ? 2 : 4} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--color-text-secondary)' }} width={45} tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}K` : String(v)} />
+                          <Tooltip contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', fontWeight: 900 }} />
+                          <Area type="monotone" dataKey="expense" stroke="var(--color-accent-base)" strokeWidth={4} fill="url(#trendGrad)" animationDuration={1500} />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </div>
-                    <div className="w-full space-y-3">
-                      {categoryTotals.map((cat, i) => (
-                        <div key={cat.name} className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.03] border border-white/5 active:bg-white/5 transition-colors">
-                          <div className="flex items-center gap-4 min-w-0">
-                             <div className="w-3 h-3 rounded-full shrink-0 shadow-[0_0_10px_rgba(0,0,0,0.5)]" style={{ backgroundColor: cat.color || COLORS[i % COLORS.length] }} />
-                             <span className="text-base font-bold truncate tracking-tight">{cat.icon} {cat.name}</span>
-                          </div>
-                          <span className="text-base font-black shrink-0 ml-2 tracking-tighter">{fmt(cat.total)}</span>
+                  </div>
+                )}
+
+                {activeTab === 'categories' && (
+                  <div className="card-premium p-6 sm:p-10">
+                     <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-10 opacity-50 text-center">Spending Distribution</h3>
+                     <div className="flex flex-col xl:flex-row items-center gap-12">
+                        <div className="w-full xl:w-1/2 h-[280px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={categoryTotals} dataKey="total" nameKey="name" innerRadius={80} outerRadius={110} paddingAngle={8} animationBegin={0} animationDuration={1200}>
+                                {categoryTotals.map((entry, index) => <Cell key={entry.name} fill={entry.color || CHART_COLORS[index % CHART_COLORS.length]} stroke="none" className="hover:opacity-80 transition-opacity outline-none" />)}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
                         </div>
-                      ))}
+                        <div className="w-full xl:w-1/2 space-y-3.5">
+                          {categoryTotals.map((cat, i) => (
+                            <div key={cat.name} className="flex items-center justify-between p-4.5 rounded-[20px] bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-colors">
+                              <div className="flex items-center gap-4 min-w-0">
+                                 <div className="w-3.5 h-3.5 rounded-full shrink-0 shadow-lg" style={{ backgroundColor: cat.color || CHART_COLORS[i % CHART_COLORS.length] }} />
+                                 <span className="text-sm font-bold truncate tracking-tight">{cat.icon} {cat.name}</span>
+                              </div>
+                              <span className="text-sm font-black shrink-0 ml-2 tracking-tighter">{fmt(cat.total)}</span>
+                            </div>
+                          ))}
+                        </div>
+                     </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* ─── RIGHT COLUMN: Intelligence & Actions (Sticky on Desktop) ─── */}
+        <div className="lg:sticky lg:top-24 lg:h-fit space-y-8 mt-12 lg:mt-0">
+          
+          {/* AI Insights Card (Command Center Header) */}
+          <div className="px-5 sm:px-0">
+             {!loading && (
+               <div className="p-6 rounded-[28px] bg-gradient-to-br from-blue-600/15 via-purple-600/10 to-transparent border border-white/10 shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform group-hover:opacity-10"><Sparkles size={48} /></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400"><Lightbulb size={14} /></div>
+                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Financial AI</span>
                     </div>
-                 </div>
-              </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+                    <p className="text-xs font-bold leading-relaxed mb-5 text-[var(--color-text-primary)]">
+                      {insights.savingsRate > 30 ? "Savings rate is elite. Focus on asset allocation." : 
+                       insights.dailyAvg > 100000 ? `High daily burn detected: ${fmt(insights.dailyAvg)}.` : 
+                       "Cash flow is stable. Good month for your savings goal."}
+                    </p>
+                    {insights.isCurrentMonth && insights.daysRemaining > 0 && (
+                      <div className="space-y-3">
+                         <div className="flex justify-between text-[10px] font-black uppercase tracking-wider opacity-40">
+                            <span>Projected</span>
+                            <span>{fmt(insights.projectedExpense)}</span>
+                         </div>
+                         <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((insights.projectedExpense / (totalIncome || 1)) * 100, 100)}%` }} className="h-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.5)]" />
+                         </div>
+                      </div>
+                    )}
+                  </div>
+               </div>
+             )}
+          </div>
+
+          {/* Quick Add Section */}
+          <div className="px-5 sm:px-0">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-4 opacity-40 pl-1">Quick Logging</h3>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-2 lg:gap-4">
+              {QUICK_TEMPLATES.map(t => (
+                <motion.button key={t.name} whileTap={{ scale: 0.95 }} onClick={() => handleQuickAdd(t)} className="flex items-center gap-3 p-4 rounded-2xl bg-[var(--color-card-elevated-base)] border border-white/5 shadow-md hover:border-white/20 transition-all text-left">
+                  <span className="text-xl sm:text-2xl shrink-0">{t.iconEmoji}</span>
+                  <span className="text-[11px] font-black uppercase tracking-wider leading-tight">{t.name}</span>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop Recent Activity (Fixed position in sidebar) */}
+          <div className="hidden lg:block px-5 sm:px-0">
+             <RecentActivity transactions={transactions} router={router} fmt={fmt} limit={6} />
+          </div>
+
+          {/* Budget Alerts (Stacked in Sidebar on Desktop) */}
+          <div className="px-5 sm:px-0">
+            <BudgetAlerts alerts={budgetAlerts} dismissed={alertsDismissed} onDismiss={() => setAlertsDismissed(true)} fmt={fmt} router={router} />
+          </div>
+
+        </div>
       </div>
 
       <FAB onClick={() => setShowAddSheet(true)} />
       <AddTransactionSheet isOpen={showAddSheet} onClose={() => setShowAddSheet(false)} onSuccess={() => loadData()} />
+    </div>
+  )
+}
+
+function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions: any[], router: any, fmt: any, limit?: number }) {
+  return (
+    <div className="card-premium shadow-xl overflow-hidden">
+      <div className="p-5 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40">Recent Activity</h3>
+        <button onClick={() => router.push('/transactions')} className="text-[9px] font-black text-[var(--color-accent-base)] uppercase tracking-wider px-2.5 py-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 transition-colors">ALL</button>
+      </div>
+      <div className="divide-y divide-white/5">
+        {transactions.slice(0, limit).map(t => (
+          <div key={t.id} onClick={() => router.push(`/transactions?id=${t.id}`)} className="p-5 flex items-center gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer active:scale-[0.98]">
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0 ${t.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+              {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm truncate">{t.description}</p>
+              <p className="text-[10px] text-[var(--color-text-secondary)] font-bold uppercase tracking-wider opacity-50">{format(new Date(t.date), 'MMM d')}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className={`font-black text-sm ${t.type === 'income' ? 'text-emerald-400' : 'text-[var(--color-text-primary)]'}`}>
+                {t.type === 'income' ? '+' : ''}{fmt(t.amount_krw)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function BudgetAlerts({ alerts, dismissed, onDismiss, fmt, router }: { alerts: any[], dismissed: boolean, onDismiss: () => void, fmt: any, router: any }) {
+  if (alerts.length === 0 || dismissed) return null
+  return (
+    <div className={`rounded-[24px] border p-5 ${alerts.some(a => a.over) ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'} shadow-lg`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={14} className={alerts.some(a => a.over) ? 'text-red-400' : 'text-amber-400'} />
+          <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${alerts.some(a => a.over) ? 'text-red-400' : 'text-amber-400'}`}>Budget Alert</span>
+        </div>
+        <button onClick={onDismiss} className="p-1 hover:bg-white/5 rounded-full opacity-40 hover:opacity-100 transition-all"><X size={14} /></button>
+      </div>
+      <div className="space-y-4">
+        {alerts.map(alert => (
+          <div key={alert.name} onClick={() => router.push('/analytics')} className="cursor-pointer group">
+            <div className="flex justify-between mb-2">
+              <span className="text-xs font-bold">{alert.icon} {alert.name}</span>
+              <span className={`text-[10px] font-black ${alert.over ? 'text-red-400' : 'text-amber-400'}`}>{alert.pct}% Used</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className={`h-full transition-all ${alert.over ? 'bg-red-400' : 'bg-amber-400'}`} style={{ width: `${Math.min(alert.pct, 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

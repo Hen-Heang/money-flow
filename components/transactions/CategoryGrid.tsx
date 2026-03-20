@@ -1,17 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { Control, Controller } from 'react-hook-form'
 import { motion } from 'framer-motion'
+import { Search } from 'lucide-react'
 import { haptic } from '@/lib/utils'
 import { TransactionFormData } from '@/hooks/useTransactionForm'
-
-interface Category {
-  id: string
-  name: string
-  icon: string
-  color: string
-  type: string
-}
+import type { Category } from '@/lib/types'
 
 interface Props {
   categories: Category[]
@@ -20,14 +15,36 @@ interface Props {
 }
 
 export default function CategoryGrid({ categories, control, onSelect }: Props) {
+  const [query, setQuery] = useState('')
+  const visible = query.trim()
+    ? categories.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
+    : categories
+
   return (
+    <div className="space-y-2">
+      {categories.length > 6 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)', opacity: 0.5 }} />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search categories..."
+            className="w-full rounded-xl pl-8 pr-3 py-2 text-xs outline-none"
+            style={{
+              backgroundColor: 'var(--color-card-elevated-base)',
+              border: '1px solid var(--color-border-base)',
+              color: 'var(--color-text-primary)',
+            }}
+          />
+        </div>
+      )}
     <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
       <Controller
         name="category_id"
         control={control}
         render={({ field }) => (
           <>
-            {categories.map((cat) => {
+            {visible.map((cat) => {
               const selected = field.value === cat.id
               return (
                 <motion.button
@@ -62,6 +79,12 @@ export default function CategoryGrid({ categories, control, onSelect }: Props) {
           </>
         )}
       />
+    </div>
+    {query && visible.length === 0 && (
+      <p className="text-center text-xs py-3 opacity-40" style={{ color: 'var(--color-text-secondary)' }}>
+        No categories match &quot;{query}&quot;
+      </p>
+    )}
     </div>
   )
 }

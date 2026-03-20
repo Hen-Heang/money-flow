@@ -31,7 +31,7 @@ export async function GET() {
     const apiKey = process.env.EXCHANGE_RATE_API_KEY
     if (!apiKey || apiKey === 'YOUR_EXCHANGE_RATE_API_KEY') {
       return NextResponse.json({
-        rate: 1300,
+        rate: 1370,
         base_currency: 'USD',
         target_currency: 'KRW',
         fetched_at: new Date().toISOString(),
@@ -39,9 +39,6 @@ export async function GET() {
         fallback: true,
       })
     }
-
-    // SSL bypass for corporate networks
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
     const response = await fetch(`https://v6.exchangerate-api.com/v6/${apiKey}/pair/USD/KRW`, {
       next: { revalidate: 0 },
@@ -51,7 +48,7 @@ export async function GET() {
       const errText = await response.text()
       console.error('[exchange-rate] API error:', response.status, errText)
       return NextResponse.json({
-        rate: 1300,
+        rate: 1370,
         base_currency: 'USD',
         target_currency: 'KRW',
         fetched_at: new Date().toISOString(),
@@ -65,7 +62,7 @@ export async function GET() {
     if (data.result !== 'success') {
       console.error('[exchange-rate] API result not success:', data)
       return NextResponse.json({
-        rate: 1300,
+        rate: 1370,
         base_currency: 'USD',
         target_currency: 'KRW',
         fetched_at: new Date().toISOString(),
@@ -95,7 +92,7 @@ export async function GET() {
   } catch (err) {
     console.error('[exchange-rate] Caught error:', err)
     return NextResponse.json({
-      rate: 1300,
+      rate: 1370,
       base_currency: 'USD',
       target_currency: 'KRW',
       fetched_at: new Date().toISOString(),
