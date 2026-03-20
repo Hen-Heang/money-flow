@@ -6,6 +6,8 @@ import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X }
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import { haptic } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { PRESET_ICONS, PRESET_COLORS } from '@/shared/presets'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { createPortal } from 'react-dom'
@@ -19,23 +21,80 @@ interface SavingsGoal {
   current_usd: number
   deadline: string | null
   note: string | null
+  auto_monthly_usd: number
+  last_auto_month: string | null
 }
 
-const PRESET_ICONS = ['💰', '✈️', '🏠', '🚗', '💻', '📱', '🎓', '💍', '🏖️', '🏋️', '🎮', '📈']
-const PRESET_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+const CONFETTI_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#fbbf24']
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
-  )
+// Generated once at module load — safe from render purity rules
+const CONFETTI_PARTICLES = Array.from({ length: 48 }, (_, i) => ({
+  id: i,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  x: (Math.random() - 0.5) * 320,
+  y: -(Math.random() * 480 + 120),
+  rotate: Math.random() * 720 - 360,
+  scale: Math.random() * 0.6 + 0.4,
+  delay: Math.random() * 0.3,
+}))
+
+function ConfettiCelebration({ goalName, goalColor, onDone }: { goalName: string; goalColor: string; onDone: () => void }) {
+  const particles = CONFETTI_PARTICLES
+
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-  return isMobile
+    const t = setTimeout(onDone, 3200)
+    return () => clearTimeout(t)
+  }, [onDone])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none"
+    >
+      {/* Burst origin */}
+      <div className="relative">
+        {particles.map(p => (
+          <motion.div
+            key={p.id}
+            className="absolute w-2.5 h-2.5 rounded-sm"
+            style={{ backgroundColor: p.color, top: 0, left: 0 }}
+            initial={{ x: 0, y: 0, opacity: 1, rotate: 0, scale: p.scale }}
+            animate={{ x: p.x, y: p.y, opacity: 0, rotate: p.rotate, scale: p.scale * 0.5 }}
+            transition={{ duration: 1.6, delay: p.delay, ease: [0.2, 0.8, 0.4, 1] }}
+          />
+        ))}
+
+        {/* Central badge */}
+        <motion.div
+          className="relative z-10 flex flex-col items-center gap-3 px-8 py-6 rounded-3xl shadow-2xl pointer-events-auto"
+          style={{ backgroundColor: goalColor, boxShadow: `0 24px 60px ${goalColor}60` }}
+          initial={{ scale: 0.4, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.8, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+          onClick={onDone}
+        >
+          <motion.span
+            className="text-5xl"
+            animate={{ rotate: [0, -15, 15, -10, 10, 0] }}
+            transition={{ delay: 0.3, duration: 0.8 }}
+          >
+            🎉
+          </motion.span>
+          <div className="text-center text-white">
+            <p className="text-xs font-black uppercase tracking-widest opacity-70 mb-1">Goal Achieved!</p>
+            <p className="text-lg font-black leading-tight">{goalName}</p>
+          </div>
+          <p className="text-[10px] text-white/50 font-bold">Tap to continue</p>
+        </motion.div>
+      </div>
+    </motion.div>
+  )
 }
+
+
 
 function GoalForm({
   initial,
@@ -55,6 +114,7 @@ function GoalForm({
   const [currentUsd, setCurrentUsd] = useState(initial?.current_usd?.toString() ?? '0')
   const [deadline, setDeadline] = useState(initial?.deadline ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [autoMonthly, setAutoMonthly] = useState(initial?.auto_monthly_usd?.toString() ?? '0')
 
   const inputStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-card-elevated-base)',
@@ -72,6 +132,7 @@ function GoalForm({
     const target = parseFloat(targetUsd)
     if (isNaN(target) || target <= 0) { toast.error('Invalid target amount'); return }
     const current = parseFloat(currentUsd) || 0
+    const monthly = parseFloat(autoMonthly) || 0
     onSave({
       name: name.trim(),
       icon,
@@ -80,6 +141,8 @@ function GoalForm({
       current_usd: current,
       deadline: deadline || null,
       note: note.trim() || null,
+      auto_monthly_usd: Math.max(monthly, 0),
+      last_auto_month: initial?.last_auto_month ?? null,
     })
   }
 
@@ -178,6 +241,24 @@ function GoalForm({
           className="font-medium"
           style={{ ...inputStyle, resize: 'none' }}
         />
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-widest opacity-60 mb-2">Monthly Auto-Deposit</p>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-lg opacity-40">$</span>
+            <input
+              value={autoMonthly}
+              onChange={e => setAutoMonthly(e.target.value)}
+              inputMode="decimal"
+              placeholder="0 = disabled"
+              className="font-black"
+              style={{ ...inputStyle, paddingLeft: '32px' }}
+            />
+          </div>
+          <p className="text-[11px] font-medium opacity-40 mt-1.5 ml-1">
+            Auto-deposited once per month when you open the app
+          </p>
+        </div>
       </div>
 
       <button
@@ -197,11 +278,13 @@ function AddDepositSheet({
   isOpen,
   onClose,
   onSuccess,
+  onGoalComplete,
 }: {
   goal: SavingsGoal
   isOpen: boolean
   onClose: () => void
   onSuccess: (newTotal: number) => void
+  onGoalComplete?: () => void
 }) {
   const [amount, setAmount] = useState('')
   const [showKeypad, setShowKeypad] = useState(true)
@@ -221,7 +304,13 @@ function AddDepositSheet({
     setSaving(false)
     if (error) { toast.error('Failed to save'); return }
     haptic('medium')
-    toast.success(`+$${deposit.toFixed(2)} added to ${goal.name}!`)
+    const achieved = newTotal >= goal.target_usd
+    if (achieved) {
+      haptic('heavy')
+      onGoalComplete?.()
+    } else {
+      toast.success(`+$${deposit.toFixed(2)} added to ${goal.name}!`)
+    }
     setAmount('')
     onSuccess(newTotal)
     onClose()
@@ -247,6 +336,7 @@ function AddDepositSheet({
         <input
           value={amount}
           readOnly={isMobile}
+          onChange={e => !isMobile && setAmount(e.target.value)}
           onFocus={() => isMobile && setShowKeypad(true)}
           placeholder="0.00"
           className="w-full bg-[var(--color-card-elevated-base)] border-2 font-black text-right pr-6 py-5 rounded-2xl text-3xl outline-none transition-all"
@@ -361,6 +451,7 @@ export default function SavingsPage() {
   const [depositGoal, setDepositGoal] = useState<SavingsGoal | null>(null)
   const [saving, setSaving] = useState(false)
   const [todayMs] = useState(() => Date.now())
+  const [celebrating, setCelebrating] = useState<{ name: string; color: string } | null>(null)
   const supabase = createClient()
 
   const loadGoals = useCallback(async () => {
@@ -371,19 +462,47 @@ export default function SavingsPage() {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
-    setGoals((data as SavingsGoal[]) || [])
+    const loaded = (data as SavingsGoal[]) || []
+    setGoals(loaded)
     setLoading(false)
+    return loaded
   }, [supabase])
 
   useEffect(() => {
-    loadGoals()
-    
+    loadGoals().then(loaded => { if (loaded) applyAutoDeposits(loaded) })
+
     // Refresh when returning to the tab
     const handleFocus = () => loadGoals()
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadGoals])
+
+  const applyAutoDeposits = useCallback(async (loadedGoals: SavingsGoal[]) => {
+    const currentMonth = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
+    const due = loadedGoals.filter(
+      g => g.auto_monthly_usd > 0 && g.last_auto_month !== currentMonth && g.current_usd < g.target_usd
+    )
+    if (due.length === 0) return
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    let applied = 0
+    for (const goal of due) {
+      const newTotal = Math.min(goal.current_usd + goal.auto_monthly_usd, goal.target_usd)
+      const { error } = await supabase
+        .from('savings_goals')
+        .update({ current_usd: newTotal, last_auto_month: currentMonth, updated_at: new Date().toISOString() })
+        .eq('id', goal.id)
+      if (!error) applied++
+    }
+
+    if (applied > 0) {
+      toast.success(`Auto-deposited to ${applied} goal${applied > 1 ? 's' : ''}`)
+      loadGoals()
+    }
+  }, [supabase, loadGoals])
 
   const handleCreate = async (data: Omit<SavingsGoal, 'id'>) => {
     setSaving(true)
@@ -661,6 +780,16 @@ export default function SavingsPage() {
       </BottomSheet>
 
       {/* Add deposit sheet */}
+      <AnimatePresence>
+        {celebrating && (
+          <ConfettiCelebration
+            goalName={celebrating.name}
+            goalColor={celebrating.color}
+            onDone={() => setCelebrating(null)}
+          />
+        )}
+      </AnimatePresence>
+
       {depositGoal && (
         <AddDepositSheet
           goal={depositGoal}
@@ -669,6 +798,7 @@ export default function SavingsPage() {
           onSuccess={(newTotal) => {
             setGoals(prev => prev.map(g => g.id === depositGoal.id ? { ...g, current_usd: newTotal } : g))
           }}
+          onGoalComplete={() => setCelebrating({ name: depositGoal.name, color: depositGoal.color })}
         />
       )}
     </div>

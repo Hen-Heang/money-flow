@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -39,6 +40,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Money Flow" />
+        <link rel="manifest" href="/manifest.json" />
         {/* Theme init — runs before render to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: `
           try {
@@ -53,6 +55,7 @@ export default function RootLayout({
         fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
       }}>
         {children}
+        <ServiceWorkerRegistration />
         <Toaster
           position="top-center"
           toastOptions={{

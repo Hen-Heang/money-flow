@@ -3,6 +3,41 @@ import type { createClient } from '@/lib/supabase'
 
 type SupabaseClient = ReturnType<typeof createClient>
 
+const DEFAULT_CATEGORIES = [
+  // Income
+  { name: 'Salary',       icon: '💼', color: '#10b981', type: 'income' },
+  { name: 'Freelance',    icon: '💻', color: '#3b82f6', type: 'income' },
+  { name: 'Investment',   icon: '📈', color: '#f59e0b', type: 'income' },
+  { name: 'Other Income', icon: '💰', color: '#8b5cf6', type: 'income' },
+  // Expense
+  { name: 'Food & Dining',  icon: '🍔', color: '#ef4444', type: 'expense' },
+  { name: 'Transport',      icon: '🚗', color: '#f59e0b', type: 'expense' },
+  { name: 'Shopping',       icon: '🛍️', color: '#ec4899', type: 'expense' },
+  { name: 'Entertainment',  icon: '🎮', color: '#8b5cf6', type: 'expense' },
+  { name: 'Health',         icon: '💊', color: '#06b6d4', type: 'expense' },
+  { name: 'Housing',        icon: '🏠', color: '#3b82f6', type: 'expense' },
+  { name: 'Education',      icon: '📚', color: '#10b981', type: 'expense' },
+  { name: 'Other',          icon: '📦', color: '#94a3b8', type: 'expense' },
+]
+
+const DEFAULT_PAYMENT_METHODS = [
+  { name: 'Cash',          icon: '💵' },
+  { name: 'Credit Card',   icon: '💳' },
+  { name: 'Debit Card',    icon: '🏦' },
+  { name: 'Bank Transfer', icon: '🏧' },
+]
+
+async function seedDefaultUserData(supabase: SupabaseClient, userId: string) {
+  await Promise.all([
+    supabase.from('categories').insert(
+      DEFAULT_CATEGORIES.map(c => ({ ...c, user_id: userId }))
+    ),
+    supabase.from('payment_methods').insert(
+      DEFAULT_PAYMENT_METHODS.map(m => ({ ...m, user_id: userId }))
+    ),
+  ])
+}
+
 export interface UserProfileRecord {
   id: string
   email: string
@@ -36,13 +71,19 @@ export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
     return existing
   }
 
+  const meta = user.user_metadata ?? {}
   const profile = {
     id: user.id,
     email: user.email || '',
-    display_name: typeof user.user_metadata?.display_name === 'string'
-      ? user.user_metadata.display_name
-      : null,
-    avatar_url: null,
+    display_name:
+      typeof meta.full_name === 'string' ? meta.full_name :
+      typeof meta.name === 'string' ? meta.name :
+      typeof meta.display_name === 'string' ? meta.display_name :
+      null,
+    avatar_url:
+      typeof meta.avatar_url === 'string' ? meta.avatar_url :
+      typeof meta.picture === 'string' ? meta.picture :
+      null,
     default_currency: 'KRW',
   }
 
@@ -55,6 +96,9 @@ export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
   const created = createdData as UserProfileRecord | null
 
   if (insertError) throw insertError
+
+  // Seed default categories and payment methods for new users
+  await seedDefaultUserData(supabase, user.id)
 
   return created
 }

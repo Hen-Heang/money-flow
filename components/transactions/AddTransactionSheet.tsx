@@ -4,28 +4,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Controller } from 'react-hook-form'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
-import { ChevronDown, ChevronUp, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase'
 import { formatNumber, haptic } from '@/lib/utils'
+import type { Category, PaymentMethod } from '@/lib/types'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
 import CategoryGrid from './CategoryGrid'
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)')
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-  return isMobile
-}
 
 function useKeyboardVisible() {
   const [visible, setVisible] = useState(false)
@@ -40,18 +30,17 @@ function useKeyboardVisible() {
   return visible
 }
 
-interface Category {
-  id: string
-  name: string
-  icon: string
-  color: string
-  type: string
-}
 
-interface PaymentMethod {
+interface Template {
   id: string
-  name: string
-  icon: string
+  type: 'income' | 'expense'
+  description: string
+  amount_krw: number
+  currency: string
+  category_id: string | null
+  payment_method_id: string | null
+  note: string | null
+  categories?: { icon: string } | null
 }
 
 export interface EditTransaction {
@@ -86,6 +75,9 @@ export default function AddTransactionSheet({
   const [canDrag, setCanDrag] = useState(true)
   const [showDetails, setShowDetails] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [isAiSuggesting, setIsAiSuggesting] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -116,9 +108,96 @@ export default function AddTransactionSheet({
   const type = watch('type')
   const currency = watch('currency')
   const amountRaw = watch('amount')
+  const description = watch('description')
+  const currentCategoryId = watch('category_id')
   const activeExchangeRate = editTransaction?.exchange_rate || liveRate
 
+  // AI Suggestion Logic
+  useEffect(() => {
+    if (isEditing || !description || description.length < 2 || currentCategoryId) return
+
+    const timeoutId = setTimeout(async () => {
+      setIsAiSuggesting(true)
+      try {
+        const response = await fetch('/api/ai/suggest-category', {
+          method: 'POST',
+          body: JSON.stringify({ 
+            description, 
+            type, 
+            categories 
+          }),
+        })
+        const { categoryId } = await response.json()
+        if (categoryId && !watch('category_id')) {
+          setValue('category_id', categoryId)
+          haptic('light')
+        }
+      } catch (err) {
+        console.error('AI Suggestion Error:', err)
+      } finally {
+        setIsAiSuggesting(false)
+      }
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
+  }, [description, type, categories, setValue, watch, isEditing, currentCategoryId])
+
   const handleCategorySelect = () => {}
+
+  const loadTemplates = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('transaction_templates')
+      .select('*, categories(icon)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (data) setTemplates(data as Template[])
+  }
+
+  const applyTemplate = (t: Template) => {
+    haptic('light')
+    setValue('type', t.type)
+    setValue('currency', t.currency as 'KRW' | 'USD')
+    setValue('amount', t.currency === 'USD' ? (t.amount_krw / activeExchangeRate).toFixed(2) : String(Math.round(t.amount_krw)))
+    setValue('description', t.description)
+    setValue('category_id', t.category_id || '')
+    setValue('payment_method_id', t.payment_method_id || '')
+    setValue('note', t.note || '')
+  }
+
+  const saveAsTemplate = async () => {
+    if (amountNum <= 0) { toast.error('Enter an amount first'); return }
+    const desc = watch('description')
+    if (!desc.trim()) { toast.error('Enter a description first'); return }
+    setSavingTemplate(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSavingTemplate(false); return }
+    const cur = watch('currency')
+    const amtKrw = cur === 'USD' ? Math.round(amountNum * activeExchangeRate) : amountNum
+    const { error } = await supabase.from('transaction_templates').insert({
+      user_id: user.id,
+      type: watch('type'),
+      description: desc.trim(),
+      amount_krw: amtKrw,
+      currency: cur,
+      category_id: watch('category_id') || null,
+      payment_method_id: watch('payment_method_id') || null,
+      note: watch('note') || null,
+    })
+    setSavingTemplate(false)
+    if (error) { toast.error('Failed to save template'); return }
+    haptic('medium')
+    toast.success('Template saved!')
+    loadTemplates()
+  }
+
+  const deleteTemplate = async (id: string) => {
+    await supabase.from('transaction_templates').delete().eq('id', id)
+    setTemplates(prev => prev.filter(t => t.id !== id))
+    haptic('light')
+  }
 
   const amountFormatted = (() => {
     if (!amountRaw) return '0'
@@ -145,6 +224,8 @@ export default function AddTransactionSheet({
     }
     loadData()
 
+    if (!editTransaction) loadTemplates()
+
     if (editTransaction) {
       const editCurrency = (editTransaction.currency as 'KRW' | 'USD') || 'KRW'
       reset({
@@ -159,12 +240,16 @@ export default function AddTransactionSheet({
       })
       if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     } else {
+      const lastPaymentMethod = typeof window !== 'undefined'
+        ? localStorage.getItem('lastPaymentMethod') ?? ''
+        : ''
       reset({
         type: 'expense',
         currency: 'KRW',
         date: format(new Date(), 'yyyy-MM-dd'),
         amount: '',
         description: '',
+        payment_method_id: lastPaymentMethod,
       })
       if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
@@ -210,7 +295,24 @@ export default function AddTransactionSheet({
       note: data.note || null,
     }
 
-    const { data: saved, error } = isEditing 
+    // Budget check for new expenses with a category
+    if (!isEditing && data.type === 'expense' && data.category_id) {
+      const thisMonth = new Date().toISOString().slice(0, 7)
+      const [{ data: budget }, { data: spent }] = await Promise.all([
+        supabase.from('budgets').select('amount_krw').eq('user_id', user.id).eq('category_id', data.category_id).single(),
+        supabase.from('transactions').select('amount_krw').eq('user_id', user.id).eq('category_id', data.category_id).eq('type', 'expense').gte('date', `${thisMonth}-01`),
+      ])
+      if (budget && budget.amount_krw > 0) {
+        const totalSpent = (spent || []).reduce((s: number, t: { amount_krw: number }) => s + t.amount_krw, 0) + amountKrw
+        if (totalSpent > budget.amount_krw) {
+          toast(`Over budget by ₩${Math.round(totalSpent - budget.amount_krw).toLocaleString()} in this category`, { icon: '⚠️', duration: 4000 })
+        } else if (totalSpent / budget.amount_krw >= 0.9) {
+          toast(`90%+ of budget used in this category`, { icon: '📊', duration: 3000 })
+        }
+      }
+    }
+
+    const { data: saved, error } = isEditing
       ? await supabase.from('transactions').update(payload).eq('id', editTransaction.id).select().single()
       : await supabase.from('transactions').insert({ ...payload, user_id: user.id }).select().single()
 
@@ -219,6 +321,9 @@ export default function AddTransactionSheet({
       return
     }
 
+    if (data.payment_method_id) {
+      localStorage.setItem('lastPaymentMethod', data.payment_method_id)
+    }
     haptic('medium')
     toast.success(isEditing ? 'Updated' : 'Saved')
     onSuccess(saved)
@@ -229,10 +334,50 @@ export default function AddTransactionSheet({
 
   // UI Styles
   const sectionLabelStyle = "text-tiny text-[var(--color-text-secondary)] mb-3"
+
+  const templateStrip = !isEditing && templates.length > 0 ? (
+    <div className="mb-4">
+      <p className={sectionLabelStyle}>Templates</p>
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        {templates.map(t => (
+          <div key={t.id} className="group relative shrink-0">
+            <button
+              type="button"
+              onClick={() => applyTemplate(t)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all active:scale-95"
+              style={{
+                backgroundColor: t.type === 'expense'
+                  ? 'rgba(239,68,68,0.12)'
+                  : 'rgba(16,185,129,0.12)',
+                color: t.type === 'expense'
+                  ? 'var(--color-expense-base)'
+                  : 'var(--color-income-base)',
+                border: `1px solid ${t.type === 'expense' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)'}`,
+              }}
+            >
+              <span>{t.categories?.icon ?? (t.type === 'expense' ? '💸' : '💰')}</span>
+              <span className="max-w-[80px] truncate">{t.description}</span>
+              <span className="opacity-60">
+                {t.currency === 'USD' ? `$${(t.amount_krw / activeExchangeRate).toFixed(0)}` : `₩${Math.round(t.amount_krw).toLocaleString()}`}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteTemplate(t.id)}
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white items-center justify-center hidden group-hover:flex active:scale-90"
+            >
+              <Trash2 size={8} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null
   const inputBaseStyle = "w-full bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] rounded-[var(--radius-md)] px-4 py-3.5 focus:border-[var(--color-accent-base)] transition-all outline-none"
 
   const desktopForm = (
     <form id="tx-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6 px-6 pb-8">
+      {templateStrip}
       {/* Type & Amount */}
       <div className="space-y-4">
         <div className="flex bg-[var(--color-card-elevated-base)] p-1 rounded-[var(--radius-md)]">
@@ -293,6 +438,17 @@ export default function AddTransactionSheet({
           </select>
         </div>
         <textarea {...register('note')} className={inputBaseStyle} placeholder="Optional note" rows={2} />
+        {!isEditing && (
+          <button
+            type="button"
+            onClick={saveAsTemplate}
+            disabled={savingTemplate}
+            className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-secondary)] opacity-60 hover:opacity-100 transition-opacity"
+          >
+            <BookmarkPlus size={14} />
+            {savingTemplate ? 'Saving...' : 'Save as Template'}
+          </button>
+        )}
       </div>
     </form>
   )
@@ -331,6 +487,7 @@ export default function AddTransactionSheet({
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
               <form id="tx-form-mobile" onSubmit={handleSubmit(onSubmit)}>
                 <div className="space-y-6">
+                  {templateStrip}
                   {/* Type Toggle */}
                   <div className="flex bg-[var(--color-card-elevated-base)] p-1 rounded-[var(--radius-lg)]">
                     {(['expense', 'income'] as const).map(opt => (
@@ -380,6 +537,17 @@ export default function AddTransactionSheet({
                           {paymentMethods.map(m => <option key={m.id} value={m.id}>{m.icon} {m.name}</option>)}
                         </select>
                         <textarea {...register('note')} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            onClick={saveAsTemplate}
+                            disabled={savingTemplate}
+                            className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] opacity-60"
+                          >
+                            <BookmarkPlus size={16} />
+                            {savingTemplate ? 'Saving...' : 'Save as Template'}
+                          </button>
+                        )}
                       </motion.div>
                     )}
                   </div>
