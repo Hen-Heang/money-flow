@@ -38,6 +38,7 @@ interface CategoryTotal {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const [greeting, setGreeting] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -116,6 +117,10 @@ export default function DashboardPage() {
       setLoading(false)
     }
   }, [currentDate, supabase, router])
+
+  useEffect(() => {
+    setGreeting(getGreeting())
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -220,7 +225,7 @@ export default function DashboardPage() {
         <div className="flex min-w-0 items-center gap-3">
           <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-[var(--color-border-base)] shadow-xl shrink-0 sm:w-14 sm:h-14" />
           <div className="min-w-0">
-            <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.2em] truncate opacity-70 font-bold">{getGreeting()}</p>
+            <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.2em] truncate opacity-70 font-bold">{greeting}</p>
             <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">{userName}</h1>
           </div>
         </div>
