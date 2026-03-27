@@ -12,15 +12,16 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
-import { createClient } from '@/lib/supabase'
 import { getUserProfile } from '@/lib/profile'
+import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import type { Transaction, Category, ExchangeRateInfo } from '@/lib/types'
 import { CHART_COLORS } from '@/lib/constants'
 import Avatar from '@/components/ui/Avatar'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import FAB from '@/components/ui/FAB'
 import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
-import ChatBot from '@/components/ai/ChatBot'
+import dynamic from 'next/dynamic'
+const ChatBot = dynamic(() => import('@/components/ai/ChatBot'), { ssr: false })
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { QUICK_TEMPLATES } from '@/shared/data'
@@ -62,7 +63,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
   
   const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
 
@@ -124,7 +125,7 @@ export default function DashboardPage() {
     let active = true
     const loadExchangeRate = async () => {
       try {
-        const response = await fetch('/api/exchange-rate', { cache: 'no-store' })
+        const response = await fetch('/api/exchange-rate', { next: { revalidate: 900 } })
         if (!response.ok) return
         const data = await response.json() as ExchangeRateInfo
         if (active) setExchangeRateInfo(data)
@@ -173,14 +174,17 @@ export default function DashboardPage() {
     return { dailyAvg, savingsRate, projectedExpense, daysRemaining, isCurrentMonth }
   }, [totalExpense, totalIncome, currentDate])
 
-  const categoryTotals: CategoryTotal[] = []
+  const categoryTotalsMap = new Map<string, CategoryTotal>()
   transactions.filter(t => t.type === 'expense' && t.categories).forEach(t => {
     const cat = t.categories!
-    const existing = categoryTotals.find(c => c.name === cat.name)
-    if (existing) existing.total += t.amount_krw
-    else categoryTotals.push({ name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget: t.category_id ? budgetMap[t.category_id] : undefined })
+    const existing = categoryTotalsMap.get(cat.name)
+    if (existing) {
+      existing.total += t.amount_krw
+    } else {
+      categoryTotalsMap.set(cat.name, { name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget: t.category_id ? budgetMap[t.category_id] : undefined })
+    }
   })
-  categoryTotals.sort((a, b) => b.total - a.total)
+  const categoryTotals: CategoryTotal[] = Array.from(categoryTotalsMap.values()).sort((a, b) => b.total - a.total)
 
   const budgetAlerts = isSameMonth(currentDate, new Date())
     ? categoryTotals

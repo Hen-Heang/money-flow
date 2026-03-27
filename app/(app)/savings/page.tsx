@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { createClient } from '@/lib/supabase'
+import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { haptic } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { PRESET_ICONS, PRESET_COLORS } from '@/shared/presets'
@@ -290,7 +290,7 @@ function AddDepositSheet({
   const [showKeypad, setShowKeypad] = useState(true)
   const [saving, setSaving] = useState(false)
   const isMobile = useIsMobile()
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
 
   const handleSave = async () => {
     const deposit = parseFloat(amount.replace(/,/g, ''))
@@ -452,7 +452,7 @@ export default function SavingsPage() {
   const [saving, setSaving] = useState(false)
   const [todayMs] = useState(() => Date.now())
   const [celebrating, setCelebrating] = useState<{ name: string; color: string } | null>(null)
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
 
   const loadGoals = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
