@@ -29,7 +29,7 @@ export default function Avatar({ src, name, size = 48, className = '' }: AvatarP
           src={src}
           alt={name ? `${name} avatar` : 'User avatar'}
           fill
-          unoptimized
+          sizes={`${size}px`}
           className="h-full w-full object-cover"
         />
       ) : (

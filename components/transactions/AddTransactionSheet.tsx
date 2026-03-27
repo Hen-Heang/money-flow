@@ -1,20 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Controller } from 'react-hook-form'
+import {  useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
-import { createClient } from '@/lib/supabase'
+import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { formatNumber, haptic } from '@/lib/utils'
 import type { Category, PaymentMethod } from '@/lib/types'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
-import CategoryGrid from './CategoryGrid'
+
 
 
 function useKeyboardVisible() {
@@ -77,10 +76,11 @@ export default function AddTransactionSheet({
   const [showKeypad, setShowKeypad] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
   const [savingTemplate, setSavingTemplate] = useState(false)
-  const [isAiSuggesting, setIsAiSuggesting] = useState(false)
+  const [isAiSuggesting, setIsAiSuggesting] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
   const isEditing = !!editTransaction
   const isMobile = useIsMobile()
   const keyboardVisible = useKeyboardVisible()
@@ -331,7 +331,6 @@ export default function AddTransactionSheet({
   }
 
   const filteredCategories = categories.filter((c) => c.type === type || c.type === 'both')
-
   // UI Styles
   const sectionLabelStyle = "text-tiny text-[var(--color-text-secondary)] mb-3"
 
@@ -420,11 +419,18 @@ export default function AddTransactionSheet({
         {convertedHint && <p className="text-xs text-[var(--color-text-secondary)] font-medium pl-1">{convertedHint}</p>}
       </div>
 
-      {/* Category */}
+
+      {/* Category for pc */}
       <div>
         <p className={sectionLabelStyle}>Category</p>
-        <CategoryGrid categories={filteredCategories} control={control} onSelect={handleCategorySelect} />
+        <select {...register('category_id')} className={inputBaseStyle}>
+          <option value="">No category</option>
+          {filteredCategories.map(c => (
+            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+          ))}
+        </select>
       </div>
+
 
       {/* Details */}
       <div className="space-y-4">
@@ -517,9 +523,19 @@ export default function AddTransactionSheet({
                   </div>
 
                   {/* Categories */}
-                  <div>
+                  {/* <div>
                     <p className={sectionLabelStyle}>Category</p>
                     <CategoryGrid categories={filteredCategories} control={control} onSelect={handleCategorySelect} />
+                  </div> */}
+{/* Category */}
+                  <div>
+                    <p className={sectionLabelStyle}>Category</p>
+                    <select {...register('category_id')} className={inputBaseStyle}>
+                      <option value="">No category</option>
+                      {filteredCategories.map(c => (
+                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Basic Details */}

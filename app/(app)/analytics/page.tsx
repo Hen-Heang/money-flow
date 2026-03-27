@@ -9,7 +9,7 @@ import {
   LineChart, Line,
 } from 'recharts'
 import { TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
+import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { formatKRW } from '@/lib/utils'
 import type { Transaction, Budget } from '@/lib/types'
 import { CHART_COLORS } from '@/lib/constants'
@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
   const [budgets, setBudgets] = useState<AnalyticsBudget[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('6M')
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
 
   const loadData = useCallback(async () => {
     setLoading(true)

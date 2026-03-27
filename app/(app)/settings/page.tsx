@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, type ChangeEvent, useCallback } from 'reac
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { createClient } from '@/lib/supabase'
+import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import Avatar from '@/components/ui/Avatar'
 import { getUserProfile } from '@/lib/profile'
 import type { Category, PaymentMethod, Budget } from '@/lib/types'
@@ -50,7 +50,7 @@ export default function SettingsPage() {
   const [newPaymentMethodIcon, setNewPaymentMethodIcon] = useState('💳')
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useSupabaseClient()
 
   useEffect(() => {
     const load = async () => {
