@@ -61,6 +61,7 @@ interface Props {
   onClose: () => void
   onSuccess: (transaction: unknown) => void
   editTransaction?: EditTransaction
+  isDuplicate?: boolean
 }
 
 export default function AddTransactionSheet({
@@ -68,6 +69,7 @@ export default function AddTransactionSheet({
   onClose,
   onSuccess,
   editTransaction,
+  isDuplicate = false,
 }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
@@ -81,7 +83,7 @@ export default function AddTransactionSheet({
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = useSupabaseClient()
-  const isEditing = !!editTransaction
+  const isEditing = !!editTransaction && !isDuplicate
   const isMobile = useIsMobile()
   const keyboardVisible = useKeyboardVisible()
 
@@ -232,7 +234,7 @@ export default function AddTransactionSheet({
         type: editTransaction.type,
         currency: editCurrency,
         amount: editCurrency === 'USD' ? editTransaction.amount_usd.toFixed(2) : String(Math.round(editTransaction.amount_krw)),
-        date: editTransaction.date,
+        date: isDuplicate ? format(new Date(), 'yyyy-MM-dd') : editTransaction.date,
         description: editTransaction.description,
         category_id: editTransaction.category_id || '',
         payment_method_id: editTransaction.payment_method_id || '',
@@ -253,7 +255,7 @@ export default function AddTransactionSheet({
       })
       if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
-  }, [isOpen, editTransaction, reset, supabase, isMobile])
+  }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile])
 
   const handleClose = () => {
     setShowKeypad(false)
@@ -459,9 +461,11 @@ export default function AddTransactionSheet({
     </form>
   )
 
+  const sheetTitle = isDuplicate ? 'Duplicate' : isEditing ? 'Edit' : 'New'
+
   if (!isMobile) {
     return (
-      <BottomSheet isOpen={isOpen} onClose={handleClose} title={isEditing ? 'Edit' : 'New'} footer={
+      <BottomSheet isOpen={isOpen} onClose={handleClose} title={sheetTitle} footer={
         <button form="tx-form" disabled={isSubmitting} className="w-full py-4 bg-[var(--color-accent-base)] text-white rounded-[var(--radius-md)] font-bold active:scale-[0.98] transition-all disabled:opacity-50">
           {isSubmitting ? 'Saving...' : 'SAVE'}
         </button>
@@ -486,7 +490,7 @@ export default function AddTransactionSheet({
               <div className="h-1.5 w-10 rounded-full bg-[var(--color-border-base)] opacity-50" />
             </div>
             <div className="flex items-center justify-between px-6 pb-4 pt-2 border-b border-[var(--color-border-base)]">
-              <h2 className="text-xl font-bold">{isEditing ? 'Edit' : 'New Transaction'}</h2>
+              <h2 className="text-xl font-bold">{isDuplicate ? 'Duplicate Transaction' : isEditing ? 'Edit Transaction' : 'New Transaction'}</h2>
               <button onClick={handleClose} className="p-2 rounded-full bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)]"><X size={20} /></button>
             </div>
 
