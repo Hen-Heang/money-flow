@@ -255,7 +255,7 @@ export default function DashboardPage() {
               
               <div className="flex items-center justify-between border-t border-white/10 pt-5">
                 <div className="min-w-0">
-                  <p className="text-xs font-black tracking-tight uppercase opacity-80">{format(currentDate, 'MMMM yyyy')}</p>
+                  <p className="text-xs font-black tracking-tight uppercase opacity-80" suppressHydrationWarning>{format(currentDate, 'MMMM yyyy')}</p>
                   {exchangeRateInfo && (
                     <p className="text-[10px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-50 mt-0.5">
                       Live Rate: 1 USD = {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW

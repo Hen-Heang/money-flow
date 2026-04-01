@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo, Suspense } from 'react'
 import { usePullToRefresh } from '@/hooks/usePullToRefresh'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Square, CheckCheck } from 'lucide-react'
+import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Square, CheckCheck, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import { formatKRW, formatUSD, haptic } from '@/lib/utils'
@@ -20,12 +20,25 @@ import RecurringSheet from '@/components/transactions/RecurringSheet'
 type FilterType = 'all' | 'income' | 'expense'
 type SortOption = 'date' | 'amount_desc' | 'amount_asc'
 
-function SwipeableRow({
+const FILTERS: { label: string; value: FilterType }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Income', value: 'income' },
+  { label: 'Expense', value: 'expense' },
+]
+
+const SORTS: { label: string; value: SortOption }[] = [
+  { label: 'Date', value: 'date' },
+  { label: '↓ Amount', value: 'amount_desc' },
+  { label: '↑ Amount', value: 'amount_asc' },
+]
+
+const SwipeableRow = memo(function SwipeableRow({
   transaction,
   showUSD,
   liveRate,
   onDelete,
   onEdit,
+  onDuplicate,
   selectMode,
   selected,
   onSelect,
@@ -35,6 +48,7 @@ function SwipeableRow({
   liveRate: number
   onDelete: (id: string) => void
   onEdit: (t: Transaction) => void
+  onDuplicate: (t: Transaction) => void
   selectMode?: boolean
   selected?: boolean
   onSelect?: (id: string) => void
@@ -49,7 +63,7 @@ function SwipeableRow({
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     isDragging.current = false
     if (info.offset.x < -60) {
-      setOffset(-120)
+      setOffset(-160)
     } else {
       setOffset(0)
     }
@@ -79,7 +93,7 @@ function SwipeableRow({
 
   const handlePointerDown = () => {
     longPressTimer.current = setTimeout(() => {
-      setOffset(-120)
+      setOffset(-160)
     }, 500)
   }
 
@@ -88,7 +102,7 @@ function SwipeableRow({
   }
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       {/* Confirm delete dialog */}
       <AnimatePresence>
         {confirmDelete && (
@@ -119,12 +133,20 @@ function SwipeableRow({
       </AnimatePresence>
 
       {/* Actions: always visible on desktop hover, revealed by swipe on mobile */}
-      <div className="absolute right-0 top-0 bottom-0 flex items-center px-3 gap-2">
+      <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center px-3 gap-2">
         {/* Desktop hover buttons (hidden on touch devices) */}
         <div
           className="hidden md:flex items-center gap-1.5 transition-opacity duration-150"
           style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none' }}
         >
+          <button
+            onClick={(e) => { e.stopPropagation(); onDuplicate(transaction) }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+            style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+            title="Duplicate"
+          >
+            <Copy className="w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(transaction) }}
             className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
@@ -145,6 +167,13 @@ function SwipeableRow({
         {/* Mobile swipe buttons */}
         <div className="md:hidden flex items-center gap-2">
           <button
+            onClick={() => { setOffset(0); onDuplicate(transaction) }}
+            className="w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+          >
+            <Copy className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
+          </button>
+          <button
             onClick={() => { setOffset(0); onEdit(transaction) }}
             className="w-10 h-10 rounded-full flex items-center justify-center"
             style={{ backgroundColor: 'var(--color-accent-base)' }}
@@ -163,7 +192,7 @@ function SwipeableRow({
 
       <motion.div
         drag={selectMode ? false : 'x'}
-        dragConstraints={{ left: -120, right: 0 }}
+        dragConstraints={{ left: -168, right: 0 }}
         dragElastic={0.1}
         onDragStart={() => { if (!selectMode) isDragging.current = true }}
         onDragEnd={selectMode ? undefined : handleDragEnd}
@@ -171,8 +200,7 @@ function SwipeableRow({
         onPointerDown={selectMode ? undefined : handlePointerDown}
         onPointerUp={selectMode ? undefined : handlePointerUp}
         onPointerLeave={selectMode ? undefined : handlePointerUp}
-        onHoverStart={() => setHovered(true)}
-        onHoverEnd={() => setHovered(false)}
+
         animate={{ x: selectMode ? 0 : offset, opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className="flex items-center gap-4 px-4 py-3 relative cursor-pointer"
@@ -228,7 +256,7 @@ function SwipeableRow({
       </motion.div>
     </div>
   )
-}
+})
 
 function TransactionsPageInner() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -262,12 +290,14 @@ function TransactionsPageInner() {
   const [showRecurring, setShowRecurring] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
+  const [isDuplicating, setIsDuplicating] = useState(false)
   const [liveRate, setLiveRate] = useState(1300)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  const supabase = createClient()
+  const supabaseRef = useRef(createClient())
+  const supabase = supabaseRef.current
   const PAGE_SIZE = 20
 
   // Advanced filters
@@ -281,19 +311,19 @@ function TransactionsPageInner() {
   const [sort, setSort] = useState<SortOption>('date')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }
+  }, [])
 
-  const exitSelectMode = () => {
+  const exitSelectMode = useCallback(() => {
     setSelectMode(false)
     setSelectedIds(new Set())
-  }
+  }, [])
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return
@@ -416,14 +446,39 @@ function TransactionsPageInner() {
 
   const { pulling, pullDistance, ready: pullReady } = usePullToRefresh(() => loadTransactions(true, true))
 
+  const handleEdit = useCallback((t: Transaction) => {
+    setIsDuplicating(false)
+    setEditingTransaction({ ...t, currency: t.currency, exchange_rate: t.exchange_rate })
+    setShowAddSheet(true)
+  }, [])
+
+  const handleNewTransaction = useCallback(() => {
+    setEditingTransaction(undefined)
+    setIsDuplicating(false)
+    setShowAddSheet(true)
+  }, [])
+
   const searchInputRef = useRef<HTMLInputElement>(null)
   useKeyboardShortcuts([
-    { key: 'n', action: () => { setEditingTransaction(undefined); setShowAddSheet(true) }, description: 'New transaction' },
+    { key: 'n', action: handleNewTransaction, description: 'New transaction' },
     { key: '/', action: () => searchInputRef.current?.focus(), description: 'Focus search' },
     { key: 'Escape', action: () => { setShowAddSheet(false); setShowRecurring(false); exitSelectMode() }, description: 'Close' },
   ])
 
-  const handleDelete = async (id: string) => {
+  const handleSheetClose = useCallback(() => {
+    setShowAddSheet(false)
+    setEditingTransaction(undefined)
+    setIsDuplicating(false)
+  }, [])
+
+  const handleDuplicate = useCallback((t: Transaction) => {
+    setEditingTransaction({ ...t, currency: t.currency, exchange_rate: t.exchange_rate })
+    setIsDuplicating(true)
+    setShowAddSheet(true)
+    haptic('light')
+  }, [])
+
+  const handleDelete = useCallback(async (id: string) => {
     const { error } = await supabase.from('transactions').delete().eq('id', id)
     if (error) {
       toast.error('Failed to delete')
@@ -431,34 +486,18 @@ function TransactionsPageInner() {
       toast.success('Deleted')
       setTransactions(prev => prev.filter(t => t.id !== id))
     }
-  }
+  }, [supabase])
 
-  // Sort transactions
-  const sortedTransactions = [...transactions].sort((a, b) => {
-    if (sort === 'amount_desc') return b.amount_krw - a.amount_krw
-    if (sort === 'amount_asc') return a.amount_krw - b.amount_krw
-    return 0 // 'date' — DB already sorted by date desc
-  })
-
-  // Group by date (preserving sort order for amount sorts)
-  const grouped = sortedTransactions.reduce<Record<string, Transaction[]>>((acc, t) => {
-    const key = t.date
-    if (!acc[key]) acc[key] = []
-    acc[key].push(t)
-    return acc
-  }, {})
-
-  const filters: { label: string; value: FilterType }[] = [
-    { label: 'All', value: 'all' },
-    { label: 'Income', value: 'income' },
-    { label: 'Expense', value: 'expense' },
-  ]
-
-  const sorts: { label: string; value: SortOption }[] = [
-    { label: 'Date', value: 'date' },
-    { label: '↓ Amount', value: 'amount_desc' },
-    { label: '↑ Amount', value: 'amount_asc' },
-  ]
+  const grouped = useMemo(() => {
+    const sorted = sort === 'date' ? transactions : [...transactions].sort((a, b) =>
+      sort === 'amount_desc' ? b.amount_krw - a.amount_krw : a.amount_krw - b.amount_krw
+    )
+    return sorted.reduce<Record<string, Transaction[]>>((acc, t) => {
+      if (!acc[t.date]) acc[t.date] = []
+      acc[t.date].push(t)
+      return acc
+    }, {})
+  }, [transactions, sort])
 
   return (
     <div className="max-w-2xl mx-auto overflow-x-hidden">
@@ -486,7 +525,7 @@ function TransactionsPageInner() {
                   }}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Recurring
+                  <span className="hidden sm:inline">Recurring</span>
                 </button>
                 <button
                   onClick={() => { haptic('light'); setSelectMode(true) }}
@@ -498,7 +537,7 @@ function TransactionsPageInner() {
                   }}
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
-                  Select
+                  <span className="hidden sm:inline">Select</span>
                 </button>
               </>
             ) : (
@@ -538,7 +577,7 @@ function TransactionsPageInner() {
               onChange={e => setSearch(e.target.value)}
               onFocus={() => setShowHistory(true)}
               onBlur={() => setTimeout(() => setShowHistory(false), 150)}
-              placeholder="Search transactions... (press / to focus)"
+              placeholder="Search transactions..."
               className="w-full rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none"
               style={{
                 backgroundColor: 'var(--color-card-elevated-base)',
@@ -693,7 +732,7 @@ function TransactionsPageInner() {
 
         {/* Filter + Sort chips */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {filters.map(f => (
+          {FILTERS.map(f => (
             <button
               key={f.value}
               onClick={() => { haptic('light'); setFilter(f.value) }}
@@ -707,7 +746,7 @@ function TransactionsPageInner() {
             </button>
           ))}
           <div className="w-px self-stretch my-1 rounded-full" style={{ backgroundColor: 'var(--color-border-base)' }} />
-          {sorts.map(s => (
+          {SORTS.map(s => (
             <button
               key={s.value}
               onClick={() => { haptic('light'); setSort(s.value) }}
@@ -789,14 +828,8 @@ function TransactionsPageInner() {
                           showUSD={showUSD}
                           liveRate={liveRate}
                           onDelete={handleDelete}
-                          onEdit={(t) => {
-                            setEditingTransaction({
-                              ...t,
-                              currency: t.currency,
-                              exchange_rate: t.exchange_rate,
-                            })
-                            setShowAddSheet(true)
-                          }}
+                          onEdit={handleEdit}
+                          onDuplicate={handleDuplicate}
                           selectMode={selectMode}
                           selected={selectedIds.has(t.id)}
                           onSelect={toggleSelect}
@@ -831,7 +864,8 @@ function TransactionsPageInner() {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-20 md:bottom-6 left-0 right-0 flex justify-center z-30 px-5"
+            className="fixed left-0 right-0 flex justify-center z-30 px-5"
+            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}
           >
             <div
               className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
@@ -871,13 +905,14 @@ function TransactionsPageInner() {
       </AnimatePresence>
 
       {!showAddSheet && !showRecurring && !selectMode && (
-        <FAB onClick={() => { setEditingTransaction(undefined); setShowAddSheet(true) }} />
+        <FAB onClick={handleNewTransaction} />
       )}
       <AddTransactionSheet
         isOpen={showAddSheet}
-        onClose={() => { setShowAddSheet(false); setEditingTransaction(undefined) }}
+        onClose={handleSheetClose}
         onSuccess={() => loadTransactions(true, true)}
         editTransaction={editingTransaction}
+        isDuplicate={isDuplicating}
       />
       <RecurringSheet
         isOpen={showRecurring}
@@ -886,7 +921,7 @@ function TransactionsPageInner() {
     </div>
   )
 }
-
+  
 export default function TransactionsPage() {
   return <Suspense><TransactionsPageInner /></Suspense>
 }
