@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays, subDays } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
-  Lightbulb, Sparkles,
+  Lightbulb, Sparkles, Flame,
   AlertTriangle, X
 } from 'lucide-react'
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  PieChart, Pie, ResponsiveContainer, Tooltip,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts'
 import { getUserProfile } from '@/lib/profile'
@@ -64,9 +64,42 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
+  const [streak, setStreak] = useState(0)
   const supabase = useSupabaseClient()
-  
+
   const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+
+  // Streak: count consecutive days with at least one logged transaction.
+  // Defined first so all effects and handlers below can reference it safely.
+  const refreshStreak = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('transactions')
+      .select('date')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+    if (!data) return
+
+    const uniqueDates = new Set(data.map((r: { date: string }) => r.date))
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+
+    // Start from today; if nothing logged yet today, allow yesterday (streak not broken mid-day)
+    let cursor: Date | null = uniqueDates.has(today)
+      ? new Date()
+      : uniqueDates.has(yesterday)
+      ? subDays(new Date(), 1)
+      : null
+    if (!cursor) { setStreak(0); return }
+
+    let count = 0
+    while (uniqueDates.has(format(cursor, 'yyyy-MM-dd'))) {
+      count++
+      cursor = subDays(cursor, 1)
+    }
+    setStreak(count)
+  }, [supabase])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -126,16 +159,19 @@ export default function DashboardPage() {
     loadData()
   }, [loadData])
 
+  useEffect(() => { refreshStreak() }, [refreshStreak])
+
   // Supabase Realtime — dashboard refreshes automatically when transactions change on any device
   useEffect(() => {
     const channel = supabase
       .channel('dashboard-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
         loadData()
+        refreshStreak()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [supabase, loadData])
+  }, [supabase, loadData, refreshStreak])
 
   useEffect(() => {
     let active = true
@@ -171,6 +207,7 @@ export default function DashboardPage() {
     if (error) { toast.error('Quick Add failed'); return }
     toast.success(`Logged ${template.iconEmoji} ${template.name}`)
     loadData()
+    refreshStreak()
   }
 
   const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
@@ -189,6 +226,22 @@ export default function DashboardPage() {
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
     return { dailyAvg, savingsRate, projectedExpense, daysRemaining, isCurrentMonth }
   }, [totalExpense, totalIncome, currentDate])
+
+  const totalBudget = useMemo(() => Object.values(budgetMap).reduce((s, v) => s + v, 0), [budgetMap])
+
+  // How much can you spend per day for the rest of the month and still hit budget?
+  const dailyBudgetRemaining = useMemo(() => {
+    if (!insights.isCurrentMonth || totalBudget === 0) return null
+    const today = new Date()
+    const todayStr = format(today, 'yyyy-MM-dd')
+    const todaySpending = transactions
+      .filter(t => t.type === 'expense' && t.date === todayStr)
+      .reduce((s, t) => s + t.amount_krw, 0)
+    const daysLeft = Math.max(insights.daysRemaining, 1)
+    const budgetLeft = totalBudget - totalExpense
+    const perDay = budgetLeft / daysLeft
+    return { perDay, todaySpending, todayAllowance: totalBudget / (daysLeft + today.getDate() - 1), over: budgetLeft < 0 }
+  }, [totalBudget, totalExpense, transactions, insights])
 
   const categoryTotalsMap = new Map<string, CategoryTotal>()
   transactions.filter(t => t.type === 'expense' && t.categories).forEach(t => {
@@ -242,10 +295,32 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-           <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-3 py-1.5 rounded-lg glass-morphic text-tiny active:scale-95 transition-all flex items-center gap-1.5">
-             {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
-           </button>
-           <ChatBot />
+          {streak > 0 && (
+            <motion.div
+              key={streak}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              title={`${streak}-day logging streak`}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-tiny font-black"
+              style={{
+                background: streak >= 7
+                  ? 'linear-gradient(135deg, #f97316 0%, #ef4444 100%)'
+                  : streak >= 3
+                  ? 'linear-gradient(135deg, #fb923c 0%, #f97316 100%)'
+                  : 'var(--color-card-elevated-base)',
+                color: streak >= 3 ? '#fff' : 'var(--color-text-secondary)',
+                border: streak < 3 ? '1px solid var(--color-border-base)' : 'none',
+              }}
+            >
+              <Flame size={11} className={streak >= 3 ? 'text-white' : ''} />
+              <span>{streak}</span>
+            </motion.div>
+          )}
+          <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-3 py-1.5 rounded-lg glass-morphic text-tiny active:scale-95 transition-all flex items-center gap-1.5">
+            {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
+          </button>
+          <ChatBot />
         </div>
       </div>
 
@@ -291,6 +366,60 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Daily Budget Remaining */}
+          <AnimatePresence>
+            {dailyBudgetRemaining && !loading && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="px-5 sm:px-0"
+              >
+                <div
+                  className="flex items-center justify-between px-4 py-3 rounded-2xl border"
+                  style={{
+                    backgroundColor: dailyBudgetRemaining.over
+                      ? 'rgba(239,68,68,0.08)'
+                      : dailyBudgetRemaining.perDay < dailyBudgetRemaining.todayAllowance * 0.3
+                      ? 'rgba(245,158,11,0.08)'
+                      : 'rgba(16,185,129,0.08)',
+                    borderColor: dailyBudgetRemaining.over
+                      ? 'rgba(239,68,68,0.2)'
+                      : dailyBudgetRemaining.perDay < dailyBudgetRemaining.todayAllowance * 0.3
+                      ? 'rgba(245,158,11,0.2)'
+                      : 'rgba(16,185,129,0.2)',
+                  }}
+                >
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider opacity-50">Daily budget left</p>
+                    <p
+                      className="text-xl font-black tracking-tight leading-tight mt-0.5"
+                      style={{
+                        color: dailyBudgetRemaining.over
+                          ? 'var(--color-expense-base)'
+                          : dailyBudgetRemaining.perDay < dailyBudgetRemaining.todayAllowance * 0.3
+                          ? 'var(--color-warning-base)'
+                          : 'var(--color-income-base)',
+                      }}
+                    >
+                      {dailyBudgetRemaining.over ? `−${fmt(Math.abs(dailyBudgetRemaining.perDay))}` : fmt(dailyBudgetRemaining.perDay)}
+                    </p>
+                    <p className="text-[10px] mt-0.5 opacity-50">
+                      {dailyBudgetRemaining.over ? 'over budget — spend less today' : `per day for rest of month`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-wider opacity-50">today</p>
+                    <p className="text-sm font-black tracking-tight" style={{ color: 'var(--color-expense-base)' }}>
+                      {fmt(dailyBudgetRemaining.todaySpending)}
+                    </p>
+                    <p className="text-[10px] mt-0.5 opacity-50">spent so far</p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* New-month budget review prompt (Responsive) */}
           <AnimatePresence>
@@ -377,9 +506,7 @@ export default function DashboardPage() {
                         <div className="w-full xl:w-1/2 h-[280px]">
                           <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                              <Pie data={categoryTotals} dataKey="total" nameKey="name" innerRadius={80} outerRadius={110} paddingAngle={8} animationBegin={0} animationDuration={1200}>
-                                {categoryTotals.map((entry, index) => <Cell key={entry.name} fill={entry.color || CHART_COLORS[index % CHART_COLORS.length]} stroke="none" className="hover:opacity-80 transition-opacity outline-none" />)}
-                              </Pie>
+                              <Pie data={categoryTotals.map((entry, i) => ({ ...entry, fill: entry.color || CHART_COLORS[i % CHART_COLORS.length] }))} dataKey="total" nameKey="name" innerRadius={80} outerRadius={110} paddingAngle={8} animationBegin={0} animationDuration={1200} stroke="none" />
                               <Tooltip />
                             </PieChart>
                           </ResponsiveContainer>
@@ -464,7 +591,7 @@ export default function DashboardPage() {
       </div>
 
       <FAB onClick={() => setShowAddSheet(true)} />
-      <AddTransactionSheet isOpen={showAddSheet} onClose={() => setShowAddSheet(false)} onSuccess={() => loadData()} />
+      <AddTransactionSheet isOpen={showAddSheet} onClose={() => setShowAddSheet(false)} onSuccess={() => { loadData(); refreshStreak() }} />
     </div>
   )
 }
