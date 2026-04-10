@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
-  Lightbulb, Sparkles, ChevronRight as ChevronIcon,
+  Lightbulb, Sparkles,
   AlertTriangle, X
 } from 'lucide-react'
 import {
@@ -126,6 +126,17 @@ export default function DashboardPage() {
     loadData()
   }, [loadData])
 
+  // Supabase Realtime — dashboard refreshes automatically when transactions change on any device
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        loadData()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, loadData])
+
   useEffect(() => {
     let active = true
     const loadExchangeRate = async () => {
@@ -221,62 +232,62 @@ export default function DashboardPage() {
   return (
     <div className="w-full max-w-full lg:max-w-6xl xl:max-w-7xl mx-auto pt-4 pb-24 md:pt-10 px-0 sm:px-5 lg:px-8 overflow-x-hidden">
       {/* ─── Top Header (Always Full Width) ─── */}
-      <div className="px-5 sm:px-0 mb-8 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-[var(--color-border-base)] shadow-xl shrink-0 sm:w-14 sm:h-14" />
+      <div className="px-5 sm:px-0 mb-6 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Avatar src={avatarUrl} name={userName} size={38} className="ring-1 ring-[var(--color-border-base)] shadow-lg shrink-0 sm:w-12 sm:h-12" />
           <div className="min-w-0">
-            <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.2em] truncate opacity-70 font-bold">{greeting}</p>
-            <h1 className="text-lg sm:text-2xl font-black tracking-tight truncate">{userName}</h1>
+            <p className="text-tiny text-[var(--color-text-secondary)] opacity-60 mb-0.5">{greeting}</p>
+            <h1 className="text-base sm:text-xl font-black tracking-tight truncate">{userName}</h1>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-           <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-4 py-2 rounded-xl glass-morphic text-[10px] font-black active:scale-95 transition-all flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+           <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-3 py-1.5 rounded-lg glass-morphic text-tiny active:scale-95 transition-all flex items-center gap-1.5">
              {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
            </button>
            <ChatBot />
         </div>
       </div>
 
-      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_360px] lg:gap-10 xl:gap-14">
+      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 xl:gap-12">
         
         {/* ─── LEFT COLUMN: Main Stats & Charts ─── */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           
           {/* Main Balance Card */}
           <div className="px-5 sm:px-0">
-            <div className="flex flex-col gap-4 mb-8">
+            <div className="flex flex-col gap-3 mb-6">
               <div className="min-w-0">
-                <p className="text-[10px] text-[var(--color-text-secondary)] uppercase tracking-[0.25em] font-black mb-1.5 opacity-60">Available Balance</p>
-                <h2 className={`text-4xl sm:text-6xl font-black tracking-tighter truncate leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
+                <p className="text-tiny text-[var(--color-text-secondary)] mb-1 opacity-50">Available Balance</p>
+                <h2 className={`text-3xl sm:text-5xl font-black tracking-tighter truncate leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
                   {fmt(balance)}
                 </h2>
               </div>
               
-              <div className="flex items-center justify-between border-t border-white/10 pt-5">
+              <div className="flex items-center justify-between border-t border-white/5 pt-4">
                 <div className="min-w-0">
-                  <p className="text-xs font-black tracking-tight uppercase opacity-80" suppressHydrationWarning>{format(currentDate, 'MMMM yyyy')}</p>
+                  <p className="text-[10px] font-black tracking-tight uppercase opacity-70" suppressHydrationWarning>{format(currentDate, 'MMMM yyyy')}</p>
                   {exchangeRateInfo && (
-                    <p className="text-[10px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-50 mt-0.5">
-                      Live Rate: 1 USD = {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW
+                    <p className="text-[9px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-40 mt-0.5">
+                      1 USD ≈ {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW
                     </p>
                   )}
                 </div>
-                <div className="flex gap-2.5 shrink-0">
-                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2.5 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg hover:bg-white/5"><ChevronLeft size={18} /></button>
-                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2.5 rounded-xl bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-lg hover:bg-white/5"><ChevronRight size={18} /></button>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2 rounded-lg bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2 rounded-lg bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-sm"><ChevronRight size={16} /></button>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-5 rounded-[24px] bg-[var(--color-income-base)]/10 border border-[var(--color-income-base)]/20 shadow-sm">
-                 <div className="flex items-center gap-2 mb-2 opacity-60"><TrendingUp size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Income</span></div>
-                 <p className="text-xl font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-2xl bg-[var(--color-income-base)]/10 border border-[var(--color-income-base)]/15 shadow-sm">
+                 <div className="flex items-center gap-1.5 mb-1.5 opacity-50"><TrendingUp size={12} /><span className="text-tiny">Income</span></div>
+                 <p className="text-lg font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
               </div>
-              <div className="p-5 rounded-[24px] bg-[var(--color-expense-base)]/10 border border-[var(--color-expense-base)]/20 shadow-sm">
-                 <div className="flex items-center gap-2 mb-2 opacity-60"><TrendingDown size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Expense</span></div>
-                 <p className="text-xl font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
+              <div className="p-4 rounded-2xl bg-[var(--color-expense-base)]/10 border border-[var(--color-expense-base)]/15 shadow-sm">
+                 <div className="flex items-center gap-1.5 mb-1.5 opacity-50"><TrendingDown size={12} /><span className="text-tiny">Expense</span></div>
+                 <p className="text-lg font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
               </div>
             </div>
           </div>
@@ -322,15 +333,15 @@ export default function DashboardPage() {
 
                     {/* Budget Usage Pill */}
                     {totalIncome > 0 && (
-                      <div className="p-8 rounded-[32px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl">
-                        <div className="flex items-center justify-between mb-5">
-                          <span className="text-[12px] font-black uppercase tracking-[0.25em] opacity-50">Budget Performance</span>
-                          <span className="text-lg font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
+                      <div className="p-5 sm:p-8 rounded-[24px] sm:rounded-[32px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl">
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-[10px] sm:text-[12px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] opacity-50">Budget Performance</span>
+                          <span className="text-base sm:text-lg font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
                         </div>
-                        <div className="h-4 rounded-full bg-black/30 overflow-hidden p-1 border border-white/5">
+                        <div className="h-3 sm:h-4 rounded-full bg-black/30 overflow-hidden p-1 border border-white/5">
                           <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min((totalExpense / totalIncome) * 100, 100)}%` }} className={`h-full rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${totalExpense/totalIncome > 0.8 ? 'bg-[var(--color-expense-base)]' : 'bg-[var(--color-accent-base)]'}`} />
                         </div>
-                        <p className="mt-4 text-[11px] text-[var(--color-text-secondary)] font-medium text-center">Remaining free cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}</p>
+                        <p className="mt-3 text-[10px] sm:text-[11px] text-[var(--color-text-secondary)] font-medium text-center">Remaining cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}</p>
                       </div>
                     )}
                   </div>
@@ -446,7 +457,7 @@ export default function DashboardPage() {
 
           {/* Budget Alerts (Stacked in Sidebar on Desktop) */}
           <div className="px-5 sm:px-0">
-            <BudgetAlerts alerts={budgetAlerts} dismissed={alertsDismissed} onDismiss={() => setAlertsDismissed(true)} fmt={fmt} router={router} />
+            <BudgetAlerts alerts={budgetAlerts} dismissed={alertsDismissed} onDismiss={() => setAlertsDismissed(true)} router={router} />
           </div>
 
         </div>
@@ -458,7 +469,7 @@ export default function DashboardPage() {
   )
 }
 
-function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions: any[], router: any, fmt: any, limit?: number }) {
+function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions: Transaction[], router: ReturnType<typeof useRouter>, fmt: (amount: number) => string, limit?: number }) {
   return (
     <div className="card-premium shadow-xl overflow-hidden">
       <div className="p-5 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
@@ -487,7 +498,7 @@ function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions
   )
 }
 
-function BudgetAlerts({ alerts, dismissed, onDismiss, fmt, router }: { alerts: any[], dismissed: boolean, onDismiss: () => void, fmt: any, router: any }) {
+function BudgetAlerts({ alerts, dismissed, onDismiss, router }: { alerts: {name: string, icon: string, spent: number, budget: number, over: boolean, pct: number}[], dismissed: boolean, onDismiss: () => void, router: ReturnType<typeof useRouter> }) {
   if (alerts.length === 0 || dismissed) return null
   return (
     <div className={`rounded-[24px] border p-5 ${alerts.some(a => a.over) ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'} shadow-lg`}>

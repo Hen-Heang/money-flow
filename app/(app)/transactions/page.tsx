@@ -64,16 +64,19 @@ const SwipeableRow = memo(function SwipeableRow({
     isDragging.current = false
     if (info.offset.x < -60) {
       setOffset(-160)
+      haptic('light')
     } else {
       setOffset(0)
     }
   }
 
   const handleDelete = () => {
+    haptic('medium')
     setConfirmDelete(true)
   }
 
   const confirmAndDelete = () => {
+    haptic('heavy')
     setDeleting(true)
     setConfirmDelete(false)
     onDelete(transaction.id)
@@ -81,6 +84,7 @@ const SwipeableRow = memo(function SwipeableRow({
 
   const handleTap = () => {
     if (selectMode) {
+      haptic('light')
       onSelect?.(transaction.id)
       return
     }
@@ -94,6 +98,7 @@ const SwipeableRow = memo(function SwipeableRow({
   const handlePointerDown = () => {
     longPressTimer.current = setTimeout(() => {
       setOffset(-160)
+      haptic('light')
     }, 500)
   }
 
@@ -132,15 +137,15 @@ const SwipeableRow = memo(function SwipeableRow({
         )}
       </AnimatePresence>
 
-      {/* Actions: always visible on desktop hover, revealed by swipe on mobile */}
-      <div className="absolute right-0 top-0 bottom-0 z-10 flex items-center px-3 gap-2">
+      {/* Actions: revealed by swipe on mobile, hover on desktop */}
+      <div className="absolute right-0 top-0 bottom-0 flex items-center px-3 gap-2">
         {/* Desktop hover buttons (hidden on touch devices) */}
         <div
           className="hidden md:flex items-center gap-1.5 transition-opacity duration-150"
           style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none' }}
         >
           <button
-            onClick={(e) => { e.stopPropagation(); onDuplicate(transaction) }}
+            onClick={(e) => { e.stopPropagation(); haptic('light'); onDuplicate(transaction) }}
             className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
             style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
             title="Duplicate"
@@ -148,7 +153,7 @@ const SwipeableRow = memo(function SwipeableRow({
             <Copy className="w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)' }} />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); onEdit(transaction) }}
+            onClick={(e) => { e.stopPropagation(); haptic('light'); onEdit(transaction) }}
             className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
             style={{ backgroundColor: 'var(--color-accent-base)' }}
             title="Edit"
@@ -164,17 +169,17 @@ const SwipeableRow = memo(function SwipeableRow({
             <Trash2 className="w-3.5 h-3.5 text-white" />
           </button>
         </div>
-        {/* Mobile swipe buttons */}
+        {/* Mobile swipe buttons — revealed when content slides left */}
         <div className="md:hidden flex items-center gap-2">
           <button
-            onClick={() => { setOffset(0); onDuplicate(transaction) }}
+            onClick={() => { haptic('light'); setOffset(0); onDuplicate(transaction) }}
             className="w-10 h-10 rounded-full flex items-center justify-center"
             style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
           >
             <Copy className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
           </button>
           <button
-            onClick={() => { setOffset(0); onEdit(transaction) }}
+            onClick={() => { haptic('light'); setOffset(0); onEdit(transaction) }}
             className="w-10 h-10 rounded-full flex items-center justify-center"
             style={{ backgroundColor: 'var(--color-accent-base)' }}
           >
@@ -203,7 +208,7 @@ const SwipeableRow = memo(function SwipeableRow({
 
         animate={{ x: selectMode ? 0 : offset, opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-        className="flex items-center gap-4 px-4 py-3 relative cursor-pointer"
+        className="flex items-center gap-4 px-4 py-3 relative cursor-pointer z-10"
         style={{
           backgroundColor: selected ? 'color-mix(in srgb, var(--color-accent-base) 12%, var(--color-card-base))' : 'var(--color-card-base)',
         }}
@@ -428,6 +433,63 @@ function TransactionsPageInner() {
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Supabase Realtime — live sync across devices (Mac, iPhone, etc.)
+  useEffect(() => {
+    let userId: string | null = null
+    supabase.auth.getUser().then(({ data }) => {
+      userId = data.user?.id ?? null
+    })
+
+    const channel = supabase
+      .channel('transactions-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'transactions' },
+        (payload) => {
+          if (!userId || payload.new.user_id !== userId) return
+          // Re-fetch with join (categories, payment_methods) for the new row
+          supabase
+            .from('transactions')
+            .select('*, categories(name, icon, color), payment_methods(name, icon)')
+            .eq('id', payload.new.id)
+            .single()
+            .then(({ data }) => {
+              if (!data) return
+              setTransactions(prev => {
+                if (prev.find(t => t.id === data.id)) return prev
+                return [data as Transaction, ...prev]
+              })
+            })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'transactions' },
+        (payload) => {
+          if (!userId || payload.new.user_id !== userId) return
+          supabase
+            .from('transactions')
+            .select('*, categories(name, icon, color), payment_methods(name, icon)')
+            .eq('id', payload.new.id)
+            .single()
+            .then(({ data }) => {
+              if (!data) return
+              setTransactions(prev => prev.map(t => t.id === data.id ? (data as Transaction) : t))
+            })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'transactions' },
+        (payload) => {
+          setTransactions(prev => prev.filter(t => t.id !== payload.old.id))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase])  
+
   // Infinite scroll — trigger next page when sentinel enters viewport
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -447,6 +509,7 @@ function TransactionsPageInner() {
   const { pulling, pullDistance, ready: pullReady } = usePullToRefresh(() => loadTransactions(true, true))
 
   const handleEdit = useCallback((t: Transaction) => {
+    haptic('light')
     setIsDuplicating(false)
     setEditingTransaction({ ...t, currency: t.currency, exchange_rate: t.exchange_rate })
     setShowAddSheet(true)

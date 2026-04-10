@@ -34,9 +34,14 @@ export const haptic = (style: 'light' | 'medium' | 'heavy' = 'light') => {
 
 export function getGreeting(): string {
   const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning 🌅'
-  if (hour < 17) return 'Good afternoon ☀️'
-  return 'Good evening 🌙'
+  if (hour >= 5 && hour < 10) {
+    const options = ['Good morning 🌅', 'Start fresh ☕️', 'Morning check-in? ☀️', 'Ready to flow? 💸']
+    return options[hour % options.length]
+  }
+  if (hour >= 10 && hour < 14) return 'Good afternoon ☀️'
+  if (hour >= 14 && hour < 17) return 'Afternoon update? ☕️'
+  if (hour >= 17 && hour < 22) return 'Good evening 🌙'
+  return 'Late night logging? 🌃'
 }
 
 export function getDisplayName(email?: string | null, displayName?: string | null): string {

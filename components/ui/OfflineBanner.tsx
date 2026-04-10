@@ -9,7 +9,7 @@ export default function OfflineBanner() {
 
   useEffect(() => {
     // Set initial state after mount (navigator.onLine is browser-only)
-    setOffline(!navigator.onLine)
+    setTimeout(() => setOffline(!navigator.onLine), 0)
     const goOffline = () => setOffline(true)
     const goOnline  = () => setOffline(false)
     window.addEventListener('offline', goOffline)
@@ -32,7 +32,7 @@ export default function OfflineBanner() {
           style={{ backgroundColor: '#ef4444', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
         >
           <WifiOff size={13} />
-          You're offline — showing cached data
+          You&apos;re offline — showing cached data
         </motion.div>
       )}
     </AnimatePresence>

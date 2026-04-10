@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-flow-v1'
+const CACHE_NAME = 'money-flow-v2'
 
 // App shell: pre-cache these on install
 const PRECACHE_URLS = [
@@ -19,11 +19,10 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   )
-  // Activate immediately without waiting for old tabs to close
   self.skipWaiting()
 })
 
-// ── Activate: delete outdated caches ────────────────────────────────────────
+// ── Activate: delete outdated caches ─────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -32,23 +31,18 @@ self.addEventListener('activate', (event) => {
         Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
       )
   )
-  // Take control of all open tabs immediately
   self.clients.claim()
 })
 
-// ── Fetch: two strategies ────────────────────────────────────────────────────
+// ── Fetch: two strategies ─────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Only handle GET requests from same origin
   if (request.method !== 'GET' || url.origin !== self.location.origin) return
-
-  // Skip Supabase and external API calls — always go to network
   if (url.hostname !== self.location.hostname) return
 
   // API routes: network-first → cache fallback
-  // User sees cached data when offline instead of an error
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
@@ -64,8 +58,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Everything else (pages, JS, CSS, images): stale-while-revalidate
-  // Return cached immediately, update cache in background
+  // Everything else: stale-while-revalidate
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(request).then((cached) => {
@@ -74,11 +67,54 @@ self.addEventListener('fetch', (event) => {
             if (response.ok) cache.put(request, response.clone())
             return response
           })
-          .catch(() => cached) // network failed, fall back to stale cache
-
-        // Return cached version immediately if available, else wait for network
+          .catch(() => cached)
         return cached || networkFetch
       })
     )
+  )
+})
+
+// ── Push notifications ────────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+
+  let data = {}
+  try { data = event.data.json() } catch { return }
+
+  const { title = 'Money Flow', body = '', icon, badge, tag, data: notifData } = data
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: icon || '/icons/icon-192.png',
+      badge: badge || '/icons/icon-192.png',
+      tag: tag || 'money-flow',
+      data: notifData || { url: '/' },
+      // Vibration pattern: short-long-short
+      vibrate: [100, 200, 100],
+    })
+  )
+})
+
+// ── Notification click: open / focus the app ──────────────────────────────────
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const targetUrl = event.notification.data?.url || '/'
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((clients) => {
+        // If the app is already open, focus it and navigate
+        for (const client of clients) {
+          if (client.url.includes(self.location.origin)) {
+            client.focus()
+            client.navigate(targetUrl)
+            return
+          }
+        }
+        // Otherwise open a new window
+        self.clients.openWindow(targetUrl)
+      })
   )
 })
