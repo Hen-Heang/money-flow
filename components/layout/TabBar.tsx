@@ -58,7 +58,7 @@ export default function TabBar() {
                   />
                 </div>
                 <span
-                  className={`text-[8px] font-bold uppercase tracking-[0.05em] transition-all duration-300 ${isActive ? 'text-white opacity-100' : 'text-white/20 opacity-50'}`}
+                  className={`text-tiny transition-all duration-300 ${isActive ? 'text-white opacity-100' : 'text-white/20 opacity-50'}`}
                 >
                   {label}
                 </span>

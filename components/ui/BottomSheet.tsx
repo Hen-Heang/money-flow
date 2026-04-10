@@ -83,9 +83,13 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
           {/* Main Modal/Sheet */}
           <motion.div
             initial={isDesktop ? { opacity: 0, scale: 0.95, y: 10 } : { y: '100%' }}
-            animate={isDesktop ? { opacity: 1, scale: 1, y: 0 } : { y: 0 }}
+            animate={
+              isDesktop
+                ? { opacity: 1, scale: 1, y: 0 }
+                : { y: keyboardHeight > 0 ? -keyboardHeight : 0 }
+            }
             exit={isDesktop ? { opacity: 0, scale: 0.95, y: 10 } : { y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            transition={{ type: 'spring', damping: 32, stiffness: 340, mass: 0.8 }}
             drag={!isDesktop && canDrag ? 'y' : false}
             dragConstraints={{ top: 0 }}
             dragElastic={{ top: 0, bottom: 0.5 }}
@@ -94,13 +98,12 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
             }}
             className={`
               relative flex flex-col overflow-hidden glass-card shadow-2xl
-              ${isDesktop 
-                ? 'w-[32rem] rounded-[28px] border border-white/10' 
+              ${isDesktop
+                ? 'w-[32rem] rounded-[28px] border border-white/10'
                 : 'w-full rounded-t-[32px] border-t border-white/10'
               }
             `}
             style={{
-              bottom: !isDesktop && keyboardHeight > 0 ? keyboardHeight : 0,
               backgroundColor: 'var(--color-card-base)',
               maxHeight: !isDesktop && keyboardHeight > 0 && visibleHeight
                 ? `${visibleHeight}px`
