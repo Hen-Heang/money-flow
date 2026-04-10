@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell,
+  PieChart, Pie,
   LineChart, Line,
 } from 'recharts'
 import { TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
@@ -413,11 +413,7 @@ export default function AnalyticsPage() {
           <div className="flex gap-4 items-center mb-4">
             <ResponsiveContainer width={120} height={120}>
               <PieChart>
-                <Pie data={categoryData} dataKey="total" cx="50%" cy="50%" innerRadius={30} outerRadius={55}>
-                  {categoryData.map((entry, index) => (
-                    <Cell key={entry.name} fill={entry.color || CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
+                <Pie data={categoryData.map((entry, i) => ({ ...entry, fill: entry.color || CHART_COLORS[i % CHART_COLORS.length] }))} dataKey="total" cx="50%" cy="50%" innerRadius={30} outerRadius={55} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex-1 space-y-2">

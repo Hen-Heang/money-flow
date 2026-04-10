@@ -6,7 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { useSearchParams } from 'next/navigation'
-import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Square, CheckCheck, Copy } from 'lucide-react'
+import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Square, CheckCheck, Copy, Ellipsis } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import { formatKRW, formatUSD, haptic } from '@/lib/utils'
@@ -57,12 +57,16 @@ const SwipeableRow = memo(function SwipeableRow({
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const isDragging = useRef(false)
+  const dragEndTime = useRef(0)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
-    isDragging.current = false
-    if (info.offset.x < -60) {
+    dragEndTime.current = Date.now()
+    // Delay reset so onTap (which fires after onDragEnd) still sees isDragging=true
+    setTimeout(() => { isDragging.current = false }, 80)
+    if (info.offset.x < -80) {
       setOffset(-160)
       haptic('light')
     } else {
@@ -83,6 +87,8 @@ const SwipeableRow = memo(function SwipeableRow({
   }
 
   const handleTap = () => {
+    // Ignore tap that fires immediately after a drag gesture ends
+    if (isDragging.current || Date.now() - dragEndTime.current < 100) return
     if (selectMode) {
       haptic('light')
       onSelect?.(transaction.id)
@@ -92,7 +98,7 @@ const SwipeableRow = memo(function SwipeableRow({
       setOffset(0)
       return
     }
-    if (!isDragging.current) onEdit(transaction)
+    onEdit(transaction)
   }
 
   const handlePointerDown = () => {
@@ -107,7 +113,7 @@ const SwipeableRow = memo(function SwipeableRow({
   }
 
   return (
-    <div className="relative overflow-hidden" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+    <div className="relative overflow-hidden" onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setMenuOpen(false) }}>
       {/* Confirm delete dialog */}
       <AnimatePresence>
         {confirmDelete && (
@@ -137,36 +143,70 @@ const SwipeableRow = memo(function SwipeableRow({
         )}
       </AnimatePresence>
 
-      {/* Actions: revealed by swipe on mobile, hover on desktop */}
+      {/* Actions: revealed by swipe on mobile, "..." menu on desktop */}
       <div className="absolute right-0 top-0 bottom-0 flex items-center px-3 gap-2">
-        {/* Desktop hover buttons (hidden on touch devices) */}
+        {/* Desktop: "..." button → expands to action buttons on hover */}
         <div
-          className="hidden md:flex items-center gap-1.5 transition-opacity duration-150"
+          className="hidden md:flex items-center gap-1.5"
           style={{ opacity: hovered ? 1 : 0, pointerEvents: hovered ? 'auto' : 'none' }}
+          onMouseLeave={() => setMenuOpen(false)}
         >
+          <AnimatePresence>
+            {menuOpen && (
+              <>
+                <motion.button
+                  key="copy"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: 0.15, delay: 0.06 }}
+                  onClick={(e) => { e.stopPropagation(); haptic('light'); setMenuOpen(false); onDuplicate(transaction) }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90"
+                  style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+                  title="Duplicate"
+                >
+                  <Copy className="w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)' }} />
+                </motion.button>
+                <motion.button
+                  key="edit"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: 0.15, delay: 0.03 }}
+                  onClick={(e) => { e.stopPropagation(); haptic('light'); setMenuOpen(false); onEdit(transaction) }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90"
+                  style={{ backgroundColor: 'var(--color-accent-base)' }}
+                  title="Edit"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-white" />
+                </motion.button>
+                <motion.button
+                  key="delete"
+                  initial={{ opacity: 0, x: 12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 12 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(false); handleDelete() }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90"
+                  style={{ backgroundColor: 'var(--color-expense-base)' }}
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-white" />
+                </motion.button>
+              </>
+            )}
+          </AnimatePresence>
           <button
-            onClick={(e) => { e.stopPropagation(); haptic('light'); onDuplicate(transaction) }}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-            style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
-            title="Duplicate"
+            onMouseEnter={() => setMenuOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v) }}
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-90"
+            style={{
+              backgroundColor: menuOpen ? 'var(--color-card-elevated-base)' : 'transparent',
+              border: `1px solid ${menuOpen ? 'var(--color-border-base)' : 'transparent'}`,
+            }}
+            title="More actions"
           >
-            <Copy className="w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)' }} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); haptic('light'); onEdit(transaction) }}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-            style={{ backgroundColor: 'var(--color-accent-base)' }}
-            title="Edit"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-white" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); handleDelete() }}
-            className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-            style={{ backgroundColor: 'var(--color-expense-base)' }}
-            title="Delete"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-white" />
+            <Ellipsis className="w-4 h-4" style={{ color: 'var(--color-text-secondary)' }} />
           </button>
         </div>
         {/* Mobile swipe buttons — revealed when content slides left */}
@@ -197,9 +237,14 @@ const SwipeableRow = memo(function SwipeableRow({
 
       <motion.div
         drag={selectMode ? false : 'x'}
-        dragConstraints={{ left: -168, right: 0 }}
-        dragElastic={0.1}
-        onDragStart={() => { if (!selectMode) isDragging.current = true }}
+        dragConstraints={{ left: -160, right: 0 }}
+        dragElastic={0.05}
+        dragMomentum={false}
+        onDragStart={() => {
+          if (selectMode) return
+          isDragging.current = true
+          if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+        }}
         onDragEnd={selectMode ? undefined : handleDragEnd}
         onTap={handleTap}
         onPointerDown={selectMode ? undefined : handlePointerDown}
@@ -304,6 +349,7 @@ function TransactionsPageInner() {
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
   const PAGE_SIZE = 20
+  const pendingDeletes = useRef(new Map<string, Transaction>())
 
   // Advanced filters
   const [filterDateFrom, setFilterDateFrom] = useState('')
@@ -541,14 +587,56 @@ function TransactionsPageInner() {
     haptic('light')
   }, [])
 
-  const handleDelete = useCallback(async (id: string) => {
-    const { error } = await supabase.from('transactions').delete().eq('id', id)
-    if (error) {
-      toast.error('Failed to delete')
-    } else {
-      toast.success('Deleted')
-      setTransactions(prev => prev.filter(t => t.id !== id))
-    }
+  const handleDelete = useCallback((id: string) => {
+    // Optimistically remove from UI and save for potential undo
+    setTransactions(prev => {
+      const item = prev.find(t => t.id === id)
+      if (item) pendingDeletes.current.set(id, item)
+      return prev.filter(t => t.id !== id)
+    })
+
+    let undone = false
+
+    toast(
+      (t) => (
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">Transaction deleted</span>
+          <button
+            className="text-sm font-black px-2 py-0.5 rounded-lg"
+            style={{ color: 'var(--color-accent-base)' }}
+            onClick={() => {
+              undone = true
+              const item = pendingDeletes.current.get(id)
+              if (item) {
+                setTransactions(prev =>
+                  [...prev, item].sort((a, b) => b.date.localeCompare(a.date))
+                )
+                pendingDeletes.current.delete(id)
+              }
+              toast.dismiss(t.id)
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      ),
+      { duration: 5000 }
+    )
+
+    // After 5s, commit the delete to DB if not undone
+    setTimeout(() => {
+      if (undone) return
+      const item = pendingDeletes.current.get(id)
+      pendingDeletes.current.delete(id)
+      supabase.from('transactions').delete().eq('id', id).then(({ error }) => {
+        if (error) {
+          toast.error('Failed to delete')
+          if (item) setTransactions(prev =>
+            [...prev, item].sort((a, b) => b.date.localeCompare(a.date))
+          )
+        }
+      })
+    }, 5200)
   }, [supabase])
 
   const grouped = useMemo(() => {
