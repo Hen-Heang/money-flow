@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: usersError.message }, { status: 500 })
   }
 
-  const eligibleUsers = users.users.filter(u => u.email)
+  const eligibleUsers = (users.users as { id: string; email?: string }[]).filter(u => u.email)
   const userIds = eligibleUsers.map(u => u.id)
 
   let sent = 0
