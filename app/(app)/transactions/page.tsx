@@ -343,6 +343,7 @@ function TransactionsPageInner() {
   const [isDuplicating, setIsDuplicating] = useState(false)
   const [liveRate, setLiveRate] = useState(1300)
   const [page, setPage] = useState(0)
+  const pageRef = useRef(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -415,7 +416,7 @@ function TransactionsPageInner() {
         .eq('user_id', user.id)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .range(reset ? 0 : page * PAGE_SIZE, (reset ? 0 : page) * PAGE_SIZE + PAGE_SIZE - 1)
+        .range(reset ? 0 : pageRef.current * PAGE_SIZE, (reset ? 0 : pageRef.current) * PAGE_SIZE + PAGE_SIZE - 1)
 
       if (filter !== 'all') query = query.eq('type', filter)
       if (debouncedSearch) query = query.ilike('description', `%${debouncedSearch}%`)
@@ -431,9 +432,11 @@ function TransactionsPageInner() {
       const newTxns = (data as Transaction[]) || []
       if (reset) {
         setTransactions(newTxns)
+        pageRef.current = 1
         setPage(1)
       } else {
         setTransactions(prev => [...prev, ...newTxns])
+        pageRef.current += 1
         setPage(prev => prev + 1)
       }
       setHasMore(newTxns.length === PAGE_SIZE)
@@ -443,7 +446,7 @@ function TransactionsPageInner() {
       setLoading(false)
       loadingRef.current = false
     }
-  }, [filter, debouncedSearch, page, filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filter, debouncedSearch, filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax, supabase])
 
   useEffect(() => {
     loadTransactions(true)

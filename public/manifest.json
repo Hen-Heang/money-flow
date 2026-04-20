@@ -3,7 +3,7 @@
   "short_name": "MoneyFlow",
   "description": "Personal finance tracker — track spending, savings goals, and budgets",
   "lang": "en",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0a0f1a",
   "theme_color": "#0a0f1a",

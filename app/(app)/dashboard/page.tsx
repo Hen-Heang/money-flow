@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays, subDays } from 'date-fns'
 import {
@@ -69,15 +69,22 @@ export default function DashboardPage() {
 
   const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
 
+  const routerRef = useRef(router)
+  useEffect(() => { routerRef.current = router }, [router])
+
   // Streak: count consecutive days with at least one logged transaction.
   // Defined first so all effects and handlers below can reference it safely.
-  const refreshStreak = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+  const refreshStreak = useCallback(async (userId?: string) => {
+    let uid = userId
+    if (!uid) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      uid = user.id
+    }
     const { data } = await supabase
       .from('transactions')
       .select('date')
-      .eq('user_id', user.id)
+      .eq('user_id', uid)
       .order('date', { ascending: false })
     if (!data) return
 
@@ -107,7 +114,7 @@ export default function DashboardPage() {
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
-        router.push('/login')
+        routerRef.current.push('/login')
         return
       }
 
@@ -149,7 +156,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [currentDate, supabase, router])
+  }, [currentDate, supabase])
 
   useEffect(() => {
     setGreeting(getGreeting())
@@ -210,8 +217,8 @@ export default function DashboardPage() {
     refreshStreak()
   }
 
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
-  const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+  const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0), [transactions])
+  const totalExpense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0), [transactions])
   const balance = totalIncome - totalExpense
   const liveRate = exchangeRateInfo?.rate || 1350
 
@@ -243,42 +250,50 @@ export default function DashboardPage() {
     return { perDay, todaySpending, todayAllowance: totalBudget / (daysLeft + today.getDate() - 1), over: budgetLeft < 0 }
   }, [totalBudget, totalExpense, transactions, insights])
 
-  const categoryTotalsMap = new Map<string, CategoryTotal>()
-  transactions.filter(t => t.type === 'expense' && t.categories).forEach(t => {
-    const cat = t.categories!
-    const existing = categoryTotalsMap.get(cat.name)
-    if (existing) {
-      existing.total += t.amount_krw
-    } else {
-      categoryTotalsMap.set(cat.name, { name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget: t.category_id ? budgetMap[t.category_id] : undefined })
-    }
-  })
-  const categoryTotals: CategoryTotal[] = Array.from(categoryTotalsMap.values()).sort((a, b) => b.total - a.total)
-
-  const budgetAlerts = isSameMonth(currentDate, new Date())
-    ? categoryTotals
-        .filter(c => c.budget && c.budget > 0 && c.total >= c.budget * 0.8)
-        .map(c => ({
-          name: c.name,
-          icon: c.icon,
-          spent: c.total,
-          budget: c.budget!,
-          over: c.total >= c.budget!,
-          pct: Math.round((c.total / c.budget!) * 100),
-        }))
-    : []
-
-  const dailyData: { day: string; expense: number; income: number }[] = []
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dayStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), d), 'yyyy-MM-dd')
-    const dayTxns = transactions.filter(t => t.date === dayStr)
-    dailyData.push({
-      day: String(d),
-      expense: dayTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0),
-      income: dayTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0),
+  const categoryTotals = useMemo<CategoryTotal[]>(() => {
+    const map = new Map<string, CategoryTotal>()
+    transactions.filter(t => t.type === 'expense' && t.categories).forEach(t => {
+      const cat = t.categories!
+      const existing = map.get(cat.name)
+      if (existing) {
+        existing.total += t.amount_krw
+      } else {
+        map.set(cat.name, { name: cat.name, icon: cat.icon, color: cat.color, total: t.amount_krw, budget: t.category_id ? budgetMap[t.category_id] : undefined })
+      }
     })
-  }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total)
+  }, [transactions, budgetMap])
+
+  const budgetAlerts = useMemo(() =>
+    isSameMonth(currentDate, new Date())
+      ? categoryTotals
+          .filter(c => c.budget && c.budget > 0 && c.total >= c.budget * 0.8)
+          .map(c => ({
+            name: c.name,
+            icon: c.icon,
+            spent: c.total,
+            budget: c.budget!,
+            over: c.total >= c.budget!,
+            pct: Math.round((c.total / c.budget!) * 100),
+          }))
+      : [],
+  [categoryTotals, currentDate])
+
+  const dailyData = useMemo(() => {
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
+    const byDate = new Map<string, { expense: number; income: number }>()
+    transactions.forEach(t => {
+      const entry = byDate.get(t.date) ?? { expense: 0, income: 0 }
+      if (t.type === 'expense') entry.expense += t.amount_krw
+      else entry.income += t.amount_krw
+      byDate.set(t.date, entry)
+    })
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const dayStr = format(new Date(currentDate.getFullYear(), currentDate.getMonth(), i + 1), 'yyyy-MM-dd')
+      const d = byDate.get(dayStr) ?? { expense: 0, income: 0 }
+      return { day: String(i + 1), expense: d.expense, income: d.income }
+    })
+  }, [transactions, currentDate])
 
   const fmt = (amount: number) => showUSD ? formatUSD(amount / liveRate) : formatKRW(amount)
 
@@ -286,11 +301,24 @@ export default function DashboardPage() {
     <div className="w-full max-w-full lg:max-w-6xl xl:max-w-7xl mx-auto pt-4 pb-24 md:pt-10 px-0 sm:px-5 lg:px-8 overflow-x-hidden">
       {/* ─── Top Header (Always Full Width) ─── */}
       <div className="px-5 sm:px-0 mb-6 flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Avatar src={avatarUrl} name={userName} size={38} className="ring-1 ring-[var(--color-border-base)] shadow-lg shrink-0 sm:w-12 sm:h-12" />
+        <div className="flex min-w-0 items-center gap-3.5">
+          <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-white/10 shadow-2xl shrink-0 sm:w-14 sm:h-14" />
           <div className="min-w-0">
-            <p className="text-tiny text-[var(--color-text-secondary)] opacity-60 mb-0.5">{greeting}</p>
-            <h1 className="text-base sm:text-xl font-black tracking-tight truncate">{userName}</h1>
+            <motion.p 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 0.5, x: 0 }}
+              className="text-tiny text-[var(--color-text-secondary)] font-black tracking-[0.2em] mb-1 uppercase"
+            >
+              {greeting}
+            </motion.p>
+            <motion.h1 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+              className="text-lg sm:text-2xl font-black tracking-tight truncate"
+            >
+              {userName}
+            </motion.h1>
           </div>
         </div>
 
@@ -324,46 +352,40 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_340px] lg:gap-8 xl:gap-12">
+      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_360px] lg:gap-10 xl:gap-14">
         
-        {/* ─── LEFT COLUMN: Main Stats & Charts ─── */}
-        <div className="space-y-6">
+        {/* ─── LEFT COLUMN: Bento Grid Dashboard ─── */}
+        <div className="space-y-8">
           
-          {/* Main Balance Card */}
-          <div className="px-5 sm:px-0">
-            <div className="flex flex-col gap-3 mb-6">
-              <div className="min-w-0">
+          {/* Main Balance & Overview Bento */}
+          <div className="px-5 sm:px-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bento-item md:col-span-2 flex flex-col justify-between min-h-[200px] bg-gradient-to-br from-blue-600/10 to-transparent">
+              <div>
                 <p className="text-tiny text-[var(--color-text-secondary)] mb-1 opacity-50">Available Balance</p>
-                <h2 className={`text-3xl sm:text-5xl font-black tracking-tighter truncate leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
+                <h2 className={`text-4xl sm:text-6xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
                   {fmt(balance)}
                 </h2>
               </div>
               
-              <div className="flex items-center justify-between border-t border-white/5 pt-4">
+              <div className="flex items-center justify-between mt-8 border-t border-white/5 pt-4">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black tracking-tight uppercase opacity-70" suppressHydrationWarning>{format(currentDate, 'MMMM yyyy')}</p>
-                  {exchangeRateInfo && (
-                    <p className="text-[9px] font-bold text-[var(--color-text-secondary)] tracking-tight opacity-40 mt-0.5">
-                      1 USD ≈ {new Intl.NumberFormat('ko-KR').format(exchangeRateInfo.rate)} KRW
-                    </p>
-                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2 rounded-lg bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-sm"><ChevronLeft size={16} /></button>
-                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2 rounded-lg bg-[var(--color-card-elevated-base)] border border-white/5 active:scale-90 transition-all shadow-sm"><ChevronRight size={16} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm"><ChevronRight size={16} /></button>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-4 rounded-2xl bg-[var(--color-income-base)]/10 border border-[var(--color-income-base)]/15 shadow-sm">
-                 <div className="flex items-center gap-1.5 mb-1.5 opacity-50"><TrendingUp size={12} /><span className="text-tiny">Income</span></div>
-                 <p className="text-lg font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
-              </div>
-              <div className="p-4 rounded-2xl bg-[var(--color-expense-base)]/10 border border-[var(--color-expense-base)]/15 shadow-sm">
-                 <div className="flex items-center gap-1.5 mb-1.5 opacity-50"><TrendingDown size={12} /><span className="text-tiny">Expense</span></div>
-                 <p className="text-lg font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
-              </div>
+            <div className="bento-item border-l-4 border-l-[var(--color-income-base)]/50">
+               <div className="flex items-center gap-1.5 mb-2 opacity-50"><TrendingUp size={12} className="text-[var(--color-income-base)]" /><span className="text-tiny uppercase font-black">Income</span></div>
+               <p className="text-2xl font-black text-[var(--color-income-base)] truncate">{fmt(totalIncome)}</p>
+            </div>
+            
+            <div className="bento-item border-l-4 border-l-[var(--color-expense-base)]/50">
+               <div className="flex items-center gap-1.5 mb-2 opacity-50"><TrendingDown size={12} className="text-[var(--color-expense-base)]" /><span className="text-tiny uppercase font-black">Expense</span></div>
+               <p className="text-2xl font-black text-[var(--color-expense-base)] truncate">{fmt(totalExpense)}</p>
             </div>
           </div>
 

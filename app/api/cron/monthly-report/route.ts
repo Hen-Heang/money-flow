@@ -141,69 +141,84 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: usersError.message }, { status: 500 })
   }
 
+  const eligibleUsers = users.users.filter(u => u.email)
+  const userIds = eligibleUsers.map(u => u.id)
+
   let sent = 0
   let skipped = 0
 
-  for (const user of users.users) {
-    if (!user.email) { skipped++; continue }
+  if (userIds.length === 0) {
+    return NextResponse.json({ sent, skipped, month: monthLabel })
+  }
 
-    // Fetch that user's last-month transactions
-    const { data: txns } = await supabase
+  // Batch all DB queries — 2 queries for all users instead of 2×N
+  const [{ data: allTxns }, { data: allProfiles }] = await Promise.all([
+    supabase
       .from('transactions')
-      .select('type, amount_krw, categories(name)')
-      .eq('user_id', user.id)
+      .select('user_id, type, amount_krw, categories(name)')
+      .in('user_id', userIds)
       .gte('date', fromDate)
-      .lte('date', toDate)
-
-    if (!txns || txns.length === 0) { skipped++; continue }
-
-    const totalIncome = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
-    const totalExpense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
-    const balance = totalIncome - totalExpense
-    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
-
-    // Top categories
-    const catMap: Record<string, number> = {}
-    txns.filter(t => t.type === 'expense').forEach(t => {
-      const catRaw = t.categories
-      const cat = catRaw && !Array.isArray(catRaw) ? (catRaw as { name: string }) : null
-      const key = cat?.name || 'Uncategorized'
-      catMap[key] = (catMap[key] || 0) + t.amount_krw
-    })
-    const topCategories = Object.entries(catMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([name, total]) => ({ name, total }))
-
-    // Get display name from users table
-    const { data: profile } = await supabase
+      .lte('date', toDate),
+    supabase
       .from('users')
-      .select('display_name')
-      .eq('id', user.id)
-      .single()
-    const displayName = (profile as { display_name?: string } | null)?.display_name || user.email.split('@')[0]
+      .select('id, display_name')
+      .in('id', userIds),
+  ])
 
-    const html = buildEmailHtml({ displayName, month: monthLabel, totalIncome, totalExpense, balance, savingsRate, topCategories })
+  // Group transactions by userId
+  const txnsByUser: Record<string, typeof allTxns> = {}
+  ;(allTxns || []).forEach(t => {
+    const uid = (t as typeof t & { user_id: string }).user_id
+    if (!txnsByUser[uid]) txnsByUser[uid] = []
+    txnsByUser[uid]!.push(t)
+  })
 
-    // Send via Resend REST API (no package needed)
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: user.email,
-        subject: `Your ${monthLabel} Money Flow Report`,
-        html,
-      }),
-    })
+  // Map profiles by userId
+  const profileByUser: Record<string, string> = {}
+  ;(allProfiles || []).forEach((p: { id: string; display_name: string | null }) => {
+    if (p.display_name) profileByUser[p.id] = p.display_name
+  })
 
-    if (res.ok) {
-      sent++
-    } else {
-      const err = await res.text()
-      console.error(`[cron/monthly-report] Failed to send to ${user.email}:`, err)
-      skipped++
-    }
+  // Send emails concurrently (max 5 at a time to avoid rate limits)
+  const CONCURRENCY = 5
+  for (let i = 0; i < eligibleUsers.length; i += CONCURRENCY) {
+    const batch = eligibleUsers.slice(i, i + CONCURRENCY)
+    await Promise.all(batch.map(async user => {
+      const txns = txnsByUser[user.id]
+      if (!txns || txns.length === 0) { skipped++; return }
+
+      const totalIncome = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+      const totalExpense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+      const balance = totalIncome - totalExpense
+      const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0
+
+      const catMap: Record<string, number> = {}
+      txns.filter(t => t.type === 'expense').forEach(t => {
+        const catRaw = t.categories
+        const cat = catRaw && !Array.isArray(catRaw) ? (catRaw as { name: string }) : null
+        const key = cat?.name || 'Uncategorized'
+        catMap[key] = (catMap[key] || 0) + t.amount_krw
+      })
+      const topCategories = Object.entries(catMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, total]) => ({ name, total }))
+
+      const displayName = profileByUser[user.id] || user.email!.split('@')[0]
+      const html = buildEmailHtml({ displayName, month: monthLabel, totalIncome, totalExpense, balance, savingsRate, topCategories })
+
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromEmail, to: user.email, subject: `Your ${monthLabel} Money Flow Report`, html }),
+      })
+
+      if (res.ok) { sent++ }
+      else {
+        console.error(`[cron/monthly-report] Failed to send to ${user.email}:`, await res.text())
+        skipped++
+      }
+    }))
   }
 
   return NextResponse.json({ sent, skipped, month: monthLabel })

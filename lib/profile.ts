@@ -104,17 +104,6 @@ export async function ensureUserProfile(supabase: SupabaseClient, user: User) {
 }
 
 export async function getUserProfile(supabase: SupabaseClient, user: User) {
-  const ensured = await ensureUserProfile(supabase, user)
-
-  const { data: profileData, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  const data = profileData as UserProfileRecord | null
-
-  if (error) throw error
-
-  return data || ensured
+  // ensureUserProfile already returns the full row (existing or newly inserted)
+  return ensureUserProfile(supabase, user)
 }

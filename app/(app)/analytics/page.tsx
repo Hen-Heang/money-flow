@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import {
@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -120,72 +120,80 @@ export default function AnalyticsPage() {
 
   const n = PERIOD_MONTHS[period]
 
-  // Period window: current period and previous period
-  const periodStart   = startOfMonth(subMonths(new Date(), n - 1))
-  const prevStart     = startOfMonth(subMonths(new Date(), 2 * n - 1))
-  const prevEnd       = endOfMonth(subMonths(new Date(), n))
+  const derived = useMemo(() => {
+    const now = new Date()
+    const periodStart  = startOfMonth(subMonths(now, n - 1))
+    const prevStart    = startOfMonth(subMonths(now, 2 * n - 1))
+    const prevEnd      = endOfMonth(subMonths(now, n))
+    const periodStartStr = format(periodStart, 'yyyy-MM-dd')
+    const prevStartStr   = format(prevStart, 'yyyy-MM-dd')
+    const prevEndStr     = format(prevEnd, 'yyyy-MM-dd')
 
-  const periodTxns    = transactions.filter(t => t.date >= format(periodStart, 'yyyy-MM-dd'))
-  const prevPeriodTxns = transactions.filter(t =>
-    t.date >= format(prevStart, 'yyyy-MM-dd') && t.date <= format(prevEnd, 'yyyy-MM-dd')
-  )
+    const periodTxns     = transactions.filter(t => t.date >= periodStartStr)
+    const prevPeriodTxns = transactions.filter(t => t.date >= prevStartStr && t.date <= prevEndStr)
 
-  // Bar chart — one bar per month in selected period
-  const monthlyData = Array.from({ length: n }, (_, i) => {
-    const m = subMonths(new Date(), n - 1 - i)
-    const monthStr = format(m, 'yyyy-MM')
-    const monthTxns = transactions.filter(t => t.date.startsWith(monthStr))
-    return {
-      month: format(m, n === 1 ? 'MMM yyyy' : 'MMM'),
-      income: monthTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0),
-      expense: monthTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0),
+    // Bar chart — group by month in a single pass
+    const monthMap = new Map<string, { income: number; expense: number; label: string }>()
+    for (let i = 0; i < n; i++) {
+      const m = subMonths(now, n - 1 - i)
+      monthMap.set(format(m, 'yyyy-MM'), { income: 0, expense: 0, label: format(m, n === 1 ? 'MMM yyyy' : 'MMM') })
     }
-  })
-
-  // Category breakdown — scoped to selected period
-  const categoryMap: Record<string, { name: string; icon: string; color: string; total: number }> = {}
-  periodTxns.filter(t => t.type === 'expense' && t.categories).forEach(t => {
-    const cat = t.categories!
-    if (!categoryMap[cat.name]) categoryMap[cat.name] = { name: cat.name, icon: cat.icon, color: cat.color, total: 0 }
-    categoryMap[cat.name].total += t.amount_krw
-  })
-  const categoryData = Object.values(categoryMap).sort((a, b) => b.total - a.total)
-
-  // Previous-period category map for trend badges
-  const prevCatMap: Record<string, number> = {}
-  prevPeriodTxns.filter(t => t.type === 'expense' && t.categories).forEach(t => {
-    const name = (t.categories as { name: string }).name
-    prevCatMap[name] = (prevCatMap[name] || 0) + t.amount_krw
-  })
-
-  // Net flow line chart
-  const netFlowData = monthlyData.map(m => ({ month: m.month, net: m.income - m.expense }))
-
-  // Budget vs Actual (always current month)
-  const thisMonthStr = format(new Date(), 'yyyy-MM')
-  const thisMonthExpenses = transactions.filter(t => t.date.startsWith(thisMonthStr) && t.type === 'expense')
-  const budgetComparison = budgets
-    .map(b => {
-      const cat = b.categories as { name: string; icon: string; color: string } | null
-      const spent = thisMonthExpenses.filter(t => t.category_id === b.category_id).reduce((s, t) => s + t.amount_krw, 0)
-      const pct = b.amount_krw > 0 ? Math.min((spent / b.amount_krw) * 100, 100) : 0
-      return { cat, spent, budget: b.amount_krw, pct, over: spent > b.amount_krw }
+    transactions.forEach(t => {
+      const key = t.date.slice(0, 7)
+      const entry = monthMap.get(key)
+      if (!entry) return
+      if (t.type === 'income') entry.income += t.amount_krw
+      else entry.expense += t.amount_krw
     })
-    .filter(b => b.cat)
-    .sort((a, b) => b.pct - a.pct)
-  const overBudgetCount = budgetComparison.filter(b => b.over).length
+    const monthlyData = Array.from(monthMap.values()).map(({ label, income, expense }) => ({ month: label, income, expense }))
+    const netFlowData = monthlyData.map(m => ({ month: m.month, net: m.income - m.expense }))
 
-  // Summary stats — period-aware
-  const totalIncome  = periodTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
-  const totalExpense = periodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
-  const avgMonthly   = n > 0 ? totalExpense / n : 0
-  const savingsRate  = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : '0'
+    // Category breakdown
+    const categoryMap: Record<string, { name: string; icon: string; color: string; total: number }> = {}
+    periodTxns.filter(t => t.type === 'expense' && t.categories).forEach(t => {
+      const cat = t.categories!
+      if (!categoryMap[cat.name]) categoryMap[cat.name] = { name: cat.name, icon: cat.icon, color: cat.color, total: 0 }
+      categoryMap[cat.name].total += t.amount_krw
+    })
+    const categoryData = Object.values(categoryMap).sort((a, b) => b.total - a.total)
 
-  // Previous period totals for trend badges
-  const prevIncome  = prevPeriodTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
-  const prevExpense = prevPeriodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
-  const prevSavings = prevIncome > 0 ? (prevIncome - prevExpense) / prevIncome * 100 : 0
-  const curSavings  = totalIncome > 0 ? (totalIncome - totalExpense) / totalIncome * 100 : 0
+    const prevCatMap: Record<string, number> = {}
+    prevPeriodTxns.filter(t => t.type === 'expense' && t.categories).forEach(t => {
+      const name = (t.categories as { name: string }).name
+      prevCatMap[name] = (prevCatMap[name] || 0) + t.amount_krw
+    })
+
+    // Budget vs Actual
+    const thisMonthStr = format(now, 'yyyy-MM')
+    const thisMonthExpenseMap = new Map<string, number>()
+    transactions.filter(t => t.date.startsWith(thisMonthStr) && t.type === 'expense' && t.category_id).forEach(t => {
+      thisMonthExpenseMap.set(t.category_id!, (thisMonthExpenseMap.get(t.category_id!) ?? 0) + t.amount_krw)
+    })
+    const budgetComparison = budgets
+      .map(b => {
+        const cat = b.categories as { name: string; icon: string; color: string } | null
+        const spent = thisMonthExpenseMap.get(b.category_id) ?? 0
+        const pct = b.amount_krw > 0 ? Math.min((spent / b.amount_krw) * 100, 100) : 0
+        return { cat, spent, budget: b.amount_krw, pct, over: spent > b.amount_krw }
+      })
+      .filter(b => b.cat)
+      .sort((a, b) => b.pct - a.pct)
+    const overBudgetCount = budgetComparison.filter(b => b.over).length
+
+    // Summary stats
+    const totalIncome  = periodTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+    const totalExpense = periodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+    const avgMonthly   = n > 0 ? totalExpense / n : 0
+    const savingsRate  = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : '0'
+    const prevIncome   = prevPeriodTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+    const prevExpense  = prevPeriodTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+    const prevSavings  = prevIncome > 0 ? (prevIncome - prevExpense) / prevIncome * 100 : 0
+    const curSavings   = totalIncome > 0 ? (totalIncome - totalExpense) / totalIncome * 100 : 0
+
+    return { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings }
+  }, [transactions, budgets, period, n])
+
+  const { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings } = derived
 
   const cardStyle = {
     backgroundColor: 'var(--color-card-base)',

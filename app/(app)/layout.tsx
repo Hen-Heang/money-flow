@@ -1,6 +1,5 @@
 import React from 'react'
-import Sidebar from '@/components/layout/Sidebar'
-import TabBar from '@/components/layout/TabBar'
+import { AppSidebar, AppTabBar } from '@/components/layout/NavShell'
 import OfflineBanner from '@/components/ui/OfflineBanner'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
@@ -16,26 +15,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }}
       />
 
-      <Sidebar />
+      <AppSidebar />
 
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:ml-64 w-full">
+      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:pl-72 w-full">
         <main
           className="relative flex-1 w-full"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+            /* mobile: 80px space for TabBar; desktop: 0px (as sidebar handles it) */
+            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
           } as React.CSSProperties}
         >
           <ErrorBoundary>
-          {children}
-        </ErrorBoundary>
-          <p className="md:hidden text-center text-[10px] pb-2" style={{ color: 'var(--color-text-secondary)' }}>
-            © 2026 MoneyFlow by Hen Heang
-          </p>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
 
-      <TabBar />
+      <AppTabBar />
       <OfflineBanner />
     </div>
   )

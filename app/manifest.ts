@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Money Flow',
     short_name: 'MoneyFlow',
     description: 'Personal finance tracker',
-    start_url: '/',
+    start_url: '/dashboard',
     display: 'standalone',
     background_color: '#0a0f1a',
     theme_color: '#0a0f1a',
