@@ -2,15 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 
+export const runtime = 'nodejs'
+
 // Runs daily at 8 AM via Vercel Cron.
 // Checks all users' current-month spending vs budgets and sends a push
 // notification if any category is at or above 80% of its budget.
-
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:support@money-flow.app',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '',
-  process.env.VAPID_PRIVATE_KEY || '',
-)
 
 interface PushSubscriptionRow {
   endpoint: string
@@ -59,6 +55,12 @@ export async function GET(request: NextRequest) {
   if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
     return NextResponse.json({ error: 'VAPID keys not configured' }, { status: 500 })
   }
+
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:support@money-flow.app',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  )
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
