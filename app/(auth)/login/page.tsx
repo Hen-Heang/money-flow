@@ -69,7 +69,7 @@ export default function LoginPage() {
         }
         // Use a full navigation instead of router.push + router.refresh to avoid
         // the iOS Safari flash caused by the two-step soft-navigation.
-        window.location.href = '/'
+        window.location.href = '/dashboard'
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'An error occurred')

@@ -1,6 +1,6 @@
 'use client'
 
-import {  useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2 } from 'lucide-react'
@@ -13,6 +13,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
+import { useWatch } from 'react-hook-form'
 
 
 
@@ -103,15 +104,14 @@ export default function AddTransactionSheet({
     control,
     reset,
     setValue,
-    watch,
+    getValues,
     formState: { errors, isSubmitting },
   } = form
 
-  const type = watch('type')
-  const currency = watch('currency')
-  const amountRaw = watch('amount')
-  const description = watch('description')
-  const currentCategoryId = watch('category_id')
+  const [type, currency, amountRaw, description, currentCategoryId] = useWatch({
+    control,
+    name: ['type', 'currency', 'amount', 'description', 'category_id'],
+  })
   const activeExchangeRate = editTransaction?.exchange_rate || liveRate
 
   // AI Suggestion Logic
@@ -123,14 +123,11 @@ export default function AddTransactionSheet({
       try {
         const response = await fetch('/api/ai/suggest-category', {
           method: 'POST',
-          body: JSON.stringify({ 
-            description, 
-            type, 
-            categories 
-          }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description, type, categories }),
         })
         const { categoryId } = await response.json()
-        if (categoryId && !watch('category_id')) {
+        if (categoryId && !getValues('category_id')) {
           setValue('category_id', categoryId)
           haptic('light')
         }
@@ -142,11 +139,9 @@ export default function AddTransactionSheet({
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [description, type, categories, setValue, watch, isEditing, currentCategoryId])
+  }, [description, type, categories, setValue, getValues, isEditing, currentCategoryId])
 
-  const handleCategorySelect = () => {}
-
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data } = await supabase
@@ -156,7 +151,7 @@ export default function AddTransactionSheet({
       .order('created_at', { ascending: false })
       .limit(10)
     if (data) setTemplates(data as Template[])
-  }
+  }, [supabase])
 
   const applyTemplate = (t: Template) => {
     haptic('light')
@@ -171,22 +166,21 @@ export default function AddTransactionSheet({
 
   const saveAsTemplate = async () => {
     if (amountNum <= 0) { toast.error('Enter an amount first'); return }
-    const desc = watch('description')
-    if (!desc.trim()) { toast.error('Enter a description first'); return }
+    const values = getValues()
+    if (!values.description.trim()) { toast.error('Enter a description first'); return }
     setSavingTemplate(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSavingTemplate(false); return }
-    const cur = watch('currency')
-    const amtKrw = cur === 'USD' ? Math.round(amountNum * activeExchangeRate) : amountNum
+    const amtKrw = values.currency === 'USD' ? Math.round(amountNum * activeExchangeRate) : amountNum
     const { error } = await supabase.from('transaction_templates').insert({
       user_id: user.id,
-      type: watch('type'),
-      description: desc.trim(),
+      type: values.type,
+      description: values.description.trim(),
       amount_krw: amtKrw,
-      currency: cur,
-      category_id: watch('category_id') || null,
-      payment_method_id: watch('payment_method_id') || null,
-      note: watch('note') || null,
+      currency: values.currency,
+      category_id: values.category_id || null,
+      payment_method_id: values.payment_method_id || null,
+      note: values.note || null,
     })
     setSavingTemplate(false)
     if (error) { toast.error('Failed to save template'); return }

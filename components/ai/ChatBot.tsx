@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bot, ChevronRight, RotateCcw, Send, Sparkles, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -61,7 +61,7 @@ function renderInline(text: string): React.ReactNode[] {
   })
 }
 
-function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
+const MessageContent = memo(function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
   if (isUser) return <span className="text-base leading-7">{text}</span>
 
   const lines = text.split('\n')
@@ -135,7 +135,7 @@ function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
   }
 
   return <div className="space-y-0.5 text-base leading-7">{elements}</div>
-}
+})
 
 function useStreamingChat(api: string) {
   const [messages, setMessages] = useState<Message[]>([])

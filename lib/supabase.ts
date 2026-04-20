@@ -3,13 +3,22 @@ import { createBrowserClient } from '@supabase/ssr'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 
-// Bypass navigator.locks API which causes:
-//   AbortError: Lock broken by another request with the 'steal' option
-// in Safari / iOS WebKit when multiple tabs are open.
-const noopLock = <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => fn()
+// In-memory sequential lock that prevents concurrent token refresh races.
+// navigator.locks caused AbortError in Safari/iOS when multiple tabs were open,
+// but a plain noop lets multiple callers refresh the token simultaneously —
+// the first rotation invalidates every other in-flight refresh token.
+// This queue ensures only one refresh runs at a time without relying on navigator.locks.
+const lockQueues = new Map<string, Promise<unknown>>()
+
+const memoryLock = <R>(name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+  const pending = (lockQueues.get(name) ?? Promise.resolve()) as Promise<unknown>
+  const next = pending.then(() => fn())
+  lockQueues.set(name, next.catch(() => {}))
+  return next
+}
 
 const clientOptions = {
-  auth: { lock: noopLock },
+  auth: { lock: memoryLock },
 }
 
 // Singleton — one client per environment, created once on first call

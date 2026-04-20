@@ -84,35 +84,54 @@ export async function GET(request: NextRequest) {
     return acc
   }, {})
 
+  const userIds = Object.keys(userSubs)
+
+  // Batch all DB queries across all users — 3 queries total instead of 3×N
+  const [{ data: allBudgets }, { data: allTxns }, { data: allCategories }] = await Promise.all([
+    supabase.from('budgets').select('user_id, category_id, amount_krw').in('user_id', userIds),
+    supabase
+      .from('transactions')
+      .select('user_id, amount_krw, category_id')
+      .in('user_id', userIds)
+      .eq('type', 'expense')
+      .gte('date', monthStart)
+      .lte('date', today),
+    supabase.from('categories').select('user_id, id, name, icon').in('user_id', userIds),
+  ])
+
+  // Group by userId in memory
+  const budgetsByUser: Record<string, BudgetRow[]> = {}
+  ;(allBudgets || []).forEach((b: BudgetRow & { user_id: string }) => {
+    if (!budgetsByUser[b.user_id]) budgetsByUser[b.user_id] = []
+    budgetsByUser[b.user_id].push(b)
+  })
+
+  const spendByUser: Record<string, Record<string, number>> = {}
+  ;(allTxns as (TransactionRow & { user_id: string })[] || []).forEach(t => {
+    if (!t.category_id) return
+    if (!spendByUser[t.user_id]) spendByUser[t.user_id] = {}
+    spendByUser[t.user_id][t.category_id] = (spendByUser[t.user_id][t.category_id] || 0) + t.amount_krw
+  })
+
+  const catsByUser: Record<string, { id: string; name: string; icon: string }[]> = {}
+  ;(allCategories || []).forEach((c: { user_id: string; id: string; name: string; icon: string }) => {
+    if (!catsByUser[c.user_id]) catsByUser[c.user_id] = []
+    catsByUser[c.user_id].push(c)
+  })
+
   let notified = 0
 
   for (const [userId, subs] of Object.entries(userSubs)) {
-    // Load this user's budgets and current-month transactions
-    const [{ data: budgets }, { data: txns }, { data: categories }] = await Promise.all([
-      supabase.from('budgets').select('category_id, amount_krw').eq('user_id', userId),
-      supabase
-        .from('transactions')
-        .select('type, amount_krw, category_id')
-        .eq('user_id', userId)
-        .eq('type', 'expense')
-        .gte('date', monthStart)
-        .lte('date', today),
-      supabase.from('categories').select('id, name, icon').eq('user_id', userId),
-    ])
-
+    const budgets = budgetsByUser[userId]
     if (!budgets || budgets.length === 0) continue
 
-    // Sum spending per category
-    const spendMap: Record<string, number> = {}
-    ;(txns as TransactionRow[] || []).forEach(t => {
-      if (t.category_id) spendMap[t.category_id] = (spendMap[t.category_id] || 0) + t.amount_krw
-    })
+    const spendMap = spendByUser[userId] || {}
+    const categories = catsByUser[userId] || []
 
-    // Find categories over 80% of budget
-    const alerts = (budgets as BudgetRow[])
+    const alerts = budgets
       .filter(b => b.amount_krw > 0 && (spendMap[b.category_id] || 0) >= b.amount_krw * 0.8)
       .map(b => {
-        const cat = (categories || []).find((c: { id: string; name: string; icon: string }) => c.id === b.category_id)
+        const cat = categories.find(c => c.id === b.category_id)
         const pct = Math.round(((spendMap[b.category_id] || 0) / b.amount_krw) * 100)
         return { name: cat?.name || 'Category', icon: cat?.icon || '📊', pct }
       })
@@ -143,7 +162,6 @@ export async function GET(request: NextRequest) {
         await sendPush(sub, payload)
         notified++
       } catch (err: unknown) {
-        // Remove expired subscriptions
         if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
           await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint)
         }

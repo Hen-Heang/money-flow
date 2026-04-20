@@ -8,16 +8,16 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
-    const from = searchParams.get('from')
-    const to = searchParams.get('to')
+    const now = new Date()
+    const from = searchParams.get('from') ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const to = searchParams.get('to') ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`
 
     let query = supabase
       .from('transactions')
       .select('type, amount_krw, amount_usd, category_id, date, categories(name, icon, color)')
       .eq('user_id', user.id)
-
-    if (from) query = query.gte('date', from)
-    if (to) query = query.lte('date', to)
+      .gte('date', from)
+      .lte('date', to)
 
     const { data, error } = await query
     if (error) throw error
