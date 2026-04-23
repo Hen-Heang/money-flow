@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { rateLimit } from '@/lib/rate-limit'
 
 const VALID_TYPES = ['income', 'expense'] as const
 const VALID_CURRENCIES = ['KRW', 'USD'] as const
@@ -117,6 +118,9 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const { allowed } = rateLimit(`tx-write:${user.id}`, 60, 60_000)
+    if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+
     const body = await request.json()
     const errors = validateTransactionBody(body, false)
     if (errors.length) return bad(errors.join('; '))
@@ -140,6 +144,9 @@ export async function PUT(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { allowed } = rateLimit(`tx-write:${user.id}`, 60, 60_000)
+    if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
@@ -170,6 +177,9 @@ export async function DELETE(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { allowed } = rateLimit(`tx-write:${user.id}`, 60, 60_000)
+    if (!allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
