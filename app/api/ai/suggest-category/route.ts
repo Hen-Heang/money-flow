@@ -1,6 +1,7 @@
 import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { rateLimit } from '@/lib/rate-limit'
 
 const DEFAULT_GEMINI_MODEL = process.env.GOOGLE_GENERATIVE_AI_MODEL || 'gemini-1.5-flash'
 
@@ -9,6 +10,9 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) return new Response('Unauthorized', { status: 401 })
+
+  const { allowed } = rateLimit(`ai-suggest:${user.id}`, 30, 60_000)
+  if (!allowed) return new Response(JSON.stringify({ categoryId: null }), { status: 200 })
 
   const { description, type, categories } = await req.json()
 

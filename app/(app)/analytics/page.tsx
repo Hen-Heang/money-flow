@@ -68,7 +68,7 @@ export default function AnalyticsPage() {
       const [{ data: txData }, { data: budgetData }] = await Promise.all([
         supabase
           .from('transactions')
-          .select('*, categories(name, icon, color)')
+          .select('*, categories(name, icon, color), payment_methods(name, icon)')
           .eq('user_id', user.id)
           .gte('date', format(sixMonthsAgo, 'yyyy-MM-dd'))
           .lte('date', format(now, 'yyyy-MM-dd'))
@@ -190,10 +190,21 @@ export default function AnalyticsPage() {
     const prevSavings  = prevIncome > 0 ? (prevIncome - prevExpense) / prevIncome * 100 : 0
     const curSavings   = totalIncome > 0 ? (totalIncome - totalExpense) / totalIncome * 100 : 0
 
-    return { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings }
+    // Payment method breakdown
+    const pmMap: Record<string, { name: string; icon: string; total: number }> = {}
+    periodTxns.filter(t => t.type === 'expense').forEach(t => {
+      const pm = t.payment_methods
+      const key = pm ? pm.name : 'Other'
+      const icon = pm ? pm.icon : '💳'
+      if (!pmMap[key]) pmMap[key] = { name: key, icon, total: 0 }
+      pmMap[key].total += t.amount_krw
+    })
+    const paymentMethodData = Object.values(pmMap).sort((a, b) => b.total - a.total)
+
+    return { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData }
   }, [transactions, budgets, period, n])
 
-  const { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings } = derived
+  const { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData } = derived
 
   const cardStyle = {
     backgroundColor: 'var(--color-card-base)',
@@ -470,6 +481,70 @@ export default function AnalyticsPage() {
                       transition={{ duration: 0.6, delay: index * 0.05 }}
                       className="h-full rounded-full"
                       style={{ backgroundColor: cat.color || CHART_COLORS[index % CHART_COLORS.length] }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Payment Method Breakdown */}
+      {paymentMethodData.length > 0 && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={cardStyle}>
+          <h3 className="font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>
+            Expense by Payment Method · {period}
+          </h3>
+          <div className="flex gap-4 items-center mb-4">
+            <ResponsiveContainer width={120} height={120}>
+              <PieChart>
+                <Pie
+                  data={paymentMethodData.map((entry, i) => ({ ...entry, fill: CHART_COLORS[i % CHART_COLORS.length] }))}
+                  dataKey="total"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={30}
+                  outerRadius={55}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex-1 space-y-2">
+              {paymentMethodData.slice(0, 5).map((pm, i) => (
+                <div key={pm.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-2 h-2 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="text-xs truncate" style={{ color: 'var(--color-text-secondary)' }}>
+                      {pm.icon} {pm.name}
+                    </span>
+                  </div>
+                  <span className="ml-2 shrink-0 text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                    {formatKRW(pm.total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            {paymentMethodData.map((pm, i) => {
+              const max = paymentMethodData[0].total
+              return (
+                <div key={pm.name}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+                      {pm.icon} {pm.name}
+                    </span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      {formatKRW(pm.total)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(pm.total / max) * 100}%` }}
+                      transition={{ duration: 0.6, delay: i * 0.05 }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
                     />
                   </div>
                 </div>
