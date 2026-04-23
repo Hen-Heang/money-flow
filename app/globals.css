@@ -205,6 +205,12 @@ input, select, textarea {
   100% { background-position: 200% 0; }
 }
 
+/* Delete toast countdown bar */
+@keyframes countdown {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
 .skeleton {
   background: linear-gradient(
     90deg,
@@ -326,5 +332,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .skeleton {
+    animation: none !important;
+    background: var(--color-card-elevated-base) !important;
   }
 }

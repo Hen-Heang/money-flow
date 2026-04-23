@@ -65,7 +65,7 @@ export default memo(function Sidebar() {
           }}
         >
           {/* Logo */}
-          <div className="flex items-center gap-3.5 px-6 pt-8 pb-8">
+          <Link href="/dashboard" className="flex items-center gap-3.5 px-6 pt-8 pb-8 hover:opacity-80 transition-opacity">
             <Logo size={32} />
             <div>
               <p
@@ -81,7 +81,7 @@ export default memo(function Sidebar() {
                 Money Flow
               </p>
             </div>
-          </div>
+          </Link>
 
           {/* Quick Add */}
           <div className="px-5 pb-8">

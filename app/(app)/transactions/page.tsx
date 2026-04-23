@@ -10,11 +10,15 @@ import { RefreshCw, Search, X, Trash2, Edit3, SlidersHorizontal, CheckSquare, Sq
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import { formatKRW, formatUSD, haptic } from '@/lib/utils'
-import type { Transaction } from '@/lib/types'
+import type { Transaction, Category } from '@/lib/types'
 import { TransactionSkeleton } from '@/components/ui/Skeleton'
 import FAB from '@/components/ui/FAB'
-import AddTransactionSheet, { EditTransaction } from '@/components/transactions/AddTransactionSheet'
-import RecurringSheet from '@/components/transactions/RecurringSheet'
+import dynamic from 'next/dynamic'
+import { TRANSACTION_PAGE_SIZE, FALLBACK_EXCHANGE_RATE, SEARCH_HISTORY_MAX } from '@/shared/presets'
+import { useCategories } from '@/hooks/useCategories'
+const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
+const RecurringSheet = dynamic(() => import('@/components/transactions/RecurringSheet'), { ssr: false })
+import type { EditTransaction } from '@/components/transactions/AddTransactionSheet'
 
 
 type FilterType = 'all' | 'income' | 'expense'
@@ -320,7 +324,7 @@ function TransactionsPageInner() {
 
   const addToSearchHistory = (term: string) => {
     if (!term.trim()) return
-    const updated = [term, ...searchHistory.filter(h => h !== term)].slice(0, 6)
+    const updated = [term, ...searchHistory.filter(h => h !== term)].slice(0, SEARCH_HISTORY_MAX)
     setSearchHistory(updated)
     localStorage.setItem('txSearchHistory', JSON.stringify(updated))
   }
@@ -341,7 +345,7 @@ function TransactionsPageInner() {
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
   const [isDuplicating, setIsDuplicating] = useState(false)
-  const [liveRate, setLiveRate] = useState(1300)
+  const [liveRate, setLiveRate] = useState(FALLBACK_EXCHANGE_RATE)
   const [page, setPage] = useState(0)
   const pageRef = useRef(0)
   const [hasMore, setHasMore] = useState(true)
@@ -349,7 +353,6 @@ function TransactionsPageInner() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   const supabaseRef = useRef(createClient())
   const supabase = supabaseRef.current
-  const PAGE_SIZE = 20
   const pendingDeletes = useRef(new Map<string, Transaction>())
 
   // Advanced filters
@@ -358,7 +361,7 @@ function TransactionsPageInner() {
   const [filterCategory, setFilterCategory] = useState('')
   const [filterAmountMin, setFilterAmountMin] = useState('')
   const [filterAmountMax, setFilterAmountMax] = useState('')
-  const [categories, setCategories] = useState<{ id: string; name: string; icon: string }[]>([])
+  const { categories } = useCategories()
   const [selectMode, setSelectMode] = useState(false)
   const [sort, setSort] = useState<SortOption>('date')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -416,7 +419,7 @@ function TransactionsPageInner() {
         .eq('user_id', user.id)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false })
-        .range(reset ? 0 : pageRef.current * PAGE_SIZE, (reset ? 0 : pageRef.current) * PAGE_SIZE + PAGE_SIZE - 1)
+        .range(reset ? 0 : pageRef.current * TRANSACTION_PAGE_SIZE, (reset ? 0 : pageRef.current) * TRANSACTION_PAGE_SIZE + TRANSACTION_PAGE_SIZE - 1)
 
       if (filter !== 'all') query = query.eq('type', filter)
       if (debouncedSearch) query = query.ilike('description', `%${debouncedSearch}%`)
@@ -439,7 +442,7 @@ function TransactionsPageInner() {
         pageRef.current += 1
         setPage(prev => prev + 1)
       }
-      setHasMore(newTxns.length === PAGE_SIZE)
+      setHasMore(newTxns.length === TRANSACTION_PAGE_SIZE)
     } catch (err) {
       console.error(err)
     } finally {
@@ -461,10 +464,6 @@ function TransactionsPageInner() {
   }, [searchParams])
 
   useEffect(() => {
-    supabase.from('categories').select('id, name, icon').then(({ data }) => {
-      if (data) setCategories(data)
-    })
-
     fetch('/api/exchange-rate')
       .then(r => r.json())
       .then(d => { if (d.rate) setLiveRate(d.rate) })
@@ -483,11 +482,24 @@ function TransactionsPageInner() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Supabase Realtime — live sync across devices (Mac, iPhone, etc.)
+  // Enrich payloads from already-loaded categories/payment_methods to avoid N+1 DB queries.
+  const categoriesRef = useRef(categories)
+  useEffect(() => { categoriesRef.current = categories }, [categories])
+
   useEffect(() => {
     let userId: string | null = null
     supabase.auth.getUser().then(({ data }) => {
       userId = data.user?.id ?? null
     })
+
+    function enrichFromCache(raw: Record<string, unknown>): Transaction {
+      const cat = categoriesRef.current.find(c => c.id === raw.category_id)
+      return {
+        ...(raw as unknown as Transaction),
+        categories: cat ? { name: cat.name, icon: cat.icon, color: (cat as Category).color } : null,
+        payment_methods: null,
+      }
+    }
 
     const channel = supabase
       .channel('transactions-realtime')
@@ -496,19 +508,11 @@ function TransactionsPageInner() {
         { event: 'INSERT', schema: 'public', table: 'transactions' },
         (payload) => {
           if (!userId || payload.new.user_id !== userId) return
-          // Re-fetch with join (categories, payment_methods) for the new row
-          supabase
-            .from('transactions')
-            .select('*, categories(name, icon, color), payment_methods(name, icon)')
-            .eq('id', payload.new.id)
-            .single()
-            .then(({ data }) => {
-              if (!data) return
-              setTransactions(prev => {
-                if (prev.find(t => t.id === data.id)) return prev
-                return [data as Transaction, ...prev]
-              })
-            })
+          const enriched = enrichFromCache(payload.new)
+          setTransactions(prev => {
+            if (prev.find(t => t.id === enriched.id)) return prev
+            return [enriched, ...prev]
+          })
         }
       )
       .on(
@@ -516,15 +520,8 @@ function TransactionsPageInner() {
         { event: 'UPDATE', schema: 'public', table: 'transactions' },
         (payload) => {
           if (!userId || payload.new.user_id !== userId) return
-          supabase
-            .from('transactions')
-            .select('*, categories(name, icon, color), payment_methods(name, icon)')
-            .eq('id', payload.new.id)
-            .single()
-            .then(({ data }) => {
-              if (!data) return
-              setTransactions(prev => prev.map(t => t.id === data.id ? (data as Transaction) : t))
-            })
+          const enriched = enrichFromCache(payload.new)
+          setTransactions(prev => prev.map(t => t.id === enriched.id ? enriched : t))
         }
       )
       .on(
@@ -602,25 +599,37 @@ function TransactionsPageInner() {
 
     toast(
       (t) => (
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Transaction deleted</span>
-          <button
-            className="text-sm font-black px-2 py-0.5 rounded-lg"
-            style={{ color: 'var(--color-accent-base)' }}
-            onClick={() => {
-              undone = true
-              const item = pendingDeletes.current.get(id)
-              if (item) {
-                setTransactions(prev =>
-                  [...prev, item].sort((a, b) => b.date.localeCompare(a.date))
-                )
-                pendingDeletes.current.delete(id)
-              }
-              toast.dismiss(t.id)
-            }}
-          >
-            Undo
-          </button>
+        <div className="flex flex-col gap-2 min-w-[200px]">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm font-medium">Transaction deleted</span>
+            <button
+              className="text-sm font-black px-2 py-0.5 rounded-lg shrink-0"
+              style={{ color: 'var(--color-accent-base)' }}
+              onClick={() => {
+                undone = true
+                const item = pendingDeletes.current.get(id)
+                if (item) {
+                  setTransactions(prev =>
+                    [...prev, item].sort((a, b) => b.date.localeCompare(a.date))
+                  )
+                  pendingDeletes.current.delete(id)
+                }
+                toast.dismiss(t.id)
+              }}
+            >
+              Undo
+            </button>
+          </div>
+          {/* Countdown bar */}
+          <div className="h-0.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-border-base)' }}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                backgroundColor: 'var(--color-accent-base)',
+                animation: 'countdown 5s linear forwards',
+              }}
+            />
+          </div>
         </div>
       ),
       { duration: 5000 }
@@ -996,8 +1005,8 @@ function TransactionsPageInner() {
             })}
 
             {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="flex justify-center py-6">
-              {hasMore && (
+            <div ref={sentinelRef} className="flex justify-center py-8">
+              {hasMore ? (
                 <div className="flex items-center gap-2 text-xs font-bold opacity-40" style={{ color: 'var(--color-text-secondary)' }}>
                   <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
@@ -1005,7 +1014,14 @@ function TransactionsPageInner() {
                   </svg>
                   Loading
                 </div>
-              )}
+              ) : transactions.length > 0 ? (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="w-8 h-px rounded-full opacity-20" style={{ backgroundColor: 'var(--color-text-secondary)' }} />
+                  <span className="text-xs font-medium opacity-30" style={{ color: 'var(--color-text-secondary)' }}>
+                    That&apos;s everything
+                  </span>
+                </div>
+              ) : null}
             </div>
           </>
         )}

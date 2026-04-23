@@ -19,12 +19,13 @@ import { CHART_COLORS } from '@/lib/constants'
 import Avatar from '@/components/ui/Avatar'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import FAB from '@/components/ui/FAB'
-import AddTransactionSheet from '@/components/transactions/AddTransactionSheet'
 import dynamic from 'next/dynamic'
+const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
 const ChatBot = dynamic(() => import('@/components/ai/ChatBot'), { ssr: false })
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { QUICK_TEMPLATES } from '@/shared/data'
+import { BUDGET_REVIEW_DAY_THRESHOLD } from '@/shared/presets'
 
 interface CategoryTotal {
   name: string;
@@ -60,7 +61,7 @@ export default function DashboardPage() {
     setBudgetReviewDismissed(true)
   }
 
-  const showBudgetReview = !budgetReviewDismissed && new Date().getDate() <= 5 && isSameMonth(currentDate, new Date())
+  const showBudgetReview = !budgetReviewDismissed && new Date().getDate() <= BUDGET_REVIEW_DAY_THRESHOLD && isSameMonth(currentDate, new Date())
   const [userName, setUserName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)

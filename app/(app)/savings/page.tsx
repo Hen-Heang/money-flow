@@ -243,7 +243,7 @@ function GoalForm({
         />
 
         <div>
-          <p className="text-[11px] font-black uppercase tracking-widest opacity-60 mb-2">Monthly Auto-Deposit</p>
+          <p className="text-[11px] font-black uppercase tracking-widest opacity-60 mb-2">Auto-Deposit on App Open</p>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-lg opacity-40">$</span>
             <input
