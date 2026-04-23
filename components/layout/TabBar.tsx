@@ -52,7 +52,7 @@ export default function TabBar() {
               } as React.CSSProperties}
             >
               <motion.div
-                whileTap={{ scale: 0.85 }}
+                whileTap={{ scale: 0.92 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                 className="flex flex-col items-center gap-1"
               >
@@ -74,9 +74,9 @@ export default function TabBar() {
                 </div>
 
                 <span
-                  className="transition-all duration-300 font-black uppercase tracking-[0.1em]"
+                  className="transition-all duration-300 font-bold"
                   style={{
-                    fontSize: 9,
+                    fontSize: 10,
                     lineHeight: 1,
                     color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.3)',
                   }}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 
 // Module-level cache — shared across all hook instances in the same session.
 // Prevents duplicate /api/exchange-rate fetches when multiple components mount.
@@ -11,21 +12,21 @@ async function fetchRate(): Promise<number> {
     pendingFetch = fetch('/api/exchange-rate')
       .then(r => r.json())
       .then(d => {
-        const rate = d?.rate ?? 1350
+        const rate = d?.rate ?? FALLBACK_EXCHANGE_RATE
         cachedRate = rate
         pendingFetch = null
         return rate
       })
       .catch(() => {
         pendingFetch = null
-        return 1350
+        return FALLBACK_EXCHANGE_RATE
       })
   }
   return pendingFetch
 }
 
 export function useExchangeRate(): number {
-  const [rate, setRate] = useState(cachedRate ?? 1350)
+  const [rate, setRate] = useState(cachedRate ?? FALLBACK_EXCHANGE_RATE)
 
   useEffect(() => {
     if (cachedRate !== null) return
