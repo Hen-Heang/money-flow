@@ -443,8 +443,7 @@ function TransactionsPageInner() {
         setPage(prev => prev + 1)
       }
       setHasMore(newTxns.length === TRANSACTION_PAGE_SIZE)
-    } catch (err) {
-      console.error(err)
+    } catch {
     } finally {
       setLoading(false)
       loadingRef.current = false

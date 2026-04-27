@@ -21,6 +21,7 @@ interface SavingsGoal {
   current_usd: number
   deadline: string | null
   note: string | null
+  purpose: string | null
   auto_monthly_usd: number
   last_auto_month: string | null
 }
@@ -114,6 +115,7 @@ function GoalForm({
   const [currentUsd, setCurrentUsd] = useState(initial?.current_usd?.toString() ?? '0')
   const [deadline, setDeadline] = useState(initial?.deadline ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
+  const [purpose, setPurpose] = useState(initial?.purpose ?? '')
   const [autoMonthly, setAutoMonthly] = useState(initial?.auto_monthly_usd?.toString() ?? '0')
 
   const inputStyle: React.CSSProperties = {
@@ -141,6 +143,7 @@ function GoalForm({
       current_usd: current,
       deadline: deadline || null,
       note: note.trim() || null,
+      purpose: purpose.trim() || null,
       auto_monthly_usd: Math.max(monthly, 0),
       last_auto_month: initial?.last_auto_month ?? null,
     })
@@ -196,6 +199,18 @@ function GoalForm({
           className="font-bold"
           style={inputStyle}
         />
+
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-widest opacity-60 mb-2">Your Why</p>
+          <textarea
+            value={purpose}
+            onChange={e => setPurpose(e.target.value)}
+            placeholder="Why does this matter to you? e.g. 'Dream vacation with my family'"
+            rows={2}
+            className="font-medium"
+            style={{ ...inputStyle, resize: 'none' }}
+          />
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="relative">
@@ -707,6 +722,19 @@ export default function SavingsPage() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Purpose / motivation */}
+                  {goal.purpose && (
+                    <div
+                      className="mb-5 flex items-start gap-2.5 rounded-2xl px-4 py-3"
+                      style={{ backgroundColor: `${goal.color}10`, borderLeft: `3px solid ${goal.color}50` }}
+                    >
+                      <span className="text-base mt-0.5 shrink-0">💬</span>
+                      <p className="text-[13px] font-semibold italic leading-snug opacity-80" style={{ color: 'var(--color-text-primary)' }}>
+                        {goal.purpose}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Progress Section */}
                   <div className="space-y-2 mb-6">

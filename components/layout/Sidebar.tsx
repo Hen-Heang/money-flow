@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, List, BarChart2, PiggyBank, Settings, Plus, LogOut } from 'lucide-react'
+import { LayoutDashboard, List, BarChart2, PiggyBank, Settings, Plus, LogOut, Wallet, FileText } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { memo, useEffect, useState } from 'react'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
@@ -17,7 +17,9 @@ const TABS = [
   { href: '/dashboard',    label: 'Home',         icon: LayoutDashboard },
   { href: '/transactions', label: 'Transactions',  icon: List },
   { href: '/savings',      label: 'Savings',       icon: PiggyBank },
+  { href: '/budget',       label: 'Budget',        icon: Wallet },
   { href: '/analytics',    label: 'Analytics',     icon: BarChart2 },
+  { href: '/report',       label: 'Report',        icon: FileText },
   { href: '/settings',     label: 'Settings',      icon: Settings },
 ]
 

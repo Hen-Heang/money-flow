@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, isSameMonth, differenceInDays, subDays } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown,
   Lightbulb, Sparkles, Flame,
-  AlertTriangle, X
+  AlertTriangle, X, FileText
 } from 'lucide-react'
 import {
   PieChart, Pie, ResponsiveContainer, Tooltip,
@@ -14,7 +14,9 @@ import {
 } from 'recharts'
 import { getUserProfile } from '@/lib/profile'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
-import type { Transaction, Category, ExchangeRateInfo } from '@/lib/types'
+import { useCategories } from '@/hooks/useCategories'
+import { useBudgets, invalidateBudgetsCache } from '@/hooks/useBudgets'
+import type { Transaction, ExchangeRateInfo } from '@/lib/types'
 import { CHART_COLORS } from '@/lib/constants'
 import Avatar from '@/components/ui/Avatar'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
@@ -42,10 +44,14 @@ export default function DashboardPage() {
   const [greeting, setGreeting] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'categories'>('overview')
-  const [budgetMap, setBudgetMap] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
+  const { categories } = useCategories()
+  const { budgets: budgetList } = useBudgets()
+  const budgetMap = useMemo(
+    () => Object.fromEntries(budgetList.map(b => [b.category_id, b.amount_krw])),
+    [budgetList]
+  )
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [alertsDismissed, setAlertsDismissed] = useState(false)
@@ -86,6 +92,7 @@ export default function DashboardPage() {
       .from('transactions')
       .select('date')
       .eq('user_id', uid)
+      .gte('date', format(subDays(new Date(), 90), 'yyyy-MM-dd'))
       .order('date', { ascending: false })
     if (!data) return
 
@@ -126,33 +133,16 @@ export default function DashboardPage() {
       setUserName(getDisplayName(profile?.email, profile?.display_name))
       setAvatarUrl(profile?.avatar_url ?? null)
 
-      const [txResult, budsResult, catsResult] = await Promise.all([
-        supabase
-          .from('transactions')
-          .select('*, categories(name, icon, color)')
-          .eq('user_id', user.id)
-          .gte('date', format(monthStart, 'yyyy-MM-dd'))
-          .lte('date', format(monthEnd, 'yyyy-MM-dd'))
-          .order('date', { ascending: false }),
-        supabase
-          .from('budgets')
-          .select('category_id, amount_krw')
-          .eq('user_id', user.id),
-        supabase.from('categories').select('*'),
-      ])
+      const txResult = await supabase
+        .from('transactions')
+        .select('*, categories(name, icon, color)')
+        .eq('user_id', user.id)
+        .gte('date', format(monthStart, 'yyyy-MM-dd'))
+        .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+        .order('date', { ascending: false })
 
       setTransactions((txResult.data as Transaction[]) || [])
-      if (catsResult.data) setCategories(catsResult.data)
-
-      if (budsResult.data) {
-        const map: Record<string, number> = {}
-        budsResult.data.forEach((b: { category_id: string; amount_krw: number }) => {
-          map[b.category_id] = b.amount_krw
-        })
-        setBudgetMap(map)
-      }
     } catch (err) {
-      console.error('Dashboard load error:', err)
       toast.error('Failed to sync data')
     } finally {
       setLoading(false)
@@ -296,7 +286,10 @@ export default function DashboardPage() {
     })
   }, [transactions, currentDate])
 
-  const fmt = (amount: number) => showUSD ? formatUSD(amount / liveRate) : formatKRW(amount)
+  const fmt = useCallback(
+    (amount: number) => showUSD ? formatUSD(amount / liveRate) : formatKRW(amount),
+    [showUSD, liveRate]
+  )
 
   return (
     <div className="w-full max-w-full lg:max-w-6xl xl:max-w-7xl mx-auto pt-4 pb-24 md:pt-10 px-0 sm:px-5 lg:px-8 overflow-x-hidden">
@@ -600,6 +593,24 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Monthly Report shortcut */}
+          <div className="px-5 sm:px-0">
+            <button
+              onClick={() => router.push('/report')}
+              className="w-full flex items-center gap-3 p-4 rounded-2xl border border-white/5 hover:border-white/15 transition-all active:scale-[0.98] text-left"
+              style={{ backgroundColor: 'var(--color-card-elevated-base)' }}
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
+                <FileText size={16} className="text-indigo-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Monthly Report</p>
+                <p className="text-[10px] font-bold opacity-40 mt-0.5">Income · Expense · Top categories</p>
+              </div>
+              <ChevronRight size={14} className="opacity-30 shrink-0" />
+            </button>
+          </div>
+
           {/* Desktop Recent Activity (Fixed position in sidebar) */}
           <div className="hidden lg:block px-5 sm:px-0">
              <RecentActivity transactions={transactions} router={router} fmt={fmt} limit={6} />
@@ -619,7 +630,7 @@ export default function DashboardPage() {
   )
 }
 
-function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions: Transaction[], router: ReturnType<typeof useRouter>, fmt: (amount: number) => string, limit?: number }) {
+const RecentActivity = memo(function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions: Transaction[], router: ReturnType<typeof useRouter>, fmt: (amount: number) => string, limit?: number }) {
   return (
     <div className="card-premium shadow-xl overflow-hidden">
       <div className="p-5 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
@@ -646,9 +657,9 @@ function RecentActivity({ transactions, router, fmt, limit = 5 }: { transactions
       </div>
     </div>
   )
-}
+})
 
-function BudgetAlerts({ alerts, dismissed, onDismiss, router }: { alerts: {name: string, icon: string, spent: number, budget: number, over: boolean, pct: number}[], dismissed: boolean, onDismiss: () => void, router: ReturnType<typeof useRouter> }) {
+const BudgetAlerts = memo(function BudgetAlerts({ alerts, dismissed, onDismiss, router }: { alerts: {name: string, icon: string, spent: number, budget: number, over: boolean, pct: number}[], dismissed: boolean, onDismiss: () => void, router: ReturnType<typeof useRouter> }) {
   if (alerts.length === 0 || dismissed) return null
   return (
     <div className={`rounded-[24px] border p-5 ${alerts.some(a => a.over) ? 'bg-red-500/10 border-red-500/30' : 'bg-amber-500/10 border-amber-500/30'} shadow-lg`}>
@@ -674,4 +685,4 @@ function BudgetAlerts({ alerts, dismissed, onDismiss, router }: { alerts: {name:
       </div>
     </div>
   )
-}
+})

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
+import { invalidateBudgetsCache } from '@/hooks/useBudgets'
 import Avatar from '@/components/ui/Avatar'
 import { getUserProfile } from '@/lib/profile'
 import type { Category, PaymentMethod, Budget } from '@/lib/types'
@@ -338,7 +339,6 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error('Failed to save subscription')
       toast.success('Notifications enabled — you\'ll get budget alerts daily')
     } catch (err) {
-      console.error('[notifications]', err)
       toast.error('Could not enable notifications')
     } finally {
       setNotifLoading(false)
@@ -440,6 +440,7 @@ export default function SettingsPage() {
       if (existing) return prev.map(b => b.category_id === categoryId ? { ...b, amount_krw: amount } : b)
       return [...prev, { category_id: categoryId, amount_krw: amount }]
     })
+    invalidateBudgetsCache()
     setEditingBudget(null)
     toast.success('Budget saved')
   }
