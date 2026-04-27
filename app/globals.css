@@ -112,12 +112,6 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.bento-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
 .bento-item {
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(24px) saturate(180%);
@@ -244,13 +238,6 @@ input, select, textarea {
 }
 
 /* ── iOS Glassmorphism ── */
-.glass {
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-}
-
 .glass-ios {
   background: color-mix(in srgb, var(--color-card-base) 70%, transparent);
   backdrop-filter: blur(25px) saturate(200%);
@@ -258,58 +245,6 @@ input, select, textarea {
   border: 0.5px solid rgba(255, 255, 255, 0.12);
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 20px);
-}
-
-.safe-top {
-  padding-top: env(safe-area-inset-top, 12px);
-}
-
-.surface-card {
-  background-color: color-mix(in srgb, var(--color-card-base) 88%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-border-base) 92%, white 8%);
-  border-radius: 16px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.surface-row {
-  transition: transform 0.18s ease, background-color 0.18s ease;
-}
-
-.surface-row:hover {
-  transform: translateY(-1px);
-  background-color: color-mix(in srgb, var(--color-card-elevated-base) 70%, transparent);
-}
-
-.soft-ring {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border-base) 88%, white 12%);
-}
-
-.fade-up {
-  animation: fadeUp 0.35s ease both;
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.glass-balance {
-  background: rgba(59, 130, 246, 0.12);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 20px;
-}
 
 /* Recharts custom styles */
 .recharts-cartesian-grid-horizontal line,

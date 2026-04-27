@@ -8,7 +8,7 @@ import {
   PieChart, Pie,
   LineChart, Line,
 } from 'recharts'
-import { TrendingDown, TrendingUp, Minus, Download } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Download, Flame, CalendarClock, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { formatKRW } from '@/lib/utils'
 import type { Transaction, Budget } from '@/lib/types'
@@ -82,8 +82,7 @@ export default function AnalyticsPage() {
 
       setTransactions((txData as Transaction[]) || [])
       setBudgets((budgetData as AnalyticsBudget[]) || [])
-    } catch (err) {
-      console.error(err)
+    } catch {
     } finally {
       setLoading(false)
     }
@@ -201,10 +200,34 @@ export default function AnalyticsPage() {
     })
     const paymentMethodData = Object.values(pmMap).sort((a, b) => b.total - a.total)
 
-    return { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData }
+    // Forecast — current month only
+    const dayOfMonth = now.getDate()
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const daysRemaining = daysInMonth - dayOfMonth
+    const thisMonthSpend  = transactions.filter(t => t.date.startsWith(thisMonthStr) && t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+    const thisMonthIncome = transactions.filter(t => t.date.startsWith(thisMonthStr) && t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+    const dailyRate = dayOfMonth > 0 ? thisMonthSpend / dayOfMonth : 0
+    const projectedSpend = dailyRate * daysInMonth
+    const totalBudgetKrw = budgets.reduce((s, b) => s + b.amount_krw, 0)
+    const projectedVsBudget = totalBudgetKrw > 0 ? projectedSpend - totalBudgetKrw : null
+    // Per-category budget projections
+    const categoryForecast = budgets
+      .map(b => {
+        const cat = b.categories as { name: string; icon: string; color: string } | null
+        if (!cat) return null
+        const spentSoFar = thisMonthExpenseMap.get(b.category_id) ?? 0
+        const catDailyRate = dayOfMonth > 0 ? spentSoFar / dayOfMonth : 0
+        const catProjected = catDailyRate * daysInMonth
+        const pct = b.amount_krw > 0 ? (catProjected / b.amount_krw) * 100 : 0
+        return { cat, projected: catProjected, budget: b.amount_krw, pct, over: catProjected > b.amount_krw }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b!.pct - a!.pct) as { cat: { name: string; icon: string; color: string }; projected: number; budget: number; pct: number; over: boolean }[]
+
+    return { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData, forecast: { dayOfMonth, daysInMonth, daysRemaining, dailyRate, projectedSpend, thisMonthSpend, thisMonthIncome, projectedVsBudget, totalBudgetKrw, categoryForecast } }
   }, [transactions, budgets, period, n])
 
-  const { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData } = derived
+  const { monthlyData, netFlowData, categoryData, categoryMap, prevCatMap, budgetComparison, overBudgetCount, totalIncome, totalExpense, avgMonthly, savingsRate, prevIncome, prevExpense, prevSavings, curSavings, paymentMethodData, forecast } = derived
 
   const cardStyle = {
     backgroundColor: 'var(--color-card-base)',
@@ -257,6 +280,101 @@ export default function AnalyticsPage() {
           </button>
         </div>
       </div>
+
+      {/* Forecast card — current month projection */}
+      {!loading && forecast.dayOfMonth > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 overflow-hidden rounded-[20px] border border-white/10 p-5"
+          style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(99,102,241,0.06) 100%)', backdropFilter: 'blur(20px)' }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                <CalendarClock className="w-4 h-4 text-blue-400" />
+              </div>
+              <p className="text-[13px] font-black uppercase tracking-widest text-blue-400">Month Forecast</p>
+            </div>
+            <span className="text-[11px] font-bold opacity-40">
+              Day {forecast.dayOfMonth} of {forecast.daysInMonth} · {forecast.daysRemaining}d left
+            </span>
+          </div>
+
+          {/* Key metrics */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {[
+              { label: 'Spent',      value: formatKRW(forecast.thisMonthSpend),              color: 'var(--color-text-primary)' },
+              { label: 'Projected',  value: formatKRW(Math.round(forecast.projectedSpend)),  color: forecast.projectedVsBudget !== null && forecast.projectedVsBudget > 0 ? '#ef4444' : '#22c55e' },
+              { label: 'Daily',      value: formatKRW(Math.round(forecast.dailyRate)),        color: 'var(--color-text-primary)' },
+            ].map(m => (
+              <div key={m.label} className="rounded-2xl p-2.5" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                <p className="text-[9px] font-black uppercase tracking-[0.15em] opacity-40 mb-1">{m.label}</p>
+                <p className="text-[12px] font-black leading-tight break-all" style={{ color: m.color }}>{m.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Budget impact */}
+          {forecast.projectedVsBudget !== null && (
+            <div
+              className="flex items-center gap-2 rounded-2xl px-4 py-2.5 mb-4"
+              style={{
+                backgroundColor: forecast.projectedVsBudget > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+                border: `1px solid ${forecast.projectedVsBudget > 0 ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`,
+              }}
+            >
+              {forecast.projectedVsBudget > 0
+                ? <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+                : <ShieldCheck className="w-4 h-4 text-green-400 shrink-0" />
+              }
+              <p className="text-[12px] font-bold" style={{ color: forecast.projectedVsBudget > 0 ? '#f87171' : '#4ade80' }}>
+                {forecast.projectedVsBudget > 0
+                  ? `Projected to exceed total budget by ${formatKRW(Math.round(forecast.projectedVsBudget))}`
+                  : `On track — ${formatKRW(Math.round(Math.abs(forecast.projectedVsBudget)))} under budget`
+                }
+              </p>
+            </div>
+          )}
+
+          {/* Per-category projections */}
+          {forecast.categoryForecast.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] opacity-40 mb-2">Category Outlook</p>
+              {forecast.categoryForecast.map(({ cat, projected, budget, pct, over }) => {
+                const barColor = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e'
+                return (
+                  <div key={cat.name}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[12px] font-bold" style={{ color: 'var(--color-text-primary)' }}>
+                        {cat.icon} {cat.name}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] font-black" style={{ color: barColor }}>
+                          {pct.toFixed(0)}%
+                        </span>
+                        <span className="text-[10px] opacity-40 font-medium">
+                          {formatKRW(Math.round(projected))} / {formatKRW(budget)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(pct, 100)}%` }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        style={{ backgroundColor: barColor, boxShadow: `0 0 8px ${barColor}50` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </motion.div>
+      )}
 
       {/* Budget vs Actual — current month */}
       {budgetComparison.length > 0 && (
