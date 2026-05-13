@@ -135,7 +135,7 @@ export default function BudgetPage() {
         </div>
         {/* Month selector */}
         <div className="flex items-center gap-1 bg-[var(--color-card-elevated-base)] rounded-2xl px-2 py-1.5 border border-[var(--color-border-base)]">
-          <button onClick={() => navigateMonth(-1)} className="p-1.5 rounded-xl active:scale-90 transition-transform">
+          <button onClick={() => navigateMonth(-1)} aria-label="Previous month" className="p-1.5 rounded-xl active:scale-90 transition-transform">
             <ChevronLeft size={16} />
           </button>
           <span className="text-[12px] font-black tracking-tight px-1 min-w-[100px] text-center" style={{ color: 'var(--color-text-primary)' }}>
@@ -144,6 +144,7 @@ export default function BudgetPage() {
           <button
             onClick={() => navigateMonth(1)}
             disabled={isCurrentMonth}
+            aria-label="Next month"
             className="p-1.5 rounded-xl active:scale-90 transition-transform disabled:opacity-30"
           >
             <ChevronRight size={16} />
