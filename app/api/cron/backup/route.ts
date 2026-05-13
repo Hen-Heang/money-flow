@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
           .join(', ')
         const values = chunk.flatMap(row => keys.map(k => row[k] ?? null))
 
-        await sql(
+        await sql.query(
           `INSERT INTO ${table} (${cols}) VALUES ${placeholders}
            ON CONFLICT (id) DO UPDATE SET ${updates}`,
           values
