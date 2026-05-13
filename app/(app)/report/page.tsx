@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText } from 'lucide-react'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
+import { useMonthNavigation } from '@/hooks/useMonthNavigation'
+import { monthLabel, monthKey, getMonthRange } from '@/lib/dateHelpers'
 import { formatKRW } from '@/lib/utils'
 
 interface TxRow {
@@ -44,33 +46,12 @@ function TrendPill({ pct, invert = false }: { pct: number | null; invert?: boole
   )
 }
 
-function monthKey(year: number, month: number) {
-  return `${year}-${String(month).padStart(2, '0')}`
-}
-function monthLabel(year: number, month: number) {
-  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-}
-
 export default function ReportPage() {
   const supabase = useSupabaseClient()
+  const { year, month, isCurrentMonth, navigateMonth } = useMonthNavigation({ disableFuture: true })
 
-  const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
   const [dataCache, setDataCache] = useState<Record<string, MonthData>>({})
   const [loading, setLoading] = useState(false)
-
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
-
-  const navigateMonth = (dir: -1 | 1) => {
-    if (dir === 1 && isCurrentMonth) return
-    setMonth(prev => {
-      const next = prev + dir
-      if (next < 1) { setYear(y => y - 1); return 12 }
-      if (next > 12) { setYear(y => y + 1); return 1 }
-      return next
-    })
-  }
 
   const prevYear  = month === 1 ? year - 1 : year
   const prevMonth = month === 1 ? 12 : month - 1
@@ -79,8 +60,7 @@ export default function ReportPage() {
     const key = monthKey(y, m)
     if (dataCache[key]) return dataCache[key]
 
-    const start = `${key}-01`
-    const end = new Date(y, m, 1).toISOString().slice(0, 10)
+    const { start, end } = getMonthRange(y, m)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null

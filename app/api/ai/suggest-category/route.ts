@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   const { allowed } = rateLimit(`ai-suggest:${user.id}`, 30, 60_000)
-  if (!allowed) return new Response(JSON.stringify({ categoryId: null }), { status: 200 })
+  if (!allowed) return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { status: 429 })
 
   const { description, type, categories } = await req.json()
 
@@ -52,6 +52,6 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error('AI Suggestion Error:', error)
-    return new Response(JSON.stringify({ categoryId: null }), { status: 200 })
+    return new Response(JSON.stringify({ error: 'AI service unavailable' }), { status: 500 })
   }
 }

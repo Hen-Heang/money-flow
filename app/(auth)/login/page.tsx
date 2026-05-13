@@ -25,6 +25,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
+  const getNext = () => {
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('next')
+    // Only allow relative paths to prevent open redirect attacks
+    return next && next.startsWith('/') ? next : '/dashboard'
+  }
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
@@ -32,10 +39,11 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setLoading(true)
     try {
+      const next = getNext()
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
         },
       })
       if (error) throw error
@@ -67,9 +75,8 @@ export default function LoginPage() {
         if (signInData.user) {
           await ensureUserProfile(supabase, signInData.user)
         }
-        // Use a full navigation instead of router.push + router.refresh to avoid
-        // the iOS Safari flash caused by the two-step soft-navigation.
-        window.location.href = '/dashboard'
+        // Full navigation avoids iOS Safari flash from two-step soft-navigation
+        window.location.href = getNext()
       }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'An error occurred')

@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { FALLBACK_EXCHANGE_RATE, EXCHANGE_RATE_CACHE_MINUTES } from '@/shared/presets'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET() {
+  const { allowed } = rateLimit('exchange-rate', 30, 60_000)
+  if (!allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+
   try {
     const supabase = await createServerSupabaseClient()
 
     const cacheThreshold = new Date(Date.now() - EXCHANGE_RATE_CACHE_MINUTES * 60 * 1000).toISOString()
     const { data: cached } = await supabase
       .from('exchange_rates')
-      .select('*')
+      .select('rate, fetched_at')
       .eq('base_currency', 'USD')
       .eq('target_currency', 'KRW')
       .gte('fetched_at', cacheThreshold)

@@ -521,11 +521,6 @@ export default function AddTransactionSheet({
                   </div>
 
                   {/* Categories */}
-                  {/* <div>
-                    <p className={sectionLabelStyle}>Category</p>
-                    <CategoryGrid categories={filteredCategories} control={control} onSelect={handleCategorySelect} />
-                  </div> */}
-{/* Category */}
                   <div>
                     <p className={sectionLabelStyle}>Category</p>
                     <select {...register('category_id')} className={inputBaseStyle}>
