@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('transactions')
-      .select('*, categories(name, icon), payment_methods(name)')
+      .select('id, date, type, description, amount_krw, amount_usd, exchange_rate, currency, note, categories(name, icon), payment_methods(name)')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
 
@@ -44,6 +44,12 @@ export async function GET(req: NextRequest) {
     }
 
     // ── CSV (default) ─────────────────────────────────────────────────────────
+    // Strip leading formula characters to prevent CSV injection in Excel/Sheets
+    const safeCell = (s: string) => {
+      const stripped = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
+      return `"${stripped.replace(/"/g, '""')}"`
+    }
+
     const headers = ['Date', 'Type', 'Description', 'Amount (KRW)', 'Amount (USD)', 'Exchange Rate', 'Currency', 'Category', 'Payment Method', 'Note']
     const rows = transactions.map(t => {
       const cat = (t.categories as { name: string } | null)?.name ?? ''
@@ -51,14 +57,14 @@ export async function GET(req: NextRequest) {
       return [
         t.date,
         t.type,
-        `"${t.description.replace(/"/g, '""')}"`,
+        safeCell(t.description),
         t.amount_krw,
         t.amount_usd.toFixed(2),
         t.exchange_rate ?? '',
         t.currency ?? 'KRW',
-        `"${cat}"`,
-        `"${pm}"`,
-        `"${(t.note ?? '').replace(/"/g, '""')}"`,
+        safeCell(cat),
+        safeCell(pm),
+        safeCell(t.note ?? ''),
       ].join(',')
     })
     const csv = [headers.join(','), ...rows].join('\n')
