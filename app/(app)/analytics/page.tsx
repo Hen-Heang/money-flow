@@ -68,7 +68,7 @@ export default function AnalyticsPage() {
       const [{ data: txData }, { data: budgetData }] = await Promise.all([
         supabase
           .from('transactions')
-          .select('*, categories(name, icon, color), payment_methods(name, icon)')
+          .select('date, type, amount_krw, category_id, categories(name, icon, color), payment_methods(name, icon)')
           .eq('user_id', user.id)
           .gte('date', format(sixMonthsAgo, 'yyyy-MM-dd'))
           .lte('date', format(now, 'yyyy-MM-dd'))

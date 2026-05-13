@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
-import { haptic } from '@/lib/utils'
+import { haptic, formatNumber } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { PRESET_ICONS, PRESET_COLORS } from '@/shared/presets'
 import BottomSheet from '@/components/ui/BottomSheet'
@@ -341,7 +341,7 @@ function AddDepositSheet({
         <div>
           <p className="text-lg font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>{goal.name}</p>
           <p className="text-[13px] font-bold opacity-60">
-            Progress: ${goal.current_usd.toLocaleString()} / ${goal.target_usd.toLocaleString()}
+            Progress: ${formatNumber(goal.current_usd)} / ${formatNumber(goal.target_usd)}
           </p>
         </div>
       </div>
@@ -474,7 +474,7 @@ export default function SavingsPage() {
     if (!user) { setLoading(false); return }
     const { data } = await supabase
       .from('savings_goals')
-      .select('*')
+      .select('id, name, icon, color, target_usd, current_usd, deadline, note, purpose, auto_monthly_usd, last_auto_month')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
     const loaded = (data as SavingsGoal[]) || []

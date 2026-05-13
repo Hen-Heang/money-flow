@@ -7,6 +7,8 @@ import toast from 'react-hot-toast'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets, invalidateBudgetsCache } from '@/hooks/useBudgets'
+import { useMonthNavigation } from '@/hooks/useMonthNavigation'
+import { monthLabel, getMonthRange } from '@/lib/dateHelpers'
 import { formatKRW, formatNumber, haptic } from '@/lib/utils'
 import type { Category, Budget } from '@/lib/types'
 
@@ -27,16 +29,9 @@ function getBarColor(pct: number) {
   return '#22c55e'
 }
 
-function monthLabel(year: number, month: number) {
-  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-}
-
 export default function BudgetPage() {
   const supabase = useSupabaseClient()
-
-  const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  const { year, month, isCurrentMonth, navigateMonth } = useMonthNavigation()
 
   const { categories: allCategories } = useCategories()
   const { budgets: cachedBudgets } = useBudgets()
@@ -56,22 +51,12 @@ export default function BudgetPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
 
-  const navigateMonth = (dir: -1 | 1) => {
-    setMonth(prev => {
-      const next = prev + dir
-      if (next < 1) { setYear(y => y - 1); return 12 }
-      if (next > 12) { setYear(y => y + 1); return 1 }
-      return next
-    })
-  }
-
   const load = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const start = `${year}-${String(month).padStart(2, '0')}-01`
-    const end = new Date(year, month, 1).toISOString().slice(0, 10)
+    const { start, end } = getMonthRange(year, month)
 
     const { data: txData } = await supabase
       .from('transactions')
@@ -139,7 +124,6 @@ export default function BudgetPage() {
   const totalRemaining = totalBudget - totalSpent
   const overBudgetCount = budgeted.filter(r => r.pct >= 100).length
 
-  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
 
   return (
     <div className="mx-auto max-w-2xl px-mobile pt-4 pb-8">

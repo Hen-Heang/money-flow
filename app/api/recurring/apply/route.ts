@@ -59,11 +59,16 @@ export async function POST() {
       // Advance next_date to the next occurrence
       const nextDate = advanceDate(rule.next_date, rule.frequency)
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('recurring_transactions')
         .update({ next_date: nextDate, last_applied: rule.next_date })
         .eq('id', rule.id)
         .eq('user_id', user.id)
+
+      if (updateError) {
+        console.error(`[recurring/apply] Failed to advance next_date for rule ${rule.id}:`, updateError)
+        continue
+      }
 
       applied.push(rule.description)
     }

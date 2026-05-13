@@ -101,8 +101,8 @@ export default function SettingsPage() {
 
       const [userProfile, cats, methods, buds] = await Promise.all([
         getUserProfile(supabase, user),
-        supabase.from('categories').select('*').eq('user_id', user.id),
-        supabase.from('payment_methods').select('*').eq('user_id', user.id),
+        supabase.from('categories').select('id, name, icon, color, type').eq('user_id', user.id),
+        supabase.from('payment_methods').select('id, name, icon').eq('user_id', user.id),
         supabase.from('budgets').select('category_id, amount_krw').eq('user_id', user.id),
       ])
       setProfile(userProfile)

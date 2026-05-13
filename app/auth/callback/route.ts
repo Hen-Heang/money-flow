@@ -65,5 +65,7 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/dashboard`)
+  const next = searchParams.get('next')
+  const redirectTo = next && next.startsWith('/') ? `${origin}${next}` : `${origin}/dashboard`
+  return NextResponse.redirect(redirectTo)
 }

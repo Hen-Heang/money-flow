@@ -129,18 +129,18 @@ export default function DashboardPage() {
       const monthStart = startOfMonth(currentDate)
       const monthEnd = endOfMonth(currentDate)
 
-      const profile = await getUserProfile(supabase, user)
+      const [profile, txResult] = await Promise.all([
+        getUserProfile(supabase, user),
+        supabase
+          .from('transactions')
+          .select('id, date, type, amount_krw, description, category_id, categories(name, icon, color)')
+          .eq('user_id', user.id)
+          .gte('date', format(monthStart, 'yyyy-MM-dd'))
+          .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+          .order('date', { ascending: false }),
+      ])
       setUserName(getDisplayName(profile?.email, profile?.display_name))
       setAvatarUrl(profile?.avatar_url ?? null)
-
-      const txResult = await supabase
-        .from('transactions')
-        .select('*, categories(name, icon, color)')
-        .eq('user_id', user.id)
-        .gte('date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('date', format(monthEnd, 'yyyy-MM-dd'))
-        .order('date', { ascending: false })
-
       setTransactions((txResult.data as Transaction[]) || [])
     } catch (err) {
       toast.error('Failed to sync data')
