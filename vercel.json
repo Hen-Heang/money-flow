@@ -15,6 +15,14 @@
     {
       "path": "/api/cron/savings",
       "schedule": "30 9 1 * *"
+    },
+    {
+      "path": "/api/cron/cleanup-exchange-rates",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 1 * * *"
     }
   ]
 }
