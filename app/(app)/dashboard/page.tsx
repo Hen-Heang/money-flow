@@ -74,7 +74,14 @@ export default function DashboardPage() {
   const [streak, setStreak] = useState(0)
   const supabase = useSupabaseClient()
 
-  const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
   const routerRef = useRef(router)
   useEffect(() => { routerRef.current = router }, [router])
@@ -296,23 +303,36 @@ export default function DashboardPage() {
       {/* ─── Top Header (Always Full Width) ─── */}
       <div className="px-5 sm:px-0 mb-6 flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3.5">
-          <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-white/10 shadow-2xl shrink-0 sm:w-14 sm:h-14" />
+          {loading && !userName ? (
+            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/10 animate-pulse shrink-0" />
+          ) : (
+            <Avatar src={avatarUrl} name={userName} size={42} className="ring-2 ring-white/10 shadow-2xl shrink-0 sm:w-14 sm:h-14" />
+          )}
           <div className="min-w-0">
-            <motion.p 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 0.5, x: 0 }}
-              className="text-tiny text-[var(--color-text-secondary)] font-black tracking-[0.2em] mb-1 uppercase"
-            >
-              {greeting}
-            </motion.p>
-            <motion.h1 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-lg sm:text-2xl font-black tracking-tight truncate"
-            >
-              {userName}
-            </motion.h1>
+            {loading && !userName ? (
+              <div className="space-y-1.5">
+                <div className="h-2.5 w-16 rounded bg-white/10 animate-pulse" />
+                <div className="h-5 w-32 rounded bg-white/10 animate-pulse" />
+              </div>
+            ) : (
+              <>
+                <motion.p
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 0.5, x: 0 }}
+                  className="text-tiny text-[var(--color-text-secondary)] font-black tracking-[0.2em] mb-1 uppercase"
+                >
+                  {greeting}
+                </motion.p>
+                <motion.h1
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 }}
+                  className="text-lg sm:text-2xl font-black tracking-tight truncate"
+                >
+                  {userName}
+                </motion.h1>
+              </>
+            )}
           </div>
         </div>
 
@@ -355,7 +375,7 @@ export default function DashboardPage() {
           <div className="px-5 sm:px-0 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bento-item md:col-span-2 flex flex-col justify-between min-h-[200px] bg-gradient-to-br from-blue-600/10 to-transparent">
               <div>
-                <p className="text-tiny text-[var(--color-text-secondary)] mb-1 opacity-50">Available Balance</p>
+                <p className="text-tiny text-[var(--color-text-secondary)] mb-1 opacity-50">Monthly Balance</p>
                 <h2 className={`text-4xl sm:text-6xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
                   {fmt(balance)}
                 </h2>
@@ -366,8 +386,8 @@ export default function DashboardPage() {
                   <p className="text-[10px] font-black tracking-tight uppercase opacity-70" suppressHydrationWarning>{format(currentDate, 'MMMM yyyy')}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm"><ChevronLeft size={16} /></button>
-                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm"><ChevronRight size={16} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(subMonths(currentDate, 1)) }} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm" aria-label="Previous month"><ChevronLeft size={16} /></button>
+                  <button onClick={() => { haptic('light'); setCurrentDate(addMonths(currentDate, 1)) }} disabled={isSameMonth(currentDate, new Date())} className="p-2.5 rounded-xl glass-morphic border-white/5 active:scale-90 transition-all shadow-sm disabled:opacity-20 disabled:cursor-not-allowed" aria-label="Next month"><ChevronRight size={16} /></button>
                 </div>
               </div>
             </div>
@@ -587,7 +607,10 @@ export default function DashboardPage() {
               {QUICK_TEMPLATES.map(t => (
                 <motion.button key={t.name} whileTap={{ scale: 0.95 }} onClick={() => handleQuickAdd(t)} className="flex items-center gap-3 p-4 rounded-2xl bg-[var(--color-card-elevated-base)] border border-white/5 shadow-md hover:border-white/20 transition-all text-left">
                   <span className="text-xl sm:text-2xl shrink-0">{t.iconEmoji}</span>
-                  <span className="text-[11px] font-black uppercase tracking-wider leading-tight">{t.name}</span>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-wider leading-tight">{t.name}</p>
+                    <p className="text-[10px] font-bold opacity-40 mt-0.5">₩{t.amount.toLocaleString()}</p>
+                  </div>
                 </motion.button>
               ))}
             </div>
@@ -639,7 +662,7 @@ const RecentActivity = memo(function RecentActivity({ transactions, router, fmt,
       </div>
       <div className="divide-y divide-white/5">
         {transactions.slice(0, limit).map(t => (
-          <div key={t.id} onClick={() => router.push(`/transactions?id=${t.id}`)} className="p-5 flex items-center gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer active:scale-[0.98]">
+          <div key={t.id} onClick={() => router.push('/transactions')} className="p-5 flex items-center gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer active:scale-[0.98]">
             <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0 ${t.type === 'income' ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
               {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
             </div>
