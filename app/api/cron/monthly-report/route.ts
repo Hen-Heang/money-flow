@@ -8,6 +8,10 @@ function formatKRW(amount: number) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(amount)
 }
 
+function escapeHtml(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function buildEmailHtml({
   displayName,
   month,
@@ -30,7 +34,7 @@ function buildEmailHtml({
     .map(
       (c) => `
       <tr>
-        <td style="padding:8px 0;color:#94a3b8;font-size:14px;">${c.name}</td>
+        <td style="padding:8px 0;color:#94a3b8;font-size:14px;">${escapeHtml(c.name)}</td>
         <td style="padding:8px 0;color:#f8fafc;font-size:14px;text-align:right;">${formatKRW(c.total)}</td>
       </tr>`
     )
@@ -51,9 +55,9 @@ function buildEmailHtml({
     </div>
 
     <!-- Greeting -->
-    <p style="color:#f8fafc;font-size:16px;margin-bottom:24px;">Hey ${displayName} 👋</p>
+    <p style="color:#f8fafc;font-size:16px;margin-bottom:24px;">Hey ${escapeHtml(displayName)} 👋</p>
     <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin-bottom:32px;">
-      Here's your money snapshot for <strong style="color:#f8fafc;">${month}</strong>. Keep it up!
+      Here's your money snapshot for <strong style="color:#f8fafc;">${escapeHtml(month)}</strong>. Keep it up!
     </p>
 
     <!-- Stats cards -->
