@@ -59,7 +59,8 @@ export default function AnalyticsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) return
 
       const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5))
@@ -280,6 +281,20 @@ export default function AnalyticsPage() {
           </button>
         </div>
       </div>
+
+      {loading && (
+        <div className="space-y-4">
+          <div className="skeleton h-40 rounded-[20px]" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="skeleton h-20 rounded-[16px]" />
+            <div className="skeleton h-20 rounded-[16px]" />
+            <div className="skeleton h-20 rounded-[16px]" />
+            <div className="skeleton h-20 rounded-[16px]" />
+          </div>
+          <div className="skeleton h-56 rounded-[20px]" />
+          <div className="skeleton h-44 rounded-[20px]" />
+        </div>
+      )}
 
       {/* Forecast card — current month projection */}
       {!loading && forecast.dayOfMonth > 0 && (
@@ -672,14 +687,6 @@ export default function AnalyticsPage() {
         </motion.div>
       )}
 
-      {loading && (
-        <div className="flex justify-center py-8">
-          <div
-            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: 'var(--color-income-base)', borderTopColor: 'transparent' }}
-          />
-        </div>
-      )}
     </div>
   )
 }

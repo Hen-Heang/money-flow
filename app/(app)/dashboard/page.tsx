@@ -91,7 +91,8 @@ export default function DashboardPage() {
   const refreshStreak = useCallback(async (userId?: string) => {
     let uid = userId
     if (!uid) {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) return
       uid = user.id
     }
@@ -127,8 +128,9 @@ export default function DashboardPage() {
     setLoading(true)
     setAlertsDismissed(false)
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) {
         routerRef.current.push('/login')
         return
       }
@@ -194,7 +196,8 @@ export default function DashboardPage() {
 
   const handleQuickAdd = async (template: typeof QUICK_TEMPLATES[0]) => {
     haptic('medium')
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
     const category = categories.find(c => c.name === template.category)
     const rate = exchangeRateInfo?.rate || 1350
