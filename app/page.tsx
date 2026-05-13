@@ -5,7 +5,7 @@ import {
   TrendingUp, Shield, Zap, Globe, BrainCircuit,
   Smartphone, CheckCircle2, ArrowRight, LayoutDashboard,
 } from 'lucide-react'
-import LandingClient from './LandingClient'
+import { HeroBadge, HeroTitle, HeroSubtitle, HeroCTA, DashboardPreview, AIPreview } from './LandingClient'
 
 export default async function LandingPage() {
   const supabase = await createServerSupabaseClient()
@@ -49,18 +49,18 @@ export default async function LandingPage() {
       <section className="pt-36 pb-12 px-6 text-center overflow-hidden relative">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] pointer-events-none" style={{ background: 'radial-gradient(ellipse at top, rgba(59,130,246,0.12) 0%, transparent 70%)' }} />
         <div className="max-w-3xl mx-auto relative z-10">
-          <LandingClient.HeroBadge />
-          <LandingClient.HeroTitle>
+          <HeroBadge />
+          <HeroTitle>
             Track every dollar.<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Grow your wealth.</span>
-          </LandingClient.HeroTitle>
-          <LandingClient.HeroSubtitle>
+          </HeroTitle>
+          <HeroSubtitle>
             Money Flow gives you a real-time view of your finances with AI-powered insights,
             multi-currency support, and beautiful analytics — all in one place.
-          </LandingClient.HeroSubtitle>
-          <LandingClient.HeroCTA user={user} />
+          </HeroSubtitle>
+          <HeroCTA user={user} />
         </div>
-        <LandingClient.DashboardPreview />
+        <DashboardPreview />
       </section>
 
       {/* ── Trust bar ── */}
@@ -191,7 +191,7 @@ export default async function LandingPage() {
               Try it free <ArrowRight size={14} />
             </Link>
           </div>
-          <LandingClient.AIPreview />
+          <AIPreview />
         </div>
       </section>
 

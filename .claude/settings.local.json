@@ -5,7 +5,8 @@
       "Bash(node -e \"const {createBrowserClient} = require\\(''@supabase/ssr''\\); try { createBrowserClient\\(''https://placeholder.supabase.co'', ''placeholder-key''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERROR:'', e.message\\); }\")",
       "Bash(npx tsc:*)",
       "Bash(tasklist)",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "Bash(node -e ' *)"
     ]
   }
 }
