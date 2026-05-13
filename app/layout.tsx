@@ -41,6 +41,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Money Flow" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="preconnect" href="https://lqjjabfmaweztxkvfrsq.supabase.co" />
+        <link rel="dns-prefetch" href="https://lqjjabfmaweztxkvfrsq.supabase.co" />
         {/* Theme init — runs before render to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: `
           try {

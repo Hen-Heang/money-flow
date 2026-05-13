@@ -96,7 +96,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) return
 
       const [userProfile, cats, methods, buds] = await Promise.all([
@@ -133,7 +134,8 @@ export default function SettingsPage() {
     setIsUploadingAvatar(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) throw new Error('You are not signed in')
 
       const blob = await resizeImageToBlob(file, 256, 0.82)
@@ -178,7 +180,8 @@ export default function SettingsPage() {
   const saveDisplayName = async () => {
     const name = editingDisplayName.trim()
     if (!name) { toast.error('Name cannot be empty'); return }
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
     const { error } = await supabase.from('users').update({ display_name: name }).eq('id', user.id)
     if (error) { toast.error('Failed to update name'); return }
@@ -379,7 +382,8 @@ export default function SettingsPage() {
     const icon = newCategoryIcon.trim() || '📦'
     if (!name) { toast.error('Name required'); return }
     const color = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     const { data, error } = await supabase
@@ -403,7 +407,8 @@ export default function SettingsPage() {
     const name = newPaymentMethodName.trim()
     const icon = newPaymentMethodIcon.trim() || '💳'
     if (!name) { toast.error('Name required'); return }
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     const { data, error } = await supabase
@@ -426,7 +431,8 @@ export default function SettingsPage() {
     const amount = parseFloat(raw)
     if (isNaN(amount) || amount < 0) { toast.error('Invalid amount'); return }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     const { error } = await supabase.from('budgets').upsert(

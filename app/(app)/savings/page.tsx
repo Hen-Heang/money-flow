@@ -470,7 +470,8 @@ export default function SavingsPage() {
   const supabase = useSupabaseClient()
 
   const loadGoals = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) { setLoading(false); return }
     const { data } = await supabase
       .from('savings_goals')
@@ -500,7 +501,8 @@ export default function SavingsPage() {
     )
     if (due.length === 0) return
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     let applied = 0
@@ -521,7 +523,8 @@ export default function SavingsPage() {
 
   const handleCreate = async (data: Omit<SavingsGoal, 'id'>) => {
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) { setSaving(false); return }
     const { error } = await supabase.from('savings_goals').insert({ ...data, user_id: user.id })
     setSaving(false)

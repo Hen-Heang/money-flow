@@ -53,7 +53,8 @@ export default function BudgetPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) { setLoading(false); return }
 
     const { start, end } = getMonthRange(year, month)
@@ -84,7 +85,8 @@ export default function BudgetPage() {
     const amount = parseFloat(raw)
     if (isNaN(amount) || amount < 0) { toast.error('Invalid amount'); return }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     const { error } = await supabase.from('budgets').upsert(
