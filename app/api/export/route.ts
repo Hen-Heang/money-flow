@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
         amount_usd: Number(t.amount_usd.toFixed(2)),
         exchange_rate: t.exchange_rate,
         currency: t.currency,
-        category: (t.categories as { name: string; icon: string } | null)?.name ?? null,
-        payment_method: (t.payment_methods as { name: string } | null)?.name ?? null,
+        category: (t.categories as unknown as { name: string; icon: string } | null)?.name ?? null,
+        payment_method: (t.payment_methods as unknown as { name: string } | null)?.name ?? null,
         note: t.note ?? null,
       }))
       return new NextResponse(JSON.stringify({ exported_at: new Date().toISOString(), count: clean.length, transactions: clean }, null, 2), {
@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
 
     const headers = ['Date', 'Type', 'Description', 'Amount (KRW)', 'Amount (USD)', 'Exchange Rate', 'Currency', 'Category', 'Payment Method', 'Note']
     const rows = transactions.map(t => {
-      const cat = (t.categories as { name: string } | null)?.name ?? ''
-      const pm  = (t.payment_methods as { name: string } | null)?.name ?? ''
+      const cat = (t.categories as unknown as { name: string } | null)?.name ?? ''
+      const pm  = (t.payment_methods as unknown as { name: string } | null)?.name ?? ''
       return [
         t.date,
         t.type,
