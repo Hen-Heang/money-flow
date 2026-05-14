@@ -2,6 +2,7 @@ import React from 'react'
 import { AppSidebar, AppTabBar } from '@/components/layout/NavShell'
 import OfflineBanner from '@/components/ui/OfflineBanner'
 import ErrorBoundary from '@/components/ui/ErrorBoundary'
+import AuthGuard from '@/components/AuthGuard'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -34,6 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <AppTabBar />
       <OfflineBanner />
+      <AuthGuard />
     </div>
   )
 }
