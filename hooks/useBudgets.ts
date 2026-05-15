@@ -12,7 +12,7 @@ async function fetchBudgets(): Promise<Budget[]> {
     const supabase = createClient()
     pendingFetch = supabase
       .from('budgets')
-      .select('category_id, amount_krw')
+      .select('category_id, amount_krw, categories(name, icon, color)')
       .then(({ data }) => {
         const result = (data as Budget[]) ?? []
         cachedBudgets = result

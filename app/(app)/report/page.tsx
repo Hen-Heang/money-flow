@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, FileText } from 'lucide-react'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
@@ -51,7 +51,8 @@ export default function ReportPage() {
   const { year, month, isCurrentMonth, navigateMonth } = useMonthNavigation({ disableFuture: true })
 
   const [dataCache, setDataCache] = useState<Record<string, MonthData>>({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const isFirstMount = useRef(true)
 
   const prevYear  = month === 1 ? year - 1 : year
   const prevMonth = month === 1 ? 12 : month - 1
@@ -96,13 +97,18 @@ export default function ReportPage() {
   const [previous, setPrevious] = useState<MonthData | null>(null)
 
   useEffect(() => {
-    setLoading(true)
+    if (!isFirstMount.current) {
+      setTimeout(() => setLoading(true), 0)
+    }
+    isFirstMount.current = false
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     Promise.all([fetchMonth(year, month), fetchMonth(prevYear, prevMonth)]).then(([cur, prev]) => {
       setCurrent(cur)
       setPrevious(prev)
       setLoading(false)
     })
-  }, [year, month]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [year, month, fetchMonth, prevYear, prevMonth])
 
   const stats = useMemo(() => {
     if (!current) return null

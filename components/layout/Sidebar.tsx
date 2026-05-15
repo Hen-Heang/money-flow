@@ -27,15 +27,12 @@ export default memo(function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = useSupabaseClient()
-
   const [displayName, setDisplayName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [showAdd, setShowAdd] = useState(false)
-  const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
-    setIsMounted(true)
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -52,6 +49,7 @@ export default memo(function Sidebar() {
     router.push('/login')
   }
 
+
   return (
     <>
       <aside
@@ -67,17 +65,17 @@ export default memo(function Sidebar() {
           }}
         >
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-3.5 px-6 pt-8 pb-8 hover:opacity-80 transition-opacity">
-            <Logo size={32} />
-            <div>
+          <Link href="/dashboard" className="flex items-center gap-4 px-6 pt-8 pb-10 hover:opacity-90 transition-all active:scale-[0.98]">
+            <Logo size={36} />
+            <div className="flex flex-col">
               <p
-                className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40"
-                style={{ color: 'var(--color-text-secondary)' }}
+                className="text-tiny opacity-40 font-black"
+                style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.35em' }}
               >
                 Finance
               </p>
               <p
-                className="text-xl font-black tracking-tight leading-tight"
+                className="text-xl font-black tracking-tight leading-none mt-1"
                 style={{ color: 'var(--color-text-primary)' }}
               >
                 Money Flow
@@ -86,14 +84,14 @@ export default memo(function Sidebar() {
           </Link>
 
           {/* Quick Add */}
-          <div className="px-5 pb-8">
+          <div className="px-5 pb-10">
             <button
               onClick={() => setShowAdd(true)}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black uppercase tracking-widest transition-all active:scale-95 hover:opacity-90"
+              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-xs font-black uppercase tracking-[0.2em] transition-all active:scale-95 hover:brightness-110 shadow-xl"
               style={{
-                background: 'var(--color-accent-base)',
+                background: 'linear-gradient(135deg, var(--color-accent-base) 0%, color-mix(in srgb, var(--color-accent-base) 80%, black) 100%)',
                 color: '#fff',
-                boxShadow: '0 8px 24px color-mix(in srgb, var(--color-accent-base) 40%, transparent)',
+                boxShadow: '0 10px 25px -5px color-mix(in srgb, var(--color-accent-base) 40%, transparent)',
               }}
             >
               <Plus size={18} strokeWidth={3} />
@@ -102,25 +100,32 @@ export default memo(function Sidebar() {
           </div>
 
           {/* Nav links */}
-          <nav className="flex flex-col gap-2 px-4 flex-1 overflow-y-auto no-scrollbar">
+          <nav className="flex flex-col gap-1.5 px-4 flex-1 overflow-y-auto no-scrollbar">
             {TABS.map(({ href, label, icon: Icon }) => {
-              const isActive = isMounted && pathname === href
+              const isActive = pathname === href
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-all duration-300 group ${
+                  className={`flex items-center gap-4 rounded-2xl px-4 py-4 transition-all duration-300 group relative ${
                     isActive 
-                      ? 'bg-blue-500/15 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.1)]' 
-                      : 'text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-white'
+                      ? 'text-blue-400' 
+                      : 'text-[var(--color-text-secondary)] hover:bg-white/[0.04] hover:text-white'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
-                  <span className="font-bold tracking-tight flex-1">{label}</span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="sidebar-active-bg"
+                      className="absolute inset-0 bg-blue-500/10 rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.08)]"
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                  <Icon className={`h-5 w-5 transition-all duration-300 relative z-10 ${isActive ? 'scale-110' : 'group-hover:scale-110 opacity-70 group-hover:opacity-100'}`} />
+                  <span className="font-bold tracking-tight flex-1 relative z-10">{label}</span>
                   {isActive && (
                     <motion.div 
-                      layoutId="sidebar-active"
-                      className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]"
+                      layoutId="sidebar-active-dot"
+                      className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)] relative z-10"
                     />
                   )}
                 </Link>

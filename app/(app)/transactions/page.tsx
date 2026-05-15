@@ -53,7 +53,6 @@ function TransactionsPageInner() {
     localStorage.setItem('txSearchHistory', JSON.stringify(updated))
   }
 
-  // Debounce search input for production performance
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search)
@@ -70,7 +69,6 @@ function TransactionsPageInner() {
   const [editingTransaction, setEditingTransaction] = useState<EditTransaction | undefined>()
   const [isDuplicating, setIsDuplicating] = useState(false)
   const [liveRate, setLiveRate] = useState(FALLBACK_EXCHANGE_RATE)
-  const [page, setPage] = useState(0)
   const pageRef = useRef(0)
   const [hasMore, setHasMore] = useState(true)
   const loadingRef = useRef(false)
@@ -79,7 +77,6 @@ function TransactionsPageInner() {
   const supabase = supabaseRef.current
   const userIdRef = useRef<string | null>(null)
   const pendingDeletes = useRef(new Map<string, Transaction>())
-
 
   // Advanced filters
   const [filterDateFrom, setFilterDateFrom] = useState('')
@@ -137,8 +134,8 @@ function TransactionsPageInner() {
 
     try {
       if (!userIdRef.current) {
-        const { data: { session } } = await supabase.auth.getSession()
-        userIdRef.current = session?.user?.id ?? null
+        const { data: { user } } = await supabase.auth.getUser()
+        userIdRef.current = user?.id ?? null
       }
       const userId = userIdRef.current
       if (!userId) return
@@ -166,11 +163,9 @@ function TransactionsPageInner() {
       if (reset) {
         setTransactions(newTxns)
         pageRef.current = 1
-        setPage(1)
       } else {
         setTransactions(prev => [...prev, ...newTxns])
         pageRef.current += 1
-        setPage(prev => prev + 1)
       }
       setHasMore(newTxns.length === TRANSACTION_PAGE_SIZE)
     } catch {
@@ -197,21 +192,8 @@ function TransactionsPageInner() {
       .then(r => r.json())
       .then(d => { if (d.rate) setLiveRate(d.rate) })
       .catch(() => {})
+  }, [])
 
-    // Auto-apply any due recurring transactions silently on page load
-    fetch('/api/recurring/apply', { method: 'POST' })
-      .then(r => r.json())
-      .then(d => {
-        if (d.applied > 0) {
-          toast.success(`${d.applied} recurring transaction${d.applied > 1 ? 's' : ''} applied`)
-          loadTransactions(true, true)
-        }
-      })
-      .catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Supabase Realtime — live sync across devices (Mac, iPhone, etc.)
-  // Enrich payloads from already-loaded categories/payment_methods to avoid N+1 DB queries.
   const categoriesRef = useRef(categories)
   useEffect(() => { categoriesRef.current = categories }, [categories])
 
@@ -294,6 +276,21 @@ function TransactionsPageInner() {
   }, [])
 
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+
+  // Measure top-header height → expose as CSS var so date headers can stick beneath it
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    const update = () => {
+      document.documentElement.style.setProperty('--tx-header-h', `${el.offsetHeight}px`)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   useKeyboardShortcuts([
     { key: 'n', action: handleNewTransaction, description: 'New transaction' },
     { key: '/', action: () => searchInputRef.current?.focus(), description: 'Focus search' },
@@ -392,6 +389,7 @@ function TransactionsPageInner() {
     <div className="max-w-2xl mx-auto overflow-x-hidden">
       {/* Header */}
       <div
+        ref={headerRef}
         className="sticky top-0 z-20 px-mobile pt-4 pb-4"
         style={{
           backgroundColor: 'color-mix(in srgb, var(--color-bg) 92%, transparent)',
@@ -687,10 +685,15 @@ function TransactionsPageInner() {
 
               return (
                 <div key={date} className="mb-4">
-                  {/* Date header */}
+                  {/* Date header — sticks below top header while scrolling its group */}
                   <div
-                    className="flex items-center justify-between px-mobile py-2"
-                    style={{ backgroundColor: 'var(--color-bg)' }}
+                    className="sticky z-10 flex items-center justify-between px-mobile py-2"
+                    style={{
+                      top: 'var(--tx-header-h, 0px)',
+                      backgroundColor: 'color-mix(in srgb, var(--color-bg) 88%, transparent)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                    }}
                   >
                     <p className="text-[11px] font-black uppercase tracking-widest opacity-50">
                       {format(parseISO(date), 'EEEE, MMM d')}

@@ -12,8 +12,8 @@
   --color-accent: var(--color-accent-base);
   --color-warning: var(--color-warning-base);
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --radius-xs: 8px;
   --radius-sm: 12px;
@@ -39,18 +39,18 @@ html {
 :root,
 :root.light {
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.2s ease;
+    background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s ease;
 }
 
 :root {
-  --color-bg: #0a0f1a;
-  --color-card-base: #111827;
-  --color-card-elevated-base: #1a2332;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-border-base: rgba(255, 255, 255, 0.08);
+  --color-bg: #030712;
+  --color-card-base: rgba(17, 24, 39, 0.6);
+  --color-card-elevated-base: rgba(31, 41, 55, 0.7);
+  --color-text-primary: #f9fafb;
+  --color-text-secondary: #9ca3af;
+  --color-border-base: rgba(255, 255, 255, 0.06);
   --color-income-base: #10b981;
   --color-expense-base: #ef4444;
   --color-accent-base: #3b82f6;
@@ -58,16 +58,16 @@ html {
 }
 
 .light {
-  --color-bg: #f8fafc;
-  --color-card-base: #ffffff;
-  --color-card-elevated-base: #f1f5f9;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #64748b;
-  --color-border-base: #e2e8f0;
-  --color-income-base: #10b981;
-  --color-expense-base: #ef4444;
-  --color-accent-base: #3b82f6;
-  --color-warning-base: #f59e0b;
+  --color-bg: #f3f4f6;
+  --color-card-base: rgba(255, 255, 255, 0.7);
+  --color-card-elevated-base: rgba(243, 244, 246, 0.8);
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-border-base: rgba(0, 0, 0, 0.05);
+  --color-income-base: #059669;
+  --color-expense-base: #dc2626;
+  --color-accent-base: #2563eb;
+  --color-warning-base: #d97706;
 }
 
 * {
@@ -78,7 +78,7 @@ html {
 /* Smooth colour transitions for all themed elements */
 *, *::before, *::after {
   transition-property: background-color, border-color, color, fill, stroke;
-  transition-duration: 0.25s;
+  transition-duration: 0.2s;
   transition-timing-function: ease;
 }
 
@@ -87,10 +87,10 @@ body {
   min-height: -webkit-fill-available;
   background-color: var(--color-bg);
   background-image: 
-    radial-gradient(at 0% 0%, color-mix(in srgb, var(--color-accent-base) 15%, transparent) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, color-mix(in srgb, var(--color-income-base) 12%, transparent) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, color-mix(in srgb, var(--color-expense-base) 8%, transparent) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, color-mix(in srgb, var(--color-warning-base) 8%, transparent) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, color-mix(in srgb, var(--color-accent-base) 12%, transparent) 0px, transparent 45%),
+    radial-gradient(at 100% 0%, color-mix(in srgb, var(--color-income-base) 10%, transparent) 0px, transparent 40%),
+    radial-gradient(at 100% 100%, color-mix(in srgb, var(--color-expense-base) 7%, transparent) 0px, transparent 45%),
+    radial-gradient(at 0% 100%, color-mix(in srgb, var(--color-warning-base) 7%, transparent) 0px, transparent 40%);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -102,41 +102,44 @@ body {
 
 /* Bento & Card Utilities */
 .glass-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
+  background: var(--color-card-base);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-lg);
   box-shadow: 
-    0 4px 24px -1px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 8px 32px -4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px rgba(255, 255, 255, 0.03);
 }
 
 .bento-item {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
+  background: var(--color-card-base);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--color-border-base);
+  border-radius: var(--radius-lg);
   box-shadow: 
-    0 4px 24px -1px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  @apply p-6 hover:bg-white/[0.05] transition-all duration-500 cursor-default;
+    0 4px 20px -1px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  @apply p-6 hover:bg-white/[0.04] transition-all duration-300 cursor-default;
 }
 
 /* Base Typography */
 p, span, div {
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: -0.01em;
+  line-height: 1.5;
 }
 
-.text-tiny { font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-.text-xs { font-size: 11px; letter-spacing: -0.01em; }
-.text-sm { font-size: 13px; letter-spacing: -0.01em; }
-.text-base { font-size: 15px; letter-spacing: -0.02em; }
-.text-lg { font-size: 17px; letter-spacing: -0.02em; }
-.text-xl { font-size: 19px; letter-spacing: -0.03em; }
-.text-2xl { font-size: 22px; letter-spacing: -0.04em; }
+.text-tiny { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.text-xs { font-size: 12px; letter-spacing: -0.01em; }
+.text-sm { font-size: 14px; letter-spacing: -0.01em; }
+.text-base { font-size: 16px; letter-spacing: -0.015em; }
+.text-lg { font-size: 18px; letter-spacing: -0.02em; }
+.text-xl { font-size: 20px; letter-spacing: -0.025em; }
+.text-2xl { font-size: 24px; letter-spacing: -0.03em; }
+.text-3xl { font-size: 30px; letter-spacing: -0.035em; }
+.text-4xl { font-size: 36px; letter-spacing: -0.04em; }
 
 button, a {
   touch-action: manipulation;
@@ -144,7 +147,7 @@ button, a {
 }
 
 button:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
 input, select, textarea {
@@ -182,15 +185,20 @@ input, select, textarea {
   background: var(--color-card-base);
   border: 1px solid var(--color-border-base);
   border-radius: var(--radius-lg);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
   overflow: hidden;
 }
 
 .glass-morphic {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light .glass-morphic {
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 /* Skeleton shimmer */
@@ -213,15 +221,15 @@ input, select, textarea {
     var(--color-card-base) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s linear infinite;
+  animation: shimmer 2s linear infinite;
   border-radius: var(--radius-sm);
 }
 
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -230,7 +238,7 @@ input, select, textarea {
 
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-base);
-  border-radius: 2px;
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -239,10 +247,15 @@ input, select, textarea {
 
 /* ── iOS Glassmorphism ── */
 .glass-ios {
-  background: color-mix(in srgb, var(--color-card-base) 70%, transparent);
-  backdrop-filter: blur(25px) saturate(200%);
-  -webkit-backdrop-filter: blur(25px) saturate(200%);
-  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--color-card-base) 75%, transparent);
+  backdrop-filter: blur(25px) saturate(210%);
+  -webkit-backdrop-filter: blur(25px) saturate(210%);
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+.light .glass-ios {
+  background: rgba(255, 255, 255, 0.75);
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
 }
 
 
