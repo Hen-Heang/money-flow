@@ -24,12 +24,9 @@ const MORE_HREFS = MORE_ITEMS.map(i => i.href)
 export default function TabBar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [isMounted, setIsMounted] = React.useState(false)
   const [showMore, setShowMore] = useState(false)
 
-  React.useEffect(() => { setIsMounted(true) }, [])
-
-  const isMoreActive = isMounted && MORE_HREFS.includes(pathname)
+  const isMoreActive = MORE_HREFS.includes(pathname)
 
   const handleMoreNav = (href: string) => {
     setShowMore(false)
@@ -56,54 +53,56 @@ export default function TabBar() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 30, stiffness: 320, mass: 0.8 }}
-              className="md:hidden fixed bottom-0 inset-x-0 z-50 rounded-t-[32px] overflow-hidden"
+              className="md:hidden fixed bottom-0 inset-x-0 z-50 rounded-t-[32px] overflow-hidden shadow-2xl"
               style={{
-                background: 'rgba(10, 15, 26, 0.97)',
-                backdropFilter: 'blur(40px)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 100px)',
+                background: 'rgba(10, 15, 26, 0.98)',
+                backdropFilter: 'blur(40px) saturate(200%)',
+                borderTop: '1px solid rgba(255,255,255,0.1)',
+                borderLeft: '1px solid rgba(255,255,255,0.05)',
+                borderRight: '1px solid rgba(255,255,255,0.05)',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 110px)',
               }}
             >
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-1">
-                <div className="w-10 h-1 rounded-full bg-white/20" />
+                <div className="w-12 h-1.5 rounded-full bg-white/10" />
               </div>
 
               {/* Header */}
-              <div className="flex items-center justify-between px-6 pt-4 pb-5">
-                <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">More</p>
+              <div className="flex items-center justify-between px-7 pt-5 pb-6">
+                <p className="text-tiny opacity-40 font-black tracking-[0.4em]">Intelligence</p>
                 <button
                   onClick={() => setShowMore(false)}
-                  className="w-8 h-8 rounded-full bg-white/8 flex items-center justify-center active:scale-90 transition-transform"
+                  className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center active:scale-90 transition-all border border-white/5"
                 >
-                  <X size={15} strokeWidth={2.5} style={{ color: 'rgba(255,255,255,0.5)' }} />
+                  <X size={16} strokeWidth={3} className="text-white/40" />
                 </button>
               </div>
 
               {/* Items */}
-              <div className="px-4 space-y-2">
+              <div className="px-5 space-y-3">
                 {MORE_ITEMS.map(({ href, label, icon: Icon, desc }) => {
-                  const isActive = isMounted && pathname === href
+                  const isActive = pathname === href
                   return (
                     <motion.button
                       key={href}
-                      whileTap={{ scale: 0.97 }}
+                      whileTap={{ scale: 0.98 }}
                       onClick={() => handleMoreNav(href)}
-                      className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-left transition-all"
+                      className="w-full flex items-center gap-5 px-5 py-5 rounded-[24px] text-left transition-all group relative overflow-hidden"
                       style={{
-                        background: isActive ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${isActive ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                        background: isActive ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${isActive ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)'}`,
                       }}
                     >
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg transition-transform group-hover:scale-110"
                         style={{ background: isActive ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)' }}
                       >
-                        <Icon size={18} strokeWidth={isActive ? 2.5 : 2} style={{ color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.5)' }} />
+                        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-400' : 'text-white/40'} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-[14px] font-black" style={{ color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.9)' }}>{label}</p>
-                        <p className="text-[11px] font-medium opacity-40">{desc}</p>
+                        <p className={`text-base font-black tracking-tight ${isActive ? 'text-blue-400' : 'text-white/90'}`}>{label}</p>
+                        <p className="text-xs font-medium opacity-40 mt-0.5">{desc}</p>
                       </div>
                     </motion.button>
                   )
@@ -117,22 +116,22 @@ export default function TabBar() {
       {/* Tab bar */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-50 flex justify-center"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', paddingLeft: 20, paddingRight: 20 }}
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', paddingLeft: 20, paddingRight: 20 }}
       >
         <div
-          className="w-full max-w-sm flex items-center justify-around shadow-2xl"
+          className="w-full max-w-sm flex items-center justify-around shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8)]"
           style={{
-            height: 72,
-            background: 'rgba(10, 15, 26, 0.85)',
-            backdropFilter: 'blur(32px) saturate(210%)',
-            WebkitBackdropFilter: 'blur(32px) saturate(210%)',
-            borderRadius: 32,
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)',
+            height: 76,
+            background: 'rgba(10, 15, 26, 0.88)',
+            backdropFilter: 'blur(40px) saturate(220%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(220%)',
+            borderRadius: 38,
+            border: '1px solid rgba(255,255,255,0.1)',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)',
           }}
         >
           {PRIMARY_TABS.map(({ href, label, icon: Icon }) => {
-            const isActive = isMounted && pathname === href
+            const isActive = pathname === href
             return (
               <Link
                 key={href}
@@ -141,21 +140,21 @@ export default function TabBar() {
                 style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
               >
                 <motion.div
-                  whileTap={{ scale: 0.92 }}
+                  whileTap={{ scale: 0.9 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  className="flex flex-col items-center gap-1"
+                  className="flex flex-col items-center gap-1.5"
                 >
                   <div
-                    className="flex items-center justify-center transition-all duration-300"
+                    className="flex items-center justify-center transition-all duration-400"
                     style={{
-                      width: 48, height: 32, borderRadius: 16,
-                      background: isActive ? 'rgba(59,130,246,0.15)' : 'transparent',
-                      boxShadow: isActive ? '0 0 15px rgba(59,130,246,0.1)' : 'none',
+                      width: 52, height: 34, borderRadius: 17,
+                      background: isActive ? 'rgba(59,130,246,0.12)' : 'transparent',
+                      boxShadow: isActive ? '0 0 20px rgba(59,130,246,0.1)' : 'none',
                     }}
                   >
-                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} style={{ color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.4)' }} />
+                    <Icon size={22} strokeWidth={isActive ? 2.5 : 2} className={`transition-all ${isActive ? 'text-blue-400 scale-110' : 'text-white/40'}`} />
                   </div>
-                  <span className="transition-all duration-300 font-bold" style={{ fontSize: 10, lineHeight: 1, color: isActive ? '#60a5fa' : 'rgba(255,255,255,0.3)' }}>
+                  <span className={`transition-all duration-400 font-black tracking-tight ${isActive ? 'text-blue-400' : 'text-white/30'}`} style={{ fontSize: 10 }}>
                     {label}
                   </span>
                 </motion.div>
@@ -163,7 +162,7 @@ export default function TabBar() {
                   <motion.span
                     layoutId="tab-dot"
                     className="absolute bottom-1.5 w-1 h-1 rounded-full"
-                    style={{ background: '#60a5fa', boxShadow: '0 0 8px #60a5fa' }}
+                    style={{ background: '#60a5fa', boxShadow: '0 0 10px #60a5fa' }}
                     transition={{ type: 'spring', stiffness: 380, damping: 28 }}
                   />
                 )}
@@ -178,21 +177,21 @@ export default function TabBar() {
             style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
           >
             <motion.div
-              whileTap={{ scale: 0.92 }}
+              whileTap={{ scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="flex flex-col items-center gap-1"
+              className="flex flex-col items-center gap-1.5"
             >
               <div
-                className="flex items-center justify-center transition-all duration-300"
+                className="flex items-center justify-center transition-all duration-400"
                 style={{
-                  width: 48, height: 32, borderRadius: 16,
-                  background: (isMoreActive || showMore) ? 'rgba(59,130,246,0.15)' : 'transparent',
-                  boxShadow: (isMoreActive || showMore) ? '0 0 15px rgba(59,130,246,0.1)' : 'none',
+                  width: 52, height: 34, borderRadius: 17,
+                  background: (isMoreActive || showMore) ? 'rgba(59,130,246,0.12)' : 'transparent',
+                  boxShadow: (isMoreActive || showMore) ? '0 0 20px rgba(59,130,246,0.1)' : 'none',
                 }}
               >
-                <Grid3X3 size={22} strokeWidth={(isMoreActive || showMore) ? 2.5 : 2} style={{ color: (isMoreActive || showMore) ? '#60a5fa' : 'rgba(255,255,255,0.4)' }} />
+                <Grid3X3 size={22} strokeWidth={(isMoreActive || showMore) ? 2.5 : 2} className={`transition-all ${(isMoreActive || showMore) ? 'text-blue-400 scale-110' : 'text-white/40'}`} />
               </div>
-              <span className="transition-all duration-300 font-bold" style={{ fontSize: 10, lineHeight: 1, color: (isMoreActive || showMore) ? '#60a5fa' : 'rgba(255,255,255,0.3)' }}>
+              <span className={`transition-all duration-400 font-black tracking-tight ${(isMoreActive || showMore) ? 'text-blue-400' : 'text-white/30'}`} style={{ fontSize: 10 }}>
                 More
               </span>
             </motion.div>
@@ -200,7 +199,7 @@ export default function TabBar() {
               <motion.span
                 layoutId="tab-dot"
                 className="absolute bottom-1.5 w-1 h-1 rounded-full"
-                style={{ background: '#60a5fa', boxShadow: '0 0 8px #60a5fa' }}
+                style={{ background: '#60a5fa', boxShadow: '0 0 10px #60a5fa' }}
                 transition={{ type: 'spring', stiffness: 380, damping: 28 }}
               />
             )}

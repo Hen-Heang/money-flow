@@ -33,6 +33,7 @@ export interface PaymentMethod {
 export interface Budget {
   category_id: string
   amount_krw: number
+  categories?: { name: string; icon: string; color: string } | null
 }
 
 export interface ExchangeRateInfo {

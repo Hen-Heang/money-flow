@@ -5,24 +5,12 @@
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/cron/budget-alerts",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/monthly-report",
-      "schedule": "0 9 1 * *"
-    },
-    {
       "path": "/api/cron/savings",
       "schedule": "30 9 1 * *"
     },
     {
       "path": "/api/cron/cleanup-exchange-rates",
       "schedule": "0 3 * * 0"
-    },
-    {
-      "path": "/api/cron/backup",
-      "schedule": "0 1 * * *"
     }
   ]
 }

@@ -12,7 +12,7 @@ import type { Category, PaymentMethod, Budget } from '@/lib/types'
 import {
   CreditCard, Tag, Download, LogOut, ChevronRight,
   Plus, Trash2, Moon, Sun, Camera, Target, Check, Pencil, X, BookOpen, Sparkles, ExternalLink,
-  FileJson, FileText, Bell, BellOff
+  FileJson, FileText
 } from 'lucide-react'
 import { formatNumber, haptic, getDisplayName, resizeImageToBlob } from '@/lib/utils'
 import { MONEY_TIPS } from '@/shared/data'
@@ -84,9 +84,7 @@ export default function SettingsPage() {
   const [isDark, setIsDark] = useState(() =>
     typeof document !== 'undefined' ? !document.documentElement.classList.contains('light') : true
   )
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
-  const [notifLoading, setNotifLoading] = useState(false)
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [isAddingPaymentMethod, setIsAddingPaymentMethod] = useState(false)
   const [newPaymentMethodName, setNewPaymentMethodName] = useState('')
   const [newPaymentMethodIcon, setNewPaymentMethodIcon] = useState('💳')
@@ -280,75 +278,7 @@ export default function SettingsPage() {
     try { localStorage.setItem('theme', goingLight ? 'light' : 'dark') } catch {}
   }
 
-  // Read current notification permission on mount
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setNotifPermission('unsupported')
-      return
-    }
-    setNotifPermission(Notification.permission)
-  }, [])
-
-  const toggleNotifications = async () => {
-    if (notifPermission === 'unsupported') {
-      toast.error('Push notifications are not supported in this browser')
-      return
-    }
-    haptic('light')
-    setNotifLoading(true)
-
-    try {
-      if (notifPermission === 'granted') {
-        // Unsubscribe — remove from server
-        const reg = await navigator.serviceWorker.ready
-        const sub = await reg.pushManager.getSubscription()
-        if (sub) {
-          await fetch('/api/push/subscribe', {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-          })
-          await sub.unsubscribe()
-        }
-        setNotifPermission('default')
-        toast.success('Notifications disabled')
-        return
-      }
-
-      // Request permission
-      const permission = await Notification.requestPermission()
-      setNotifPermission(permission)
-      if (permission !== 'granted') {
-        toast.error('Permission denied — enable notifications in your browser settings')
-        return
-      }
-
-      // Subscribe and send to server
-      const reg = await navigator.serviceWorker.ready
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidKey) { toast.error('Push not configured'); return }
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: vapidKey,
-      })
-
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub.toJSON()),
-      })
-
-      if (!res.ok) throw new Error('Failed to save subscription')
-      toast.success('Notifications enabled — you\'ll get budget alerts daily')
-    } catch (err) {
-      toast.error('Could not enable notifications')
-    } finally {
-      setNotifLoading(false)
-    }
-  }
-
-  const deleteCategory = async (id: string) => {
+const deleteCategory = async (id: string) => {
     haptic('medium')
     const { error } = await supabase.from('categories').delete().eq('id', id)
     if (error) { toast.error('Failed to delete'); return }
@@ -524,37 +454,6 @@ export default function SettingsPage() {
                 className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
               />
             </div>
-          }
-        />
-        <Row
-          icon={notifPermission === 'granted' ? Bell : BellOff}
-          color="var(--color-accent-base)"
-          title="Budget Alerts"
-          subtitle={
-            notifPermission === 'unsupported'
-              ? 'Not supported in this browser'
-              : notifPermission === 'granted'
-              ? 'Push notifications are on'
-              : notifPermission === 'denied'
-              ? 'Blocked — enable in browser settings'
-              : 'Get notified when nearing budget limits'
-          }
-          onClick={notifPermission !== 'denied' && notifPermission !== 'unsupported' ? toggleNotifications : undefined}
-          right={
-            notifPermission === 'unsupported' || notifPermission === 'denied' ? null : notifLoading ? (
-              <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--color-accent-base)', borderTopColor: 'transparent' }} />
-            ) : (
-              <div
-                className="w-11 h-6 rounded-full relative transition-colors shadow-inner"
-                style={{ backgroundColor: notifPermission === 'granted' ? 'var(--color-accent-base)' : 'var(--color-border-base)' }}
-              >
-                <motion.div
-                  animate={{ x: notifPermission === 'granted' ? 22 : 4 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  className="absolute top-1 w-4 h-4 rounded-full bg-white shadow-md"
-                />
-              </div>
-            )
           }
         />
       </Group>

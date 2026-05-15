@@ -39,14 +39,13 @@ export default function BudgetPage() {
     () => allCategories.filter(c => c.type === 'expense' || c.type === 'both'),
     [allCategories]
   )
-  const [budgets, setBudgets] = useState<Budget[]>([])
+
+  // Use localBudgets for optimistic updates, fallback to cachedBudgets
+  const [localBudgets, setLocalBudgets] = useState<Budget[] | null>(null)
+  const budgets = localBudgets ?? cachedBudgets
+
   const [spends, setSpends] = useState<CategorySpend[]>([])
   const [loading, setLoading] = useState(true)
-
-  // Sync from global cache on first load
-  useEffect(() => {
-    if (cachedBudgets.length > 0 && budgets.length === 0) setBudgets(cachedBudgets)
-  }, [cachedBudgets]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
@@ -78,7 +77,8 @@ export default function BudgetPage() {
     setLoading(false)
   }, [supabase, year, month])
 
-  useEffect(() => { load() }, [load])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load() }, [load])
 
   const saveBudget = async (categoryId: string) => {
     const raw = editInput.replace(/,/g, '')
@@ -95,10 +95,11 @@ export default function BudgetPage() {
     )
     if (error) { toast.error('Failed to save'); return }
 
-    setBudgets(prev => {
-      const exists = prev.find(b => b.category_id === categoryId)
-      if (exists) return prev.map(b => b.category_id === categoryId ? { ...b, amount_krw: amount } : b)
-      return [...prev, { category_id: categoryId, amount_krw: amount }]
+    setLocalBudgets(prev => {
+      const base = prev ?? cachedBudgets
+      const exists = base.find(b => b.category_id === categoryId)
+      if (exists) return base.map(b => b.category_id === categoryId ? { ...b, amount_krw: amount } : b)
+      return [...base, { category_id: categoryId, amount_krw: amount }]
     })
     invalidateBudgetsCache()
     haptic('medium')

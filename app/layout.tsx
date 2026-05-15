@@ -1,7 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
-import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import './globals.css'
+
+const geistSans = GeistSans
+const geistMono = GeistMono
 
 export const metadata: Metadata = {
   title: 'Money Flow',
@@ -35,7 +39,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -51,13 +55,8 @@ export default function RootLayout({
           } catch(e) {}
         ` }} />
       </head>
-      <body style={{
-        backgroundColor: 'var(--color-bg)',
-        color: 'var(--color-text-primary)',
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif",
-      }}>
+      <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)]">
         {children}
-        <ServiceWorkerRegistration />
         <Toaster
           position="top-center"
           toastOptions={{

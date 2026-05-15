@@ -2,7 +2,6 @@ const CACHE_NAME = 'money-flow-v2'
 
 // App shell: pre-cache these on install
 const PRECACHE_URLS = [
-  '/',
   '/transactions',
   '/savings',
   '/analytics',
@@ -71,50 +70,5 @@ self.addEventListener('fetch', (event) => {
         return cached || networkFetch
       })
     )
-  )
-})
-
-// ── Push notifications ────────────────────────────────────────────────────────
-self.addEventListener('push', (event) => {
-  if (!event.data) return
-
-  let data = {}
-  try { data = event.data.json() } catch { return }
-
-  const { title = 'Money Flow', body = '', icon, badge, tag, data: notifData } = data
-
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: icon || '/icons/icon-192.png',
-      badge: badge || '/icons/icon-192.png',
-      tag: tag || 'money-flow',
-      data: notifData || { url: '/' },
-      // Vibration pattern: short-long-short
-      vibrate: [100, 200, 100],
-    })
-  )
-})
-
-// ── Notification click: open / focus the app ──────────────────────────────────
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  const targetUrl = event.notification.data?.url || '/'
-
-  event.waitUntil(
-    self.clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clients) => {
-        // If the app is already open, focus it and navigate
-        for (const client of clients) {
-          if (client.url.includes(self.location.origin)) {
-            client.focus()
-            client.navigate(targetUrl)
-            return
-          }
-        }
-        // Otherwise open a new window
-        self.clients.openWindow(targetUrl)
-      })
   )
 })
