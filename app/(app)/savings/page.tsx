@@ -550,13 +550,41 @@ export default function SavingsPage() {
     loadGoals()
   }
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('savings_goals').delete().eq('id', id)
-    if (error) { toast.error('Failed to delete'); return }
+  const handleDelete = (goal: SavingsGoal) => {
     haptic('medium')
-    toast.success('Goal removed')
-    setGoals(prev => prev.filter(g => g.id !== id))
+    setGoals(prev => prev.filter(g => g.id !== goal.id))
+    let undone = false
+    const t = toast(
+      (toastInstance) => (
+        <span className="flex items-center gap-3 text-sm font-medium">
+          Goal removed
+          <button
+            className="font-black text-blue-400 underline-offset-2 hover:underline"
+            onClick={() => {
+              undone = true
+              setGoals(prev => [...prev, goal].sort((a, b) => a.id.localeCompare(b.id)))
+              toast.dismiss(toastInstance.id)
+            }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000 }
+    )
+    setTimeout(async () => {
+      if (undone) return
+      const { error } = await supabase.from('savings_goals').delete().eq('id', goal.id)
+      if (error) {
+        toast.error('Failed to delete')
+        setGoals(prev => [...prev, goal])
+      }
+    }, 5100)
   }
+
+  const activeGoals = useMemo(() => goals.filter(g => g.current_usd < g.target_usd), [goals])
+  const completedGoals = useMemo(() => goals.filter(g => g.current_usd >= g.target_usd), [goals])
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const totalSaved = goals.reduce((s, g) => s + g.current_usd, 0)
   const totalTarget = goals.reduce((s, g) => s + g.target_usd, 0)
@@ -636,14 +664,14 @@ export default function SavingsPage() {
 
       {/* Goals list */}
       <div className="space-y-5">
-        <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40 ml-1">Individual Goals</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40 ml-1">Active Goals</p>
         {loading ? (
           <div className="space-y-4">
             {[1, 2].map(i => (
               <div key={i} className="skeleton h-44 rounded-[28px]" />
             ))}
           </div>
-        ) : goals.length === 0 ? (
+        ) : activeGoals.length === 0 && completedGoals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center bg-[var(--color-card-base)] rounded-[32px] border border-dashed border-[var(--color-border-base)]">
             <div className="w-20 h-20 rounded-full bg-[var(--color-card-elevated-base)] flex items-center justify-center text-4xl mb-6">🎯</div>
             <h3 className="text-xl font-black mb-2">No active goals</h3>
@@ -657,15 +685,20 @@ export default function SavingsPage() {
               Set a Goal
             </button>
           </div>
+        ) : activeGoals.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center bg-[var(--color-card-base)] rounded-[32px] border border-dashed border-[var(--color-border-base)]">
+            <div className="text-4xl mb-3">🎉</div>
+            <h3 className="text-lg font-black mb-1">All goals achieved!</h3>
+            <p className="text-sm font-medium opacity-50">Set a new goal to keep saving.</p>
+          </div>
         ) : (
           <AnimatePresence>
-            {goals.map(goal => {
+            {activeGoals.map(goal => {
               const pct = goal.target_usd > 0 ? Math.min((goal.current_usd / goal.target_usd) * 100, 100) : 0
               const remaining = Math.max(goal.target_usd - goal.current_usd, 0)
               const days = daysUntil(goal.deadline)
               const done = pct >= 100
-              
-              // Daily contribution calculation
+              const isOverdue = !done && days !== null && days < 0
               const dailyNeeded = days && days > 0 ? (remaining / days) : null
 
               return (
@@ -675,8 +708,11 @@ export default function SavingsPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="group relative overflow-hidden rounded-[28px] border border-[var(--color-border-base)] p-5 shadow-sm transition-all active:border-white/20 sm:p-6"
-                  style={{ backgroundColor: 'var(--color-card-base)' }}
+                  className="group relative overflow-hidden rounded-[28px] p-5 shadow-sm transition-all sm:p-6"
+                  style={{
+                    backgroundColor: 'var(--color-card-base)',
+                    border: isOverdue ? '1.5px solid rgba(239,68,68,0.4)' : '1px solid var(--color-border-base)',
+                  }}
                 >
                   {/* Goal header */}
                   <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -718,7 +754,7 @@ export default function SavingsPage() {
                         <Pencil className="w-4 h-4 text-[var(--color-text-secondary)]" />
                       </button>
                       <button
-                        onClick={() => { if(confirm('Delete goal?')) handleDelete(goal.id) }}
+                        onClick={() => handleDelete(goal)}
                         className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--color-card-elevated-base)] active:scale-90 transition-all"
                       >
                         <Trash2 className="w-4 h-4 text-red-400" />
@@ -765,10 +801,18 @@ export default function SavingsPage() {
                   {/* Pro Stats Footer */}
                   <div className="flex flex-col gap-4 border-t border-[var(--color-border-base)] pt-4 min-[431px]:flex-row min-[431px]:items-center min-[431px]:justify-between">
                     <div className="flex flex-col">
-                       <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 mb-0.5">Needed Daily</span>
-                       <p className="text-[13px] font-black" style={{ color: dailyNeeded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
-                         {dailyNeeded ? `$${dailyNeeded.toFixed(2)}` : '--'}
-                       </p>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40 mb-0.5">
+                        {isOverdue ? 'Status' : 'Needed Daily'}
+                      </span>
+                      {isOverdue ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-black text-red-400">
+                          ⚠ Overdue
+                        </span>
+                      ) : (
+                        <p className="text-[13px] font-black" style={{ color: dailyNeeded ? 'var(--color-text-primary)' : 'var(--color-text-secondary)' }}>
+                          {dailyNeeded ? `$${dailyNeeded.toFixed(2)}` : '--'}
+                        </p>
+                      )}
                     </div>
                     {!done ? (
                       <button
@@ -793,6 +837,53 @@ export default function SavingsPage() {
               )
             })}
           </AnimatePresence>
+        )}
+
+        {/* Completed Goals */}
+        {!loading && completedGoals.length > 0 && (
+          <div className="mt-6">
+            <button
+              onClick={() => setShowCompleted(p => !p)}
+              className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.3em] opacity-50 hover:opacity-80 transition-opacity ml-1 mb-3"
+            >
+              <CheckCircle2 size={13} className="text-green-400" />
+              {completedGoals.length} Completed
+              <span className="opacity-60">{showCompleted ? '▲' : '▼'}</span>
+            </button>
+            <AnimatePresence>
+              {showCompleted && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="space-y-3 overflow-hidden"
+                >
+                  {completedGoals.map(goal => (
+                    <div
+                      key={goal.id}
+                      className="flex items-center gap-4 p-4 rounded-[20px] border opacity-70"
+                      style={{ backgroundColor: 'var(--color-card-base)', borderColor: `${goal.color}30` }}
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ backgroundColor: `${goal.color}15` }}>
+                        {goal.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black truncate" style={{ color: 'var(--color-text-primary)' }}>{goal.name}</p>
+                        <p className="text-[11px] font-bold" style={{ color: goal.color }}>${goal.target_usd.toLocaleString()} saved</p>
+                      </div>
+                      <CheckCircle2 className="w-5 h-5 shrink-0 text-green-400" strokeWidth={2.5} />
+                      <button
+                        onClick={() => handleDelete(goal)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center bg-[var(--color-card-elevated-base)] active:scale-90 transition-all shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      </button>
+                    </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         )}
       </div>
 
