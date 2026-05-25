@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { isSameMonth } from 'date-fns'
-import { FileText, ChevronRight } from 'lucide-react'
+import { FileText, ChevronRight, Settings } from 'lucide-react'
 
-import { getUserProfile } from '@/lib/profile'
 import { getMonthRange } from '@/lib/dateHelpers'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets } from '@/hooks/useBudgets'
+import { useUserProfile } from '@/hooks/useUserProfile'
 import type { Transaction, ExchangeRateInfo } from '@/lib/types'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import { QUICK_TEMPLATES } from '@/shared/data'
@@ -22,6 +22,7 @@ const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddT
 const ChatBot = dynamic(() => import('@/components/ai/ChatBot'), { ssr: false })
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 // New modular components
 import { SummaryCards } from './components/SummaryCards'
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const { categories } = useCategories()
   const { budgets: budgetList } = useBudgets()
+  const { profile: userProfile } = useUserProfile()
   
   const budgetMap = useMemo(
     () => Object.fromEntries(budgetList.map(b => [b.category_id, b.amount_krw])),
@@ -69,10 +71,9 @@ export default function DashboardPage() {
   }
 
   const showBudgetReview = !budgetReviewDismissed && new Date().getDate() <= BUDGET_REVIEW_DAY_THRESHOLD && isSameMonth(currentDate, new Date())
-  const [userName, setUserName] = useState('')
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [exchangeRateInfo, setExchangeRateInfo] = useState<ExchangeRateInfo | null>(null)
-  const [streak, setStreak] = useState(0)
+  const userName = getDisplayName(userProfile?.email, userProfile?.display_name)
+  const avatarUrl = userProfile?.avatar_url ?? null
   const supabase = useSupabaseClient()
 
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
@@ -95,18 +96,13 @@ export default function DashboardPage() {
         return
       }
 
-      const [profile, txResult] = await Promise.all([
-        getUserProfile(supabase, user),
-        supabase
-          .from('transactions')
-          .select('id, date, type, amount_krw, description, category_id, categories(name, icon, color)')
-          .eq('user_id', user.id)
-          .gte('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).start)
-          .lt('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).end)
-          .order('date', { ascending: false }),
-      ])
-      setUserName(getDisplayName(profile?.email, profile?.display_name))
-      setAvatarUrl(profile?.avatar_url ?? null)
+      const txResult = await supabase
+        .from('transactions')
+        .select('id, date, type, amount_krw, description, category_id, categories(name, icon, color)')
+        .eq('user_id', user.id)
+        .gte('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).start)
+        .lt('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).end)
+        .order('date', { ascending: false })
       setTransactions((txResult.data as Transaction[]) || [])
     } catch (err) {
       toast.error('Failed to sync data')
@@ -245,7 +241,9 @@ export default function DashboardPage() {
       {/* ─── Top Header ─── */}
       <div className="px-5 sm:px-0 mb-10 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0">
-          <Avatar src={avatarUrl} name={userName} size={48} className="ring-4 ring-white/5 shadow-2xl shrink-0 sm:w-16 sm:h-16" />
+          <Link href="/settings" className="active:scale-95 transition-transform">
+            <Avatar src={avatarUrl} name={userName} size={48} className="ring-4 ring-white/5 shadow-2xl shrink-0 sm:w-16 sm:h-16" />
+          </Link>
           <div className="min-w-0">
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} className="text-tiny text-[var(--color-text-secondary)] font-black tracking-[0.3em] mb-1 uppercase">
               {greeting}
@@ -261,6 +259,9 @@ export default function DashboardPage() {
             {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
           </button>
           <ChatBot />
+          <Link href="/settings" className="md:hidden w-9 h-9 rounded-2xl glass-morphic border border-white/5 flex items-center justify-center active:scale-95 transition-transform">
+            <Settings size={16} className="text-white/60" />
+          </Link>
         </div>
       </div>
 
@@ -324,15 +325,15 @@ export default function DashboardPage() {
 
           <div className="px-5 sm:px-0">
             <button
-              onClick={() => router.push('/report')}
+              onClick={() => router.push('/analytics')}
               className="w-full flex items-center gap-4 p-5 rounded-[28px] border border-white/5 hover:border-white/20 transition-all active:scale-[0.98] text-left bg-[var(--color-card-elevated-base)] group"
             >
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/10 group-hover:scale-110 transition-transform">
                 <FileText size={20} className="text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-black tracking-tight">Financial Report</p>
-                <p className="text-xs font-bold opacity-30 mt-0.5">Quarterly & Monthly Analytics</p>
+                <p className="text-base font-black tracking-tight">Analytics</p>
+                <p className="text-xs font-bold opacity-30 mt-0.5">Trends & Monthly Summary</p>
               </div>
               <ChevronRight size={18} className="opacity-20 group-hover:translate-x-1 transition-transform" />
             </button>

@@ -710,13 +710,17 @@ const deleteCategory = async (id: string) => {
       </div>
       
       <div className="flex justify-center pb-8">
-        <button 
-          onClick={() => {
+        <button
+          onClick={async () => {
             haptic('light')
-            const t = toast.loading('Checking for updates...')
-            setTimeout(() => {
-              toast.success('Your app is up to date!', { id: t })
-            }, 1500)
+            const t = toast.loading('Checking version...')
+            try {
+              const res = await fetch('/api/version')
+              const { version } = await res.json() as { version: string }
+              toast.success(`v${version} — You're on the latest version`, { id: t, duration: 3000 })
+            } catch {
+              toast.error('Could not check version', { id: t })
+            }
           }}
           className="text-[10px] font-black uppercase tracking-widest text-[var(--color-accent-base)] px-4 py-2 rounded-full bg-blue-500/5 active:scale-95 transition-all"
         >
