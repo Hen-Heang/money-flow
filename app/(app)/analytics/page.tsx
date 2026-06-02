@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import {
@@ -8,9 +8,11 @@ import {
   PieChart, Pie,
   LineChart, Line,
 } from 'recharts'
-import { TrendingDown, TrendingUp, Minus, Download, Flame, CalendarClock, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Download, Flame, CalendarClock, ShieldCheck, ShieldAlert, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { formatKRW } from '@/lib/utils'
+import { useMonthNavigation } from '@/hooks/useMonthNavigation'
+import { monthLabel, monthKey, getMonthRange } from '@/lib/dateHelpers'
 import type { Transaction, Budget } from '@/lib/types'
 import { CHART_COLORS } from '@/lib/constants'
 
@@ -49,12 +51,106 @@ interface AnalyticsBudget extends Budget {
 type Period = '1M' | '3M' | '6M'
 const PERIOD_MONTHS: Record<Period, number> = { '1M': 1, '3M': 3, '6M': 6 }
 
+interface MonthSummary {
+  income: number
+  expense: number
+  txCount: number
+  topCategories: { name: string; icon: string; color: string; total: number }[]
+}
+
+function delta(current: number, prev: number) {
+  if (prev === 0) return null
+  return ((current - prev) / prev) * 100
+}
+
+function TrendPill({ pct, invert = false }: { pct: number | null; invert?: boolean }) {
+  if (pct === null) return null
+  const isUp = pct > 0
+  const isFlat = Math.abs(pct) < 0.5
+  if (isFlat) return (
+    <span className="flex items-center gap-0.5 text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>
+      <Minus size={9} /> Flat
+    </span>
+  )
+  const isGood = invert ? !isUp : isUp
+  const color = isGood ? '#22c55e' : '#ef4444'
+  const bg = isGood ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)'
+  return (
+    <span className="flex items-center gap-0.5 text-[10px] font-black px-2 py-0.5 rounded-full" style={{ backgroundColor: bg, color }}>
+      {isUp ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+      {Math.abs(pct).toFixed(0)}%
+    </span>
+  )
+}
+
+type View = 'trends' | 'monthly'
+
 export default function AnalyticsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [budgets, setBudgets] = useState<AnalyticsBudget[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('6M')
+  const [view, setView] = useState<View>('trends')
   const supabase = useSupabaseClient()
+
+  // Monthly summary state
+  const { year, month, isCurrentMonth, navigateMonth } = useMonthNavigation({ disableFuture: true })
+  const monthCacheRef = useMemo(() => new Map<string, MonthSummary>(), [])
+  const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null)
+  const [prevMonthSummary, setPrevMonthSummary] = useState<MonthSummary | null>(null)
+  const [monthLoading, setMonthLoading] = useState(false)
+
+  const prevYear  = month === 1 ? year - 1 : year
+  const prevMonth = month === 1 ? 12 : month - 1
+
+  const fetchMonthSummary = useCallback(async (y: number, m: number, userId: string): Promise<MonthSummary | null> => {
+    const key = monthKey(y, m)
+    if (monthCacheRef.has(key)) return monthCacheRef.get(key)!
+    const { start, end } = getMonthRange(y, m)
+    const { data } = await supabase
+      .from('transactions')
+      .select('type, amount_krw, categories(name, icon, color)')
+      .eq('user_id', userId)
+      .gte('date', start)
+      .lt('date', end)
+    if (!data) return null
+    const rows = data as { type: string; amount_krw: number; categories: { name: string; icon: string; color: string } | null }[]
+    const income  = rows.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
+    const expense = rows.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
+    const catMap: Record<string, { name: string; icon: string; color: string; total: number }> = {}
+    rows.filter(t => t.type === 'expense' && t.categories).forEach(t => {
+      const c = t.categories!
+      if (!catMap[c.name]) catMap[c.name] = { ...c, total: 0 }
+      catMap[c.name].total += t.amount_krw
+    })
+    const result: MonthSummary = {
+      income, expense, txCount: rows.length,
+      topCategories: Object.values(catMap).sort((a, b) => b.total - a.total).slice(0, 6),
+    }
+    monthCacheRef.set(key, result)
+    return result
+  }, [supabase, monthCacheRef])
+
+  useEffect(() => {
+    if (view !== 'monthly') return
+    setMonthLoading(true)
+    let cancelled = false
+    const load = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id
+      if (!userId || cancelled) return
+      const [cur, prev] = await Promise.all([
+        fetchMonthSummary(year, month, userId),
+        fetchMonthSummary(prevYear, prevMonth, userId),
+      ])
+      if (cancelled) return
+      setMonthSummary(cur)
+      setPrevMonthSummary(prev)
+      setMonthLoading(false)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [view, year, month, prevYear, prevMonth, fetchMonthSummary, supabase])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -239,7 +335,8 @@ export default function AnalyticsPage() {
 
   return (
     <div className="px-mobile py-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <motion.h1
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -249,38 +346,197 @@ export default function AnalyticsPage() {
           Analytics
         </motion.h1>
 
-        <div className="flex items-center gap-2">
-          {/* Period selector */}
-          <div
-            className="flex rounded-xl p-1 gap-1"
-            style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
-          >
-            {(['1M', '3M', '6M'] as Period[]).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className="rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all"
-                style={{
-                  backgroundColor: period === p ? 'var(--color-accent-base)' : 'transparent',
-                  color: period === p ? 'white' : 'var(--color-text-secondary)',
-                }}
-              >
-                {p}
-              </button>
-            ))}
+        {view === 'trends' && (
+          <div className="flex items-center gap-2">
+            <div
+              className="flex rounded-xl p-1 gap-1"
+              style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
+            >
+              {(['1M', '3M', '6M'] as Period[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-black uppercase tracking-wider transition-all"
+                  style={{
+                    backgroundColor: period === p ? 'var(--color-accent-base)' : 'transparent',
+                    color: period === p ? 'white' : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleExportPeriod}
+              className="flex items-center justify-center rounded-xl p-2 transition-all active:scale-95"
+              style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-secondary)' }}
+              title={`Export ${period} data as CSV`}
+            >
+              <Download className="h-4 w-4" />
+            </button>
           </div>
+        )}
 
-          {/* Export CSV */}
-          <button
-            onClick={handleExportPeriod}
-            className="flex items-center justify-center rounded-xl p-2 transition-all active:scale-95"
-            style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-secondary)' }}
-            title={`Export ${period} data as CSV`}
-          >
-            <Download className="h-4 w-4" />
-          </button>
-        </div>
+        {view === 'monthly' && (
+          <div className="flex items-center gap-1 rounded-2xl px-2 py-1.5 border" style={{ backgroundColor: 'var(--color-card-elevated-base)', borderColor: 'var(--color-border-base)' }}>
+            <button onClick={() => navigateMonth(-1)} className="p-1.5 rounded-xl active:scale-90 transition-transform">
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-[12px] font-black tracking-tight px-1 min-w-[110px] text-center" style={{ color: 'var(--color-text-primary)' }}>
+              {monthLabel(year, month)}
+            </span>
+            <button onClick={() => navigateMonth(1)} disabled={isCurrentMonth} className="p-1.5 rounded-xl active:scale-90 transition-transform disabled:opacity-30">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* View toggle */}
+      <div className="flex rounded-2xl p-1 gap-1 mb-6" style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}>
+        {([
+          { key: 'trends',  label: 'Trends',  icon: Flame },
+          { key: 'monthly', label: 'Monthly', icon: FileText },
+        ] as { key: View; label: string; icon: React.ElementType }[]).map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setView(key)}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-black uppercase tracking-wider transition-all"
+            style={{
+              backgroundColor: view === key ? 'var(--color-accent-base)' : 'transparent',
+              color: view === key ? 'white' : 'var(--color-text-secondary)',
+            }}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Monthly Summary View ── */}
+      {view === 'monthly' && (
+        <div className="space-y-4">
+          {monthLoading ? (
+            [1, 2, 3].map(i => <div key={i} className="skeleton h-28 rounded-[24px]" />)
+          ) : monthSummary ? (() => {
+            const balance = monthSummary.income - monthSummary.expense
+            const savingsRate = monthSummary.income > 0 ? ((monthSummary.income - monthSummary.expense) / monthSummary.income) * 100 : 0
+            const prevBalance = prevMonthSummary ? prevMonthSummary.income - prevMonthSummary.expense : 0
+            const prevSavings = prevMonthSummary && prevMonthSummary.income > 0 ? ((prevMonthSummary.income - prevMonthSummary.expense) / prevMonthSummary.income) * 100 : 0
+            return (
+              <>
+                {/* Hero balance card */}
+                <div
+                  className="relative overflow-hidden rounded-[32px] border border-white/10 p-6 shadow-2xl"
+                  style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.14) 0%, rgba(99,102,241,0.06) 100%)', backdropFilter: 'blur(20px)' }}
+                >
+                  <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40 mb-4">Net Balance</p>
+                  <p className="text-[clamp(1.75rem,8vw,4rem)] font-black leading-none tracking-tighter mb-2 break-all"
+                    style={{ color: balance >= 0 ? '#22c55e' : '#ef4444' }}>
+                    {balance >= 0 ? '' : '-'}{formatKRW(Math.abs(balance))}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <TrendPill pct={delta(balance, prevBalance)} />
+                    <span className="text-[11px] font-bold opacity-40">vs {monthLabel(prevYear, prevMonth)}</span>
+                  </div>
+                  <div className="absolute -right-8 -bottom-8 w-36 h-36 bg-blue-500/10 rounded-full blur-3xl" />
+                </div>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Income',       value: formatKRW(monthSummary.income),          color: '#22c55e', pct: delta(monthSummary.income, prevMonthSummary?.income ?? 0),   invert: false },
+                    { label: 'Expense',      value: formatKRW(monthSummary.expense),         color: '#ef4444', pct: delta(monthSummary.expense, prevMonthSummary?.expense ?? 0), invert: true },
+                    { label: 'Savings Rate', value: `${savingsRate.toFixed(1)}%`,            color: '#3b82f6', pct: savingsRate - prevSavings || null,                            invert: false },
+                    { label: 'Transactions', value: `${monthSummary.txCount}`,               color: 'var(--color-text-primary)', pct: null,                                      invert: false },
+                  ].map(stat => (
+                    <div key={stat.label} className="rounded-[20px] p-4 border border-[var(--color-border-base)]" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 mb-2">{stat.label}</p>
+                      <p className="text-[15px] sm:text-[18px] font-black leading-tight mb-1 break-all" style={{ color: stat.color }}>{stat.value}</p>
+                      <TrendPill pct={stat.pct ?? null} invert={stat.invert} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Top categories */}
+                {monthSummary.topCategories.length > 0 && (
+                  <div className="rounded-[24px] border border-[var(--color-border-base)] overflow-hidden" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                    <div className="px-5 pt-5 pb-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40">Top Spending</p>
+                    </div>
+                    <div className="px-5 pb-5 space-y-4">
+                      {monthSummary.topCategories.map((cat, i) => {
+                        const max = monthSummary.topCategories[0].total
+                        const prevCat = prevMonthSummary?.topCategories.find(c => c.name === cat.name)
+                        return (
+                          <motion.div key={cat.name} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[13px] font-bold" style={{ color: 'var(--color-text-primary)' }}>{cat.icon} {cat.name}</span>
+                              <div className="flex items-center gap-2">
+                                <TrendPill pct={delta(cat.total, prevCat?.total ?? 0)} invert />
+                                <span className="text-[13px] font-black" style={{ color: 'var(--color-text-primary)' }}>{formatKRW(cat.total)}</span>
+                              </div>
+                            </div>
+                            <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-card-elevated-base)' }}>
+                              <motion.div
+                                className="h-full rounded-full"
+                                initial={{ width: 0 }}
+                                animate={{ width: `${(cat.total / max) * 100}%` }}
+                                transition={{ duration: 0.6, delay: i * 0.06, ease: 'easeOut' }}
+                                style={{ backgroundColor: cat.color, boxShadow: `0 0 8px ${cat.color}50` }}
+                              />
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* MoM comparison */}
+                {prevMonthSummary && (prevMonthSummary.income > 0 || prevMonthSummary.expense > 0) && (
+                  <div className="rounded-[24px] border border-[var(--color-border-base)] p-5" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                    <p className="text-[11px] font-black uppercase tracking-[0.3em] opacity-40 mb-4">vs {monthLabel(prevYear, prevMonth)}</p>
+                    <div className="space-y-3">
+                      {[
+                        { label: 'Income',  cur: monthSummary.income,  prev: prevMonthSummary.income,  good: true },
+                        { label: 'Expense', cur: monthSummary.expense, prev: prevMonthSummary.expense, good: false },
+                      ].map(row => {
+                        const diff = row.cur - row.prev
+                        const isMore = diff > 0
+                        const color = (row.good ? isMore : !isMore) ? '#22c55e' : '#ef4444'
+                        return (
+                          <div key={row.label} className="flex items-center justify-between">
+                            <span className="text-[13px] font-bold opacity-60">{row.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] font-black" style={{ color }}>{diff >= 0 ? '+' : ''}{formatKRW(diff)}</span>
+                              <span className="text-[11px] opacity-30 font-medium">from {formatKRW(row.prev)}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {monthSummary.income === 0 && monthSummary.expense === 0 && (
+                  <div className="flex flex-col items-center justify-center py-24 text-center rounded-[32px] border border-dashed border-[var(--color-border-base)]" style={{ backgroundColor: 'var(--color-card-base)' }}>
+                    <div className="w-20 h-20 rounded-full bg-[var(--color-card-elevated-base)] flex items-center justify-center mb-6">
+                      <FileText className="w-9 h-9 opacity-30" />
+                    </div>
+                    <h3 className="text-xl font-black mb-2">No data for this month</h3>
+                    <p className="text-sm font-medium opacity-50 max-w-[220px] leading-relaxed">No transactions recorded in {monthLabel(year, month)}.</p>
+                  </div>
+                )}
+              </>
+            )
+          })() : null}
+        </div>
+      )}
+
+      {/* ── Trends View ── */}
+      {view === 'trends' && <>
 
       {loading && (
         <div className="space-y-4">
@@ -310,7 +566,9 @@ export default function AnalyticsPage() {
               <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center">
                 <CalendarClock className="w-4 h-4 text-blue-400" />
               </div>
-              <p className="text-[13px] font-black uppercase tracking-widest text-blue-400">Month Forecast</p>
+              <p className="text-[13px] font-black uppercase tracking-widest text-blue-400">
+                {format(new Date(), 'MMMM')} Forecast
+              </p>
             </div>
             <span className="text-[11px] font-bold opacity-40">
               Day {forecast.dayOfMonth} of {forecast.daysInMonth} · {forecast.daysRemaining}d left
@@ -686,6 +944,8 @@ export default function AnalyticsPage() {
           </div>
         </motion.div>
       )}
+
+      </>}
 
     </div>
   )

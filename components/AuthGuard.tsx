@@ -12,6 +12,10 @@ export default function AuthGuard() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
+        try {
+          localStorage.removeItem('searchHistory')
+          localStorage.removeItem('budgetReviewDismissed')
+        } catch {}
         router.replace('/login')
       }
     })

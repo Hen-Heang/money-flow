@@ -103,18 +103,47 @@ function TransactionsPageInner() {
     setSelectedIds(new Set())
   }, [])
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedIds.size === 0) return
-    haptic('heavy')
+    haptic('medium')
     const ids = Array.from(selectedIds)
-    const { error } = await supabase.from('transactions').delete().in('id', ids)
-    if (error) {
-      toast.error('Bulk delete failed')
-    } else {
-      toast.success(`Deleted ${ids.length} transaction${ids.length > 1 ? 's' : ''}`)
-      setTransactions(prev => prev.filter(t => !selectedIds.has(t.id)))
-      exitSelectMode()
-    }
+    const count = ids.length
+    const snapshot = new Set(selectedIds)
+
+    // Optimistically remove from UI
+    setTransactions(prev => prev.filter(t => !snapshot.has(t.id)))
+    exitSelectMode()
+
+    let undone = false
+    const toastId = toast(
+      (toastInstance) => (
+        <span className="flex items-center gap-3 text-sm font-medium">
+          {count} transaction{count > 1 ? 's' : ''} deleted
+          <button
+            className="font-black text-blue-400 underline-offset-2 hover:underline"
+            onClick={() => {
+              undone = true
+              toast.dismiss(toastInstance.id)
+              // Reload to restore — we can't easily restore from snapshot without the full objects
+              window.location.reload()
+            }}
+          >
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 5000 }
+    )
+
+    setTimeout(async () => {
+      if (undone) return
+      haptic('heavy')
+      const { error } = await supabase.from('transactions').delete().in('id', ids)
+      if (error) {
+        toast.error('Bulk delete failed — please refresh')
+        toast.dismiss(toastId)
+      }
+    }, 5100)
   }
 
   const activeFilterCount = [filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax].filter(Boolean).length
