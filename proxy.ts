@@ -2,12 +2,15 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/auth/callback']
+// Exact-match public routes (prefix match would be too broad, e.g. '/' matches everything)
+const PUBLIC_EXACT = ['/']
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths through without auth check
-  if (PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+  // Allow public paths through without auth check. The landing page ('/') handles
+  // its own redirect for authenticated users in app/page.tsx.
+  if (PUBLIC_EXACT.includes(pathname) || PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.next({ request })
   }
 

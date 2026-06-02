@@ -56,11 +56,13 @@ export default function DashboardPage() {
   const [showUSD, setShowUSD] = useState(false)
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [alertsDismissed, setAlertsDismissed] = useState(false)
-  const [budgetReviewDismissed, setBudgetReviewDismissed] = useState(() => {
-    if (typeof window === 'undefined') return true
+  // Start dismissed to match the server render (no localStorage on the server),
+  // then resolve the real value after mount to avoid a hydration mismatch.
+  const [budgetReviewDismissed, setBudgetReviewDismissed] = useState(true)
+  useEffect(() => {
     const currentMonth = new Date().toISOString().slice(0, 7)
-    return localStorage.getItem('budgetReviewDismissed') === currentMonth
-  })
+    setBudgetReviewDismissed(localStorage.getItem('budgetReviewDismissed') === currentMonth)
+  }, [])
 
   const dismissBudgetReview = () => {
     const currentMonth = new Date().toISOString().slice(0, 7)
@@ -75,10 +77,12 @@ export default function DashboardPage() {
   const [streak, setStreak] = useState(0)
   const supabase = useSupabaseClient()
 
-  const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 1024)
+  // Start false to match the server render, then sync to the real viewport after mount.
+  const [isDesktop, setIsDesktop] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
+    setIsDesktop(mq.matches)
     const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)

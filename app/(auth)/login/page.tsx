@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -20,7 +20,14 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>
 
 export default function LoginPage() {
+  // Start false to match the server render, then read the URL after mount so
+  // ?mode=signup opens sign-up mode without a hydration mismatch.
   const [isSignUp, setIsSignUp] = useState(false)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('mode') === 'signup') {
+      setIsSignUp(true)
+    }
+  }, [])
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
