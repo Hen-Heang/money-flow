@@ -115,7 +115,7 @@ export default function BudgetPage() {
     .map(c => {
       const budget = budgetMap[c.id]
       const spent = spendMap[c.id] ?? 0
-      return { category_id: c.id, amount_krw: budget, category: c, spent, pct: Math.min((spent / budget) * 100, 100) }
+      return { category_id: c.id, amount_krw: budget, category: c, spent, pct: (spent / budget) * 100 }
     })
     .sort((a, b) => b.pct - a.pct)
 
@@ -123,7 +123,7 @@ export default function BudgetPage() {
 
   const totalBudget = budgets.reduce((s, b) => s + b.amount_krw, 0)
   const totalSpent = budgeted.reduce((s, r) => s + r.spent, 0)
-  const totalPct = totalBudget > 0 ? Math.min((totalSpent / totalBudget) * 100, 100) : 0
+  const totalPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
   const totalRemaining = totalBudget - totalSpent
   const overBudgetCount = budgeted.filter(r => r.pct >= 100).length
 
@@ -207,15 +207,22 @@ export default function BudgetPage() {
 
             {/* Overall progress bar */}
             <div className="space-y-1.5">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-[11px] font-bold opacity-40">Overall</span>
-                <span className="text-[11px] font-black" style={{ color: getBarColor(totalPct) }}>{totalPct.toFixed(1)}%</span>
+                <div className="flex items-center gap-1.5">
+                  {totalPct > 100 && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>
+                      +{formatKRW(totalSpent - totalBudget)} over
+                    </span>
+                  )}
+                  <span className="text-[11px] font-black" style={{ color: getBarColor(totalPct) }}>{totalPct.toFixed(1)}%</span>
+                </div>
               </div>
               <div className="h-3 rounded-full bg-white/10 overflow-hidden shadow-inner">
                 <motion.div
                   className="h-full rounded-full"
                   initial={{ width: 0 }}
-                  animate={{ width: `${totalPct}%` }}
+                  animate={{ width: `${Math.min(totalPct, 100)}%` }}
                   transition={{ type: 'spring', damping: 20, stiffness: 100, delay: 0.1 }}
                   style={{ backgroundColor: getBarColor(totalPct), boxShadow: `0 0 12px ${getBarColor(totalPct)}60` }}
                 />
@@ -331,13 +338,20 @@ export default function BudgetPage() {
                         {formatKRW(row.spent)}
                         <span className="text-[11px] font-bold opacity-40 ml-1">/ {formatKRW(row.amount_krw)}</span>
                       </span>
-                      <span className="text-[12px] font-black" style={{ color: barColor }}>{row.pct.toFixed(0)}%</span>
+                      <div className="flex items-center gap-1.5">
+                        {row.pct > 100 && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>
+                            +{formatKRW(row.spent - row.amount_krw)} over
+                          </span>
+                        )}
+                        <span className="text-[12px] font-black" style={{ color: barColor }}>{row.pct.toFixed(0)}%</span>
+                      </div>
                     </div>
                     <div className="h-2 rounded-full bg-[var(--color-card-elevated-base)] overflow-hidden">
                       <motion.div
                         className="h-full rounded-full"
                         initial={{ width: 0 }}
-                        animate={{ width: `${row.pct}%` }}
+                        animate={{ width: `${Math.min(row.pct, 100)}%` }}
                         transition={{ type: 'spring', damping: 15, stiffness: 80 }}
                         style={{ backgroundColor: barColor, boxShadow: `0 0 10px ${barColor}40` }}
                       />
