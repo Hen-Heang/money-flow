@@ -22,9 +22,22 @@ export async function GET(request: Request) {
         },
       }
     )
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
+    // A reused/expired code (e.g. prefetch, refresh, back button) returns
+    // "flow_state_already_used". If the first exchange already established a
+    // session, the cookies are present and getUser() still resolves — so we
+    // treat the retry as a no-op and continue to the redirect instead of
+    // bouncing the user to "/" with an error param. Only a genuinely failed
+    // login (no session at all) is sent back to /login.
     const { data: { user } } = await supabase.auth.getUser()
+
+    if (exchangeError && !user) {
+      const loginUrl = new URL('/login', origin)
+      loginUrl.searchParams.set('error', 'auth_failed')
+      return NextResponse.redirect(loginUrl)
+    }
+
     if (user) {
       const meta = user.user_metadata ?? {}
       const displayName: string | null =
