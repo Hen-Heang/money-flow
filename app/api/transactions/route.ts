@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { rateLimit } from '@/lib/rate-limit'
+import { sendTelegramMessage } from '@/lib/telegram'
 
 const VALID_TYPES = ['income', 'expense'] as const
 const VALID_CURRENCIES = ['KRW', 'USD'] as const
@@ -133,6 +134,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    const emoji = data.type === 'expense' ? '💸' : '💰'
+    const sign = data.type === 'expense' ? '-' : '+'
+    await sendTelegramMessage(
+      `${emoji} *New ${data.type}*\n${data.description}\n\`${sign}₩${Number(data.amount_krw).toLocaleString()}\``
+    )
+
     return NextResponse.json({ data }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

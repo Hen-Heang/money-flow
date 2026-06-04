@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendTelegramMessage } from '@/lib/telegram'
 
 // This route is called by Vercel Cron (or any scheduler) — NOT by users.
 // It uses the service role key to apply recurring transactions for ALL active users.
@@ -100,5 +101,12 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(`[cron/recurring] Applied ${applied} transactions, ${errors.length} errors`)
+
+  if (applied > 0) {
+    await sendTelegramMessage(
+      `🔄 *Recurring Transactions*\n${applied} transaction${applied > 1 ? 's' : ''} auto-applied today.`
+    )
+  }
+
   return NextResponse.json({ applied, errors: errors.length > 0 ? errors : undefined })
 }

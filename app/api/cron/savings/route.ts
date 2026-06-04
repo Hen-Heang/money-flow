@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendTelegramMessage } from '@/lib/telegram'
 
 // Called by Vercel Cron on the 1st of each month at 9:30 AM.
 // Applies auto-monthly deposits to savings goals for all users.
@@ -62,5 +63,12 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(`[cron/savings] Applied ${applied} auto-deposits, ${errors.length} errors`)
+
+  if (applied > 0) {
+    await sendTelegramMessage(
+      `🏦 *Savings Auto-Deposit*\n${applied} goal${applied > 1 ? 's' : ''} received their monthly deposit.`
+    )
+  }
+
   return NextResponse.json({ applied, errors: errors.length > 0 ? errors : undefined })
 }
