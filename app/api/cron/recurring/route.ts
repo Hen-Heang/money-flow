@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendTelegramMessage } from '@/lib/telegram'
+import { sendTelegramToUser, fmtKRW, escapeHtml } from '@/lib/telegram'
 
 // This route is called by Vercel Cron (or any scheduler) — NOT by users.
 // It uses the service role key to apply recurring transactions for ALL active users.
@@ -70,6 +70,8 @@ export async function GET(request: NextRequest) {
 
   let applied = 0
   const errors: string[] = []
+  // Collect per-user applied items so we can send one Telegram summary each.
+  const appliedByUser = new Map<string, Array<{ description: string; type: string; amount_krw: number }>>()
 
   for (const rule of due) {
     const { error: insertError } = await supabase.from('transactions').insert({
@@ -97,16 +99,25 @@ export async function GET(request: NextRequest) {
       .update({ next_date: advanceDate(rule.next_date, rule.frequency), last_applied: rule.next_date })
       .eq('id', rule.id)
 
+    const list = appliedByUser.get(rule.user_id) ?? []
+    list.push({ description: rule.description, type: rule.type, amount_krw: Number(rule.amount_krw) || 0 })
+    appliedByUser.set(rule.user_id, list)
     applied++
   }
 
-  console.log(`[cron/recurring] Applied ${applied} transactions, ${errors.length} errors`)
+  // Best-effort Telegram notifications (never block the cron result).
+  await Promise.all(
+    Array.from(appliedByUser.entries()).map(([userId, items]) => {
+      const lines = items.map((i) => {
+        const sign = i.type === 'income' ? '+' : '−'
+        return `• ${escapeHtml(i.description)} ${sign}${fmtKRW(i.amount_krw)}`
+      })
+      const text = [`🔁 <b>Recurring applied</b> (${items.length})`, '', ...lines].join('\n')
+      return sendTelegramToUser(supabase, userId, text).catch(() => false)
+    }),
+  )
 
-  if (applied > 0) {
-    await sendTelegramMessage(
-      `🔄 *Recurring Transactions*\n${applied} transaction${applied > 1 ? 's' : ''} auto-applied today.`
-    )
-  }
+  console.log(`[cron/recurring] Applied ${applied} transactions, ${errors.length} errors`)
 
   return NextResponse.json({ applied, errors: errors.length > 0 ? errors : undefined })
 }

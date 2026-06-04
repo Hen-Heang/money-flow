@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/cleanup-exchange-rates",
       "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/budget-alerts",
+      "schedule": "0 10 * * *"
     }
   ]
 }
