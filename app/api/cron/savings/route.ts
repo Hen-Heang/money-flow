@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendTelegramToUser, escapeHtml } from '@/lib/telegram'
 
 // Called by Vercel Cron on the 1st of each month at 9:30 AM.
 // Applies auto-monthly deposits to savings goals for all users.
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   // Fetch all auto-deposit goals not yet processed this month
   const { data: goals, error: fetchError } = await supabase
     .from('savings_goals')
-    .select('id, current_usd, target_usd, auto_monthly_usd, last_auto_month')
+    .select('id, user_id, name, icon, current_usd, target_usd, auto_monthly_usd, last_auto_month')
     .gt('auto_monthly_usd', 0)
     .or(`last_auto_month.is.null,last_auto_month.neq.${currentMonth}`)
 
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
 
   let applied = 0
   const errors: string[] = []
+  const notifications: Array<Promise<unknown>> = []
 
   for (const goal of due) {
     const newTotal = Math.min(goal.current_usd + goal.auto_monthly_usd, goal.target_usd)
@@ -59,7 +61,20 @@ export async function GET(request: NextRequest) {
       continue
     }
     applied++
+
+    // Best-effort Telegram notification.
+    const deposit = newTotal - goal.current_usd
+    const pct = goal.target_usd > 0 ? Math.round((newTotal / goal.target_usd) * 100) : 0
+    const reached = newTotal >= goal.target_usd
+    const text = [
+      `${goal.icon || '🏦'} <b>Savings deposit</b> — ${escapeHtml(goal.name)}`,
+      `+$${deposit.toFixed(2)} → $${newTotal.toFixed(2)} of $${Number(goal.target_usd).toFixed(2)} (${pct}%)`,
+      reached ? '🎉 Goal reached!' : '',
+    ].filter(Boolean).join('\n')
+    notifications.push(sendTelegramToUser(supabase, goal.user_id, text).catch(() => false))
   }
+
+  await Promise.all(notifications)
 
   console.log(`[cron/savings] Applied ${applied} auto-deposits, ${errors.length} errors`)
   return NextResponse.json({ applied, errors: errors.length > 0 ? errors : undefined })
