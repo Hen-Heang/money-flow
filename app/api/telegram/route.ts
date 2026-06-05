@@ -302,7 +302,6 @@ export async function POST(request: NextRequest) {
   const text = message?.text?.trim()
   const chatId = message?.chat?.id
   if (!chatId || !text) return NextResponse.json({ ok: true })
-  console.log('[telegram] incoming chat_id:', chatId) // TEMP: remove after push test
 
   // Per-chat rate limit to contain abuse/loops.
   const { allowed } = rateLimit(`tg:${chatId}`, 20, 60_000)
