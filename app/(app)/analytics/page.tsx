@@ -136,8 +136,8 @@ export default function AnalyticsPage() {
     setMonthLoading(true)
     let cancelled = false
     const load = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const userId = session?.user?.id
+      const { data: { user: sessionUser } } = await supabase.auth.getUser()
+      const userId = sessionUser?.id
       if (!userId || cancelled) return
       const [cur, prev] = await Promise.all([
         fetchMonthSummary(year, month, userId),
@@ -155,8 +155,7 @@ export default function AnalyticsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5))

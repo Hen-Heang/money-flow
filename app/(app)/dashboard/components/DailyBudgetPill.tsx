@@ -52,7 +52,7 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
           <div className="relative z-10">
             <p className="text-xs font-black uppercase tracking-[0.25em] opacity-40 mb-2">Strategic Reserve</p>
             <p
-              className="text-4xl font-black tracking-tighter leading-none"
+              className="text-5xl font-black tracking-tighter leading-none"
               style={{
                 color: over
                   ? 'var(--color-expense-base)'
@@ -69,7 +69,7 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
           </div>
           <div className="text-right relative z-10">
             <p className="text-xs font-black uppercase tracking-[0.25em] opacity-40 mb-2">Tactical Deployment</p>
-            <p className="text-3xl font-black tracking-tighter leading-none text-rose-400">
+            <p className="text-4xl font-black tracking-tighter leading-none text-rose-400">
               <AnimatedNumber value={todaySpending} format={fmt} />
             </p>
             <p className="text-xs font-bold mt-2 opacity-50 tracking-tight">SPENT TODAY</p>
