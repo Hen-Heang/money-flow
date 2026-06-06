@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { haptic, formatNumber } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -554,16 +554,16 @@ export default function SavingsPage() {
     haptic('medium')
     setGoals(prev => prev.filter(g => g.id !== goal.id))
     let undone = false
-    const t = toast(
-      (toastInstance) => (
-        <span className="flex items-center gap-3 text-sm font-medium">
+    const t = toast.custom(
+      (id) => (
+        <span className="flex items-center gap-3 text-sm font-medium px-4 py-3 rounded-xl bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] shadow-xl">
           Goal removed
           <button
             className="font-black text-blue-400 underline-offset-2 hover:underline"
             onClick={() => {
               undone = true
               setGoals(prev => [...prev, goal].sort((a, b) => a.id.localeCompare(b.id)))
-              toast.dismiss(toastInstance.id)
+              toast.dismiss(id)
             }}
           >
             Undo

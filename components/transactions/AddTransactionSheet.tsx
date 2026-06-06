@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
@@ -13,7 +13,8 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
-import { useWatch } from 'react-hook-form'
+import { useWatch, Controller } from 'react-hook-form'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
 
 
 
@@ -419,12 +420,23 @@ export default function AddTransactionSheet({
       {/* Category for pc */}
       <div>
         <p className={sectionLabelStyle}>Category</p>
-        <select {...register('category_id')} className={inputBaseStyle}>
-          <option value="">No category</option>
-          {filteredCategories.map(c => (
-            <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-          ))}
-        </select>
+        <Controller
+          control={control}
+          name="category_id"
+          render={({ field }) => (
+            <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
+              <SelectTrigger className={inputBaseStyle}>
+                <SelectValue placeholder="No category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No category</SelectItem>
+                {filteredCategories.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
       </div>
 
 
@@ -434,10 +446,23 @@ export default function AddTransactionSheet({
         <input {...register('description')} className={inputBaseStyle} placeholder="Description" />
         <div className="grid grid-cols-2 gap-3">
           <input {...register('date')} type="date" className={inputBaseStyle} />
-          <select {...register('payment_method_id')} className={inputBaseStyle}>
-            <option value="">Payment Method</option>
-            {paymentMethods.map(m => <option key={m.id} value={m.id}>{m.icon} {m.name}</option>)}
-          </select>
+          <Controller
+            control={control}
+            name="payment_method_id"
+            render={({ field }) => (
+              <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
+                <SelectTrigger className={inputBaseStyle}>
+                  <SelectValue placeholder="Payment Method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No method</SelectItem>
+                  {paymentMethods.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.icon} {m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
         </div>
         <textarea {...register('note')} className={inputBaseStyle} placeholder="Optional note" rows={2} />
         {!isEditing && (
@@ -523,12 +548,23 @@ export default function AddTransactionSheet({
                   {/* Categories */}
                   <div>
                     <p className={sectionLabelStyle}>Category</p>
-                    <select {...register('category_id')} className={inputBaseStyle}>
-                      <option value="">No category</option>
-                      {filteredCategories.map(c => (
-                        <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                      ))}
-                    </select>
+                    <Controller
+                      control={control}
+                      name="category_id"
+                      render={({ field }) => (
+                        <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
+                          <SelectTrigger className={inputBaseStyle}>
+                            <SelectValue placeholder="No category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">No category</SelectItem>
+                            {filteredCategories.map(c => (
+                              <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
                   </div>
 
                   {/* Basic Details */}
@@ -541,10 +577,23 @@ export default function AddTransactionSheet({
                     {showDetails && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden">
                         <input {...register('date')} type="date" className={inputBaseStyle} />
-                        <select {...register('payment_method_id')} className={inputBaseStyle}>
-                          <option value="">Payment Method</option>
-                          {paymentMethods.map(m => <option key={m.id} value={m.id}>{m.icon} {m.name}</option>)}
-                        </select>
+                        <Controller
+                          control={control}
+                          name="payment_method_id"
+                          render={({ field }) => (
+                            <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
+                              <SelectTrigger className={inputBaseStyle}>
+                                <SelectValue placeholder="Payment Method" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">No method</SelectItem>
+                                {paymentMethods.map(m => (
+                                  <SelectItem key={m.id} value={m.id}>{m.icon} {m.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
                         <textarea {...register('note')} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
                         {!isEditing && (
                           <button

@@ -41,10 +41,10 @@ export const Intelligence = memo(function Intelligence({
             <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/10">
               <Lightbulb size={16} />
             </div>
-            <span className="text-tiny font-black text-blue-400 tracking-[0.3em]">Command AI</span>
+            <span className="text-xs font-black text-blue-400 tracking-[0.3em]">Command AI</span>
           </div>
           
-          <p className="text-base font-bold leading-relaxed mb-8 text-[var(--color-text-primary)] tracking-tight">
+          <p className="text-lg font-bold leading-relaxed mb-8 text-[var(--color-text-primary)] tracking-tight">
             {insights.savingsRate > 30 
               ? "Your capital efficiency is exceptional this month. Asset diversification is recommended." 
               : insights.dailyAvg > 100000 
@@ -56,12 +56,12 @@ export const Intelligence = memo(function Intelligence({
             <div className="space-y-4 bg-white/[0.03] p-5 rounded-2xl border border-white/5">
                <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-tiny font-black opacity-40 mb-1">Projected Exit</p>
-                    <p className="text-lg font-black tracking-tight">{fmt(insights.projectedExpense)}</p>
+                    <p className="text-xs font-black opacity-40 mb-1.5">Projected Exit</p>
+                    <p className="text-xl font-black tracking-tight">{fmt(insights.projectedExpense)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-tiny font-black opacity-40 mb-1">Savings Est.</p>
-                    <p className={`text-sm font-black ${insights.savingsRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <p className="text-xs font-black opacity-40 mb-1.5">Savings Est.</p>
+                    <p className={`text-base font-black ${insights.savingsRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {insights.savingsRate.toFixed(1)}%
                     </p>
                   </div>
@@ -80,7 +80,7 @@ export const Intelligence = memo(function Intelligence({
 
       {/* Quick Logging */}
       <div className="px-1">
-        <h3 className="text-tiny font-black opacity-40 tracking-[0.3em] mb-5 pl-1">Tactical Logging</h3>
+        <h3 className="text-xs font-black opacity-40 tracking-[0.3em] mb-5 pl-1">Tactical Logging</h3>
         <div className="grid grid-cols-2 gap-4">
           {QUICK_TEMPLATES.map((t, i) => (
             <motion.button 
@@ -92,10 +92,10 @@ export const Intelligence = memo(function Intelligence({
               onClick={() => { haptic('medium'); handleQuickAdd(t) }} 
               className="flex items-center gap-4 p-4.5 rounded-[24px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-lg hover:border-white/20 transition-all text-left group"
             >
-              <span className="text-3xl shrink-0 group-hover:scale-110 transition-transform">{t.iconEmoji}</span>
+              <span className="text-4xl shrink-0 group-hover:scale-110 transition-transform">{t.iconEmoji}</span>
               <div className="min-w-0">
-                <p className="text-tiny font-black tracking-widest leading-none mb-1.5">{t.name}</p>
-                <p className="text-xs font-bold opacity-30">₩{t.amount.toLocaleString()}</p>
+                <p className="text-xs font-black tracking-widest leading-none mb-2">{t.name}</p>
+                <p className="text-sm font-bold opacity-30">₩{t.amount.toLocaleString()}</p>
               </div>
             </motion.button>
           ))}

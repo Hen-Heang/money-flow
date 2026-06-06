@@ -1,8 +1,6 @@
-import { google } from '@ai-sdk/google'
 import { streamText } from 'ai'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-
-const DEFAULT_GEMINI_MODEL = process.env.GOOGLE_GENERATIVE_AI_MODEL || 'gemini-2.5-flash'
+import { getChatModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
 
 // ── Rate limiter ─────────────────────────────────────────────────────────────
 // In-memory sliding-window: 20 requests per user per minute
@@ -147,13 +145,11 @@ ${recentTx}
 `
       : 'No transaction data available yet.'
 
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
-  if (!apiKey || apiKey === 'YOUR_GOOGLE_AI_API_KEY') {
-    return new Response('Google AI API Key is missing. Please set GOOGLE_GENERATIVE_AI_API_KEY in your .env file.', { status: 500 })
-  }
+  const { data: userPref } = await supabase.from('users').select('ai_provider').eq('id', user.id).single()
+  const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
 
   const result = streamText({
-    model: google(DEFAULT_GEMINI_MODEL),
+    model: getChatModel(provider),
     system: `You are a friendly and insightful personal finance assistant for the Money Flow app.
 Help users understand their spending habits, track budgets, and make smarter financial decisions.
 Be concise, practical, and encouraging. Use bullet points for lists. Use ₩ for Korean Won and $ for USD.

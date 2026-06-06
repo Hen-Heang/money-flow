@@ -1,9 +1,7 @@
-import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { rateLimit } from '@/lib/rate-limit'
-
-const DEFAULT_GEMINI_MODEL = process.env.GOOGLE_GENERATIVE_AI_MODEL || 'gemini-1.5-flash'
+import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
 
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient()
@@ -30,8 +28,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    const { data: userPref } = await supabase.from('users').select('ai_provider').eq('id', user.id).single()
+    const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
     const { text } = await generateText({
-      model: google(DEFAULT_GEMINI_MODEL),
+      model: getFastModel(provider),
       system: `You are a financial assistant for a money tracking app. 
       Your task is to categorize a user's transaction based on its description.
       Available categories: ${JSON.stringify(availableCategories)}
