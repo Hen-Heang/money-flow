@@ -52,8 +52,7 @@ export default function BudgetPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
     const { start, end } = getMonthRange(year, month)

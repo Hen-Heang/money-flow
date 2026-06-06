@@ -29,11 +29,11 @@ export const SummaryCards = memo(function SummaryCards({
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bento-item md:col-span-2 flex flex-col justify-between min-h-[280px] bg-gradient-to-br from-blue-600/10 via-transparent to-transparent border-blue-500/10"
+        className="bento-item md:col-span-2 flex flex-col justify-between min-h-[300px] bg-gradient-to-br from-blue-600/10 via-transparent to-transparent border-blue-500/10"
       >
         <div>
           <p className="text-xs text-[var(--color-text-secondary)] mb-3 opacity-50 tracking-[0.2em]">Monthly Balance</p>
-          <h2 className={`text-6xl sm:text-8xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
+          <h2 className={`text-7xl sm:text-9xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
             <AnimatedNumber value={balance} format={fmt} />
           </h2>
         </div>
@@ -74,7 +74,7 @@ export const SummaryCards = memo(function SummaryCards({
            <TrendingUp size={16} className="text-[var(--color-income-base)]" />
            <span className="text-xs uppercase font-black tracking-widest">Income</span>
          </div>
-         <p className="text-4xl sm:text-5xl font-black text-[var(--color-income-base)] truncate tracking-tight">
+         <p className="text-5xl sm:text-6xl font-black text-[var(--color-income-base)] truncate tracking-tight">
            <AnimatedNumber value={totalIncome} format={fmt} />
          </p>
       </motion.div>
@@ -89,7 +89,7 @@ export const SummaryCards = memo(function SummaryCards({
            <TrendingDown size={16} className="text-[var(--color-expense-base)]" />
            <span className="text-xs uppercase font-black tracking-widest">Expense</span>
          </div>
-         <p className="text-4xl sm:text-5xl font-black text-[var(--color-expense-base)] truncate tracking-tight">
+         <p className="text-5xl sm:text-6xl font-black text-[var(--color-expense-base)] truncate tracking-tight">
            <AnimatedNumber value={totalExpense} format={fmt} />
          </p>
       </motion.div>
