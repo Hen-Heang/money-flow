@@ -590,7 +590,7 @@ export default function ChatBot() {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-1 px-4 py-4">
+                <div className="space-y-2 px-4 py-4">
                   {messages.map((message) => {
                     const isUser = message.role === 'user'
                     return (
@@ -615,8 +615,14 @@ export default function ChatBot() {
                             </div>
                           </div>
                         ) : (
-                          /* AI message — full width, no bubble */
-                          <div className={`py-3 ${message.error ? 'opacity-70' : ''}`}>
+                          /* AI message — card background on desktop, plain on mobile */
+                          <div
+                            className={`py-3 ${message.error ? 'opacity-70' : ''} ${!isMobile ? 'px-3 rounded-2xl' : ''}`}
+                            style={!isMobile ? {
+                              background: 'var(--color-card-elevated-base)',
+                              border: '1px solid var(--color-border-base)',
+                            } : undefined}
+                          >
                             <div className="mb-2 flex items-center gap-2">
                               <div
                                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg"
@@ -682,9 +688,10 @@ export default function ChatBot() {
 
             {/* Input bar */}
             <div
-              className="shrink-0 glass-ios"
+              className={`shrink-0 ${isMobile ? 'glass-ios' : ''}`}
               style={{
                 borderTop: '1px solid var(--color-border-base)',
+                background: !isMobile ? 'var(--color-card-base)' : undefined,
                 paddingBottom: isMobile && keyboardOffset > 0
                   ? `${keyboardOffset + 12}px`
                   : isMobile

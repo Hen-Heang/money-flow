@@ -18,7 +18,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
       "font-src 'self'",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.resend.com https://v6.exchangerate-api.com",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://api.openai.com https://api.resend.com https://v6.exchangerate-api.com",
       "frame-ancestors 'none'",
     ].join('; '),
   },

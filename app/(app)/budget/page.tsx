@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Wallet, ChevronLeft, ChevronRight, Pencil, Check, X, TrendingUp, AlertTriangle } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets, invalidateBudgetsCache } from '@/hooks/useBudgets'

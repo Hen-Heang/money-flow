@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Toaster } from 'react-hot-toast'
+import { Toaster } from 'sonner'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
@@ -58,13 +58,13 @@ export default function RootLayout({
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)]">
         {children}
         <Toaster
-          position="top-center"
+          position="bottom-center"
+          theme="dark"
+          richColors
+          closeButton
           toastOptions={{
             style: {
-              background: 'var(--color-card-elevated-base)',
-              color: 'var(--color-text-primary)',
-              borderRadius: '12px',
-              border: '1px solid var(--color-border-base)',
+              fontFamily: 'var(--font-geist-sans)',
             },
           }}
         />

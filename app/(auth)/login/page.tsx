@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase'
 import { ensureUserProfile } from '@/lib/profile'
 import Logo from '@/components/ui/Logo'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff } from 'lucide-react'
 

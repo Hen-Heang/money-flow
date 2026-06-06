@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
+import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
 import { createTelegramServiceClient, sendTelegramMessage, escapeHtml, fmtKRW } from '@/lib/telegram'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 import { rateLimit } from '@/lib/rate-limit'
@@ -9,7 +9,6 @@ import { rateLimit } from '@/lib/rate-limit'
 // Secured by the secret token Telegram echoes back in a header — set when
 // the webhook is registered (see /api/telegram/setup).
 
-const DEFAULT_GEMINI_MODEL = process.env.GOOGLE_GENERATIVE_AI_MODEL || 'gemini-1.5-flash'
 
 type ServiceClient = NonNullable<ReturnType<typeof createTelegramServiceClient>>
 
@@ -195,11 +194,12 @@ interface ParsedTransaction {
 async function parseTransaction(
   text: string,
   categories: Array<{ id: string; name: string; type: string }>,
+  provider: AIProvider = 'gemini',
 ): Promise<ParsedTransaction | null> {
   const catList = categories.map((c) => ({ id: c.id, name: c.name, type: c.type }))
 
   const { text: raw } = await generateText({
-    model: google(DEFAULT_GEMINI_MODEL),
+    model: getFastModel(provider),
     system: `You parse a single short message into a money transaction for a tracking app.
 Default currency is KRW (Korean won) unless the user clearly writes USD or a $ sign.
 Treat the transaction as "expense" unless the message clearly describes earning money (salary, refund, income, deposit) — then "income".
@@ -231,12 +231,13 @@ If there is no clear amount, respond with {"amount": 0}.`,
 }
 
 async function handleLogExpense(supabase: ServiceClient, userId: string, text: string): Promise<string> {
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('id, name, type')
-    .eq('user_id', userId)
+  const [{ data: categories }, { data: userPref }] = await Promise.all([
+    supabase.from('categories').select('id, name, type').eq('user_id', userId),
+    supabase.from('users').select('ai_provider').eq('id', userId).single(),
+  ])
+  const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
 
-  const parsed = await parseTransaction(text, categories ?? [])
+  const parsed = await parseTransaction(text, categories ?? [], provider)
   if (!parsed) {
     return "I couldn't read an amount there. Try something like <code>coffee 4500</code> or <code>lunch 12000 food</code>."
   }

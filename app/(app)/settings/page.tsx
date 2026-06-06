@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, type ChangeEvent, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { invalidateBudgetsCache } from '@/hooks/useBudgets'
 import Avatar from '@/components/ui/Avatar'
@@ -91,6 +91,8 @@ const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [telegramLinked, setTelegramLinked] = useState(false)
   const [telegramCode, setTelegramCode] = useState<{ code: string; deepLink: string | null } | null>(null)
   const [telegramLoading, setTelegramLoading] = useState(false)
+  const [aiProvider, setAiProvider] = useState<'openai' | 'gemini'>('gemini')
+  const [aiSwitching, setAiSwitching] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const supabase = useSupabaseClient()
@@ -101,13 +103,15 @@ const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
       const user = session?.user
       if (!user) return
 
-      const [userProfile, cats, methods, buds] = await Promise.all([
+      const [userProfile, cats, methods, buds, aiPref] = await Promise.all([
         getUserProfile(supabase, user),
         supabase.from('categories').select('id, name, icon, color, type').eq('user_id', user.id),
         supabase.from('payment_methods').select('id, name, icon').eq('user_id', user.id),
         supabase.from('budgets').select('category_id, amount_krw').eq('user_id', user.id),
+        supabase.from('users').select('ai_provider').eq('id', user.id).single(),
       ])
       setProfile(userProfile)
+      if (aiPref.data?.ai_provider) setAiProvider(aiPref.data.ai_provider as 'openai' | 'gemini')
 
       // Telegram link status (best-effort)
       try {
@@ -216,6 +220,26 @@ const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
       toast.success('Code copied')
     } catch {
       toast.error('Could not copy')
+    }
+  }
+
+  const switchAIProvider = async (provider: 'openai' | 'gemini') => {
+    if (provider === aiProvider) return
+    haptic('light')
+    setAiSwitching(true)
+    try {
+      const res = await fetch('/api/settings/ai-provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      })
+      if (!res.ok) throw new Error()
+      setAiProvider(provider)
+      toast.success(`Switched to ${provider === 'openai' ? 'OpenAI GPT-4o' : 'Google Gemini'}`)
+    } catch {
+      toast.error('Failed to switch AI provider')
+    } finally {
+      setAiSwitching(false)
     }
   }
 
@@ -507,6 +531,51 @@ const deleteCategory = async (id: string) => {
             </div>
           }
         />
+      </Group>
+
+      <Group title="AI Assistant">
+        <Row
+          icon={Sparkles}
+          color="#8b5cf6"
+          title={aiProvider === 'openai' ? 'OpenAI GPT-4o' : 'Google Gemini'}
+          subtitle="Powers chat & smart categorization"
+          onClick={() => { haptic('light'); setActiveSection(activeSection === 'ai' ? null : 'ai') }}
+          active={activeSection === 'ai'}
+          right={
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${aiProvider === 'openai' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+              {aiProvider === 'openai' ? 'GPT-4o' : 'Gemini'}
+            </span>
+          }
+        />
+        <AnimatePresence>
+          {activeSection === 'ai' && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              <div className="bg-[var(--color-card-elevated-base)]/30 px-5 py-5 space-y-3">
+                <p className="text-[12px] font-medium opacity-60 leading-relaxed">
+                  Choose your AI engine for chat and smart categorization. Automatically falls back to the other if a key expires.
+                </p>
+                {[
+                  { id: 'gemini' as const, label: 'Google Gemini', desc: 'gemini-2.5-flash · Default', emoji: '🤖' },
+                  { id: 'openai' as const, label: 'OpenAI ChatGPT', desc: 'gpt-4o · Requires OPENAI_API_KEY', emoji: '✨' },
+                ].map(opt => (
+                  <button
+                    key={opt.id}
+                    disabled={aiSwitching}
+                    onClick={() => switchAIProvider(opt.id)}
+                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] disabled:opacity-50 ${aiProvider === opt.id ? 'border-[var(--color-accent-base)] bg-[var(--color-accent-base)]/5' : 'border-[var(--color-border-base)] bg-[var(--color-card-base)]'}`}
+                  >
+                    <span className="text-2xl">{opt.emoji}</span>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-black">{opt.label}</p>
+                      <p className="text-[11px] font-medium opacity-50">{opt.desc}</p>
+                    </div>
+                    {aiProvider === opt.id && <Check size={16} className="text-[var(--color-accent-base)] shrink-0" strokeWidth={3} />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </Group>
 
       <Group title="Personalization">

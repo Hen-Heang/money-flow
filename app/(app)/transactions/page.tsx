@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { format, parseISO } from 'date-fns'
 import { useSearchParams } from 'next/navigation'
 import { RefreshCw, Search, X, Trash2, SlidersHorizontal, CheckCheck } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
 import { formatKRW, haptic } from '@/lib/utils'
 import type { Transaction, Category } from '@/lib/types'
@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic'
 import { TRANSACTION_PAGE_SIZE, FALLBACK_EXCHANGE_RATE, SEARCH_HISTORY_MAX } from '@/shared/presets'
 import { useCategories } from '@/hooks/useCategories'
 import SwipeableRow from '@/components/transactions/SwipeableRow'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
 const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
 const RecurringSheet = dynamic(() => import('@/components/transactions/RecurringSheet'), { ssr: false })
 import type { EditTransaction } from '@/components/transactions/AddTransactionSheet'
@@ -115,16 +116,15 @@ function TransactionsPageInner() {
     exitSelectMode()
 
     let undone = false
-    const toastId = toast(
-      (toastInstance) => (
-        <span className="flex items-center gap-3 text-sm font-medium">
+    const toastId = toast.custom(
+      (id) => (
+        <span className="flex items-center gap-3 text-sm font-medium px-4 py-3 rounded-xl bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] shadow-xl">
           {count} transaction{count > 1 ? 's' : ''} deleted
           <button
             className="font-black text-blue-400 underline-offset-2 hover:underline"
             onClick={() => {
               undone = true
-              toast.dismiss(toastInstance.id)
-              // Reload to restore — we can't easily restore from snapshot without the full objects
+              toast.dismiss(id)
               window.location.reload()
             }}
           >
@@ -349,9 +349,9 @@ function TransactionsPageInner() {
 
     let undone = false
 
-    toast(
-      (t) => (
-        <div className="flex flex-col gap-2 min-w-[200px]">
+    toast.custom(
+      (toastId) => (
+        <div className="flex flex-col gap-2 min-w-[200px] px-4 py-3 rounded-xl bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] shadow-xl">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium">Transaction deleted</span>
             <button
@@ -366,13 +366,12 @@ function TransactionsPageInner() {
                   )
                   pendingDeletes.current.delete(id)
                 }
-                toast.dismiss(t.id)
+                toast.dismiss(toastId)
               }}
             >
               Undo
             </button>
           </div>
-          {/* Countdown bar */}
           <div className="h-0.5 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-border-base)' }}>
             <div
               className="h-full rounded-full"
@@ -618,17 +617,17 @@ function TransactionsPageInner() {
                 {/* Category */}
                 <div>
                   <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: 'var(--color-text-secondary)' }}>Category</p>
-                  <select
-                    value={filterCategory}
-                    onChange={e => setFilterCategory(e.target.value)}
-                    className="w-full rounded-xl px-3 py-2 text-sm outline-none"
-                    style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)', color: 'var(--color-text-primary)' }}
-                  >
-                    <option value="">All categories</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                    ))}
-                  </select>
+                  <Select value={filterCategory || '__none__'} onValueChange={v => setFilterCategory(v === '__none__' ? '' : v)}>
+                    <SelectTrigger className="w-full rounded-xl px-3 py-2 text-sm">
+                      <SelectValue placeholder="All categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">All categories</SelectItem>
+                      {categories.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Clear */}

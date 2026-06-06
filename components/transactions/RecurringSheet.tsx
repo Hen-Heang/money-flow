@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, X, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { formatKRW } from '@/lib/utils'
 import type { Category } from '@/lib/types'
 import { useExchangeRate } from '@/hooks/useExchangeRate'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
 
 interface RecurringRule {
   id: string
@@ -350,16 +351,17 @@ export default function RecurringSheet({ isOpen, onClose }: Props) {
                       <input style={inputStyle} placeholder="Description (e.g. Rent, Salary)" value={fDesc} onChange={e => setFDesc(e.target.value)} />
 
                       {/* Category */}
-                      <select
-                        style={inputStyle}
-                        value={fCategory}
-                        onChange={e => setFCategory(e.target.value)}
-                      >
-                        <option value="">No category</option>
-                        {categories.filter(c => true).map(c => (
-                          <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
-                        ))}
-                      </select>
+                      <Select value={fCategory || '__none__'} onValueChange={v => setFCategory(v === '__none__' ? '' : v)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="No category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">No category</SelectItem>
+                          {categories.map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
                       {/* Frequency */}
                       <div className="grid grid-cols-4 gap-1.5">

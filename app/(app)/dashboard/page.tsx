@@ -20,7 +20,7 @@ import FAB from '@/components/ui/FAB'
 import dynamic from 'next/dynamic'
 const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
 const ChatBot = dynamic(() => import('@/components/ai/ChatBot'), { ssr: false })
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -249,10 +249,10 @@ export default function DashboardPage() {
             <Avatar src={avatarUrl} name={userName} size={48} className="ring-4 ring-white/5 shadow-2xl shrink-0 sm:w-16 sm:h-16" />
           </Link>
           <div className="min-w-0">
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} className="text-tiny text-[var(--color-text-secondary)] font-black tracking-[0.3em] mb-1 uppercase">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} className="text-xs text-[var(--color-text-secondary)] font-black tracking-[0.3em] mb-1 uppercase">
               {greeting}
             </motion.p>
-            <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="text-xl sm:text-3xl font-black tracking-tight truncate">
+            <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="text-2xl sm:text-4xl font-black tracking-tight truncate">
               {userName}
             </motion.h1>
           </div>
@@ -302,8 +302,8 @@ export default function DashboardPage() {
               {totalIncome > 0 && (
                 <div className="p-7 sm:p-10 rounded-[32px] sm:rounded-[40px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl relative overflow-hidden group">
                   <div className="flex items-center justify-between mb-6">
-                    <span className="text-tiny font-black uppercase tracking-[0.3em] opacity-40">Capital Utilization</span>
-                    <span className="text-lg sm:text-xl font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
+                    <span className="text-xs font-black uppercase tracking-[0.3em] opacity-40">Capital Utilization</span>
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
                   </div>
                   <div className="h-4 sm:h-5 rounded-full bg-black/40 overflow-hidden p-1 border border-white/5">
                     <motion.div 
@@ -314,7 +314,7 @@ export default function DashboardPage() {
                       }`} 
                     />
                   </div>
-                  <p className="mt-5 text-xs text-[var(--color-text-secondary)] font-bold text-center opacity-50 tracking-tight">
+                  <p className="mt-5 text-sm text-[var(--color-text-secondary)] font-bold text-center opacity-50 tracking-tight">
                     Remaining cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}
                   </p>
                 </div>
@@ -336,8 +336,8 @@ export default function DashboardPage() {
                 <FileText size={20} className="text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-black tracking-tight">Analytics</p>
-                <p className="text-xs font-bold opacity-30 mt-0.5">Trends & Monthly Summary</p>
+                <p className="text-lg font-black tracking-tight">Analytics</p>
+                <p className="text-sm font-bold opacity-30 mt-0.5">Trends & Monthly Summary</p>
               </div>
               <ChevronRight size={18} className="opacity-20 group-hover:translate-x-1 transition-transform" />
             </button>
