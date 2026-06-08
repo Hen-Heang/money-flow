@@ -27,7 +27,7 @@ export const RecentActivity = memo(function RecentActivity({
       className="card-premium shadow-2xl overflow-hidden border-white/5 bg-white/[0.01]"
     >
       <div className="p-6 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
-        <h3 className="text-sm font-black opacity-40 tracking-[0.2em]">Recent Activity</h3>
+        <h3 className="text-base font-black opacity-60 tracking-[0.2em]">Recent Activity</h3>
         <button 
           onClick={() => { haptic('light'); router.push('/transactions') }} 
           className="text-tiny font-black text-blue-400 tracking-widest px-3 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 transition-all active:scale-95 border border-blue-500/10"
@@ -53,19 +53,19 @@ export const RecentActivity = memo(function RecentActivity({
               {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-[17px] truncate tracking-tight text-white/90">{t.description}</p>
-              <p className="text-xs text-[var(--color-text-secondary)] font-bold opacity-40 mt-1">
+              <p className="font-bold text-lg truncate tracking-tight text-white/90">{t.description}</p>
+              <p className="text-sm text-[var(--color-text-secondary)] font-bold opacity-50 mt-1">
                 {format(new Date(t.date), 'MMM d, yyyy')}
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className={`font-black text-xl tracking-tighter ${
+              <p className={`font-black text-2xl tracking-tighter ${
                 t.type === 'income' ? 'text-emerald-400' : 'text-white'
               }`}>
                 {t.type === 'income' ? '+' : ''}{fmt(t.amount_krw)}
               </p>
               {t.type === 'expense' && (
-                <p className="text-xs font-bold opacity-30 mt-0.5 uppercase tracking-tighter">
+                <p className="text-sm font-bold opacity-40 mt-0.5 uppercase tracking-tighter">
                    {t.categories?.name || 'Uncategorized'}
                 </p>
               )}

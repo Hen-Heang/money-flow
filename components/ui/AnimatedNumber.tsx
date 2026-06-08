@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useMotionValue, animate } from 'framer-motion'
+import { cn } from '@/lib/utils'
 
 interface Props {
   value: number
@@ -15,7 +16,9 @@ export function AnimatedNumber({ value, format, className }: Props) {
   const [display, setDisplay] = useState(() => format(0))
 
   // Always keep formatRef pointing at the latest formatter
-  formatRef.current = format
+  useEffect(() => {
+    formatRef.current = format
+  }, [format])
 
   // Subscribe to motion value updates and push to React state
   useEffect(() => {
@@ -38,5 +41,8 @@ export function AnimatedNumber({ value, format, className }: Props) {
     setDisplay(format(Math.round(mv.get())))
   }, [format, mv])
 
-  return <span className={className}>{display}</span>
+  // Inherit the parent's font-size/letter-spacing so wrapper classes like
+  // text-7xl / text-9xl take effect (the global `span { font-size: 14px }`
+  // base rule would otherwise pin this to 14px).
+  return <span className={cn('text-[length:inherit] tracking-[inherit]', className)}>{display}</span>
 }

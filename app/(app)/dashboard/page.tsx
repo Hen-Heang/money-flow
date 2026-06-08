@@ -300,8 +300,8 @@ export default function DashboardPage() {
               {totalIncome > 0 && (
                 <div className="p-7 sm:p-10 rounded-[32px] sm:rounded-[40px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl relative overflow-hidden group">
                   <div className="flex items-center justify-between mb-6">
-                    <span className="text-xs font-black uppercase tracking-[0.3em] opacity-40">Capital Utilization</span>
-                    <span className="text-xl sm:text-2xl font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
+                    <span className="text-sm font-black uppercase tracking-[0.3em] opacity-50">Capital Utilization</span>
+                    <span className="text-2xl sm:text-3xl font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
                   </div>
                   <div className="h-4 sm:h-5 rounded-full bg-black/40 overflow-hidden p-1 border border-white/5">
                     <motion.div 
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                       }`} 
                     />
                   </div>
-                  <p className="mt-5 text-sm text-[var(--color-text-secondary)] font-bold text-center opacity-50 tracking-tight">
+                  <p className="mt-5 text-base text-[var(--color-text-secondary)] font-bold text-center opacity-60 tracking-tight">
                     Remaining cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}
                   </p>
                 </div>
@@ -334,8 +334,8 @@ export default function DashboardPage() {
                 <FileText size={20} className="text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-lg font-black tracking-tight">Analytics</p>
-                <p className="text-sm font-bold opacity-30 mt-0.5">Trends & Monthly Summary</p>
+                <p className="text-xl font-black tracking-tight">Analytics</p>
+                <p className="text-base font-bold opacity-40 mt-0.5">Trends & Monthly Summary</p>
               </div>
               <ChevronRight size={18} className="opacity-20 group-hover:translate-x-1 transition-transform" />
             </button>
