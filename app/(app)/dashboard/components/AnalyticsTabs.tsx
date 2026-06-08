@@ -158,12 +158,12 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
                              className="w-4 h-4 rounded-full shrink-0 shadow-[0_0_10px_rgba(0,0,0,0.5)] group-hover:scale-125 transition-transform" 
                              style={{ backgroundColor: cat.color || CHART_COLORS[i % CHART_COLORS.length] }} 
                            />
-                           <span className="text-base font-bold truncate tracking-tight text-white/90">
-                             <span className="mr-2 opacity-100">{cat.icon}</span>
+                           <span className="text-lg font-bold truncate tracking-tight text-white/90">
+                             <span className="mr-2 text-2xl opacity-100">{cat.icon}</span>
                              {cat.name}
                            </span>
                         </div>
-                        <span className="text-base font-black shrink-0 ml-2 tracking-tighter">{fmt(cat.total)}</span>
+                        <span className="text-2xl font-black shrink-0 ml-2 tracking-tighter">{fmt(cat.total)}</span>
                       </div>
                     ))}
                   </div>

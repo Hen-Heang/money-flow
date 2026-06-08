@@ -56,12 +56,12 @@ export const Intelligence = memo(function Intelligence({
             <div className="space-y-4 bg-white/[0.03] p-5 rounded-2xl border border-white/5">
                <div className="flex justify-between items-end">
                   <div>
-                    <p className="text-xs font-black opacity-40 mb-1.5">Projected Exit</p>
-                    <p className="text-xl font-black tracking-tight">{fmt(insights.projectedExpense)}</p>
+                    <p className="text-sm font-black opacity-50 mb-1.5">Projected Exit</p>
+                    <p className="text-2xl font-black tracking-tight">{fmt(insights.projectedExpense)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xs font-black opacity-40 mb-1.5">Savings Est.</p>
-                    <p className={`text-base font-black ${insights.savingsRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <p className="text-sm font-black opacity-50 mb-1.5">Savings Est.</p>
+                    <p className={`text-xl font-black ${insights.savingsRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {insights.savingsRate.toFixed(1)}%
                     </p>
                   </div>
@@ -94,8 +94,8 @@ export const Intelligence = memo(function Intelligence({
             >
               <span className="text-4xl shrink-0 group-hover:scale-110 transition-transform">{t.iconEmoji}</span>
               <div className="min-w-0">
-                <p className="text-xs font-black tracking-widest leading-none mb-2">{t.name}</p>
-                <p className="text-sm font-bold opacity-30">₩{t.amount.toLocaleString()}</p>
+                <p className="text-sm font-black tracking-widest leading-none mb-2">{t.name}</p>
+                <p className="text-base font-bold opacity-40">₩{t.amount.toLocaleString()}</p>
               </div>
             </motion.button>
           ))}

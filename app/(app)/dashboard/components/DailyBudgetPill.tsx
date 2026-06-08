@@ -35,7 +35,7 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
         className="px-5 sm:px-0"
       >
         <div
-          className="flex items-center justify-between p-7 rounded-[28px] border shadow-xl relative overflow-hidden group transition-colors duration-500"
+          className="flex items-center justify-between gap-4 p-5 sm:p-7 rounded-[28px] border shadow-xl relative overflow-hidden group transition-colors duration-500"
           style={{
             backgroundColor: over
               ? 'rgba(239,68,68,0.12)'
@@ -49,10 +49,10 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
               : 'rgba(16,185,129,0.25)',
           }}
         >
-          <div className="relative z-10">
-            <p className="text-xs font-black uppercase tracking-[0.25em] opacity-40 mb-2">Strategic Reserve</p>
+          <div className="relative z-10 min-w-0">
+            <p className="text-xs sm:text-sm font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] opacity-50 mb-2 truncate">Strategic Reserve</p>
             <p
-              className="text-5xl font-black tracking-tighter leading-none"
+              className="text-3xl sm:text-5xl font-black tracking-tighter leading-none truncate"
               style={{
                 color: over
                   ? 'var(--color-expense-base)'
@@ -63,16 +63,16 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
             >
               {over && '−'}<AnimatedNumber value={Math.abs(perDay)} format={fmt} />
             </p>
-            <p className="text-xs font-bold mt-2 opacity-50 tracking-tight">
+            <p className="text-sm font-bold mt-2 opacity-60 tracking-tight">
               {over ? 'CRITICAL: REDUCE SPENDING' : `AVAILABLE PER DAY`}
             </p>
           </div>
-          <div className="text-right relative z-10">
-            <p className="text-xs font-black uppercase tracking-[0.25em] opacity-40 mb-2">Tactical Deployment</p>
-            <p className="text-4xl font-black tracking-tighter leading-none text-rose-400">
+          <div className="text-right relative z-10 min-w-0">
+            <p className="text-xs sm:text-sm font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] opacity-50 mb-2 truncate">Tactical Deployment</p>
+            <p className="text-2xl sm:text-4xl font-black tracking-tighter leading-none text-rose-400 truncate">
               <AnimatedNumber value={todaySpending} format={fmt} />
             </p>
-            <p className="text-xs font-bold mt-2 opacity-50 tracking-tight">SPENT TODAY</p>
+            <p className="text-sm font-bold mt-2 opacity-60 tracking-tight">SPENT TODAY</p>
           </div>
           
           {/* Subtle animated gradient overlay */}

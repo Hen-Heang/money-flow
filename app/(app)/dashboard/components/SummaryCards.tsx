@@ -32,15 +32,15 @@ export const SummaryCards = memo(function SummaryCards({
         className="bento-item md:col-span-2 flex flex-col justify-between min-h-[300px] bg-gradient-to-br from-blue-600/10 via-transparent to-transparent border-blue-500/10"
       >
         <div>
-          <p className="text-xs text-[var(--color-text-secondary)] mb-3 opacity-50 tracking-[0.2em]">Monthly Balance</p>
-          <h2 className={`text-7xl sm:text-9xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
+          <p className="text-sm text-[var(--color-text-secondary)] mb-3 opacity-70 tracking-[0.2em] uppercase font-bold">Monthly Balance</p>
+          <h2 className={`text-5xl sm:text-6xl font-black tracking-tighter leading-none ${balance >= 0 ? 'text-[var(--color-income-base)]' : 'text-[var(--color-expense-base)]'}`}>
             <AnimatedNumber value={balance} format={fmt} />
           </h2>
         </div>
 
         <div className="flex items-center justify-between mt-10 border-t border-white/5 pt-5">
           <div className="min-w-0">
-            <p className="text-sm font-black tracking-widest uppercase opacity-60" suppressHydrationWarning>
+            <p className="text-base font-black tracking-widest uppercase opacity-70" suppressHydrationWarning>
               {format(currentDate, 'MMMM yyyy')}
             </p>
           </div>
@@ -70,11 +70,11 @@ export const SummaryCards = memo(function SummaryCards({
         transition={{ delay: 0.1 }}
         className="bento-item border-l-4 border-l-[var(--color-income-base)]/40 hover:border-l-[var(--color-income-base)] transition-colors"
       >
-         <div className="flex items-center gap-2 mb-4 opacity-60">
-           <TrendingUp size={16} className="text-[var(--color-income-base)]" />
-           <span className="text-xs uppercase font-black tracking-widest">Income</span>
+         <div className="flex items-center gap-2 mb-4 opacity-70">
+           <TrendingUp size={18} className="text-[var(--color-income-base)]" />
+           <span className="text-sm uppercase font-black tracking-widest">Income</span>
          </div>
-         <p className="text-5xl sm:text-6xl font-black text-[var(--color-income-base)] truncate tracking-tight">
+         <p className="text-3xl sm:text-4xl font-black text-[var(--color-income-base)] truncate tracking-tight">
            <AnimatedNumber value={totalIncome} format={fmt} />
          </p>
       </motion.div>
@@ -85,11 +85,11 @@ export const SummaryCards = memo(function SummaryCards({
         transition={{ delay: 0.2 }}
         className="bento-item border-l-4 border-l-[var(--color-expense-base)]/40 hover:border-l-[var(--color-expense-base)] transition-colors"
       >
-         <div className="flex items-center gap-2 mb-4 opacity-60">
-           <TrendingDown size={16} className="text-[var(--color-expense-base)]" />
-           <span className="text-xs uppercase font-black tracking-widest">Expense</span>
+         <div className="flex items-center gap-2 mb-4 opacity-70">
+           <TrendingDown size={18} className="text-[var(--color-expense-base)]" />
+           <span className="text-sm uppercase font-black tracking-widest">Expense</span>
          </div>
-         <p className="text-5xl sm:text-6xl font-black text-[var(--color-expense-base)] truncate tracking-tight">
+         <p className="text-3xl sm:text-4xl font-black text-[var(--color-expense-base)] truncate tracking-tight">
            <AnimatedNumber value={totalExpense} format={fmt} />
          </p>
       </motion.div>

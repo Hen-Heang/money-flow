@@ -124,22 +124,25 @@ body {
   @apply p-6 hover:bg-white/[0.04] transition-all duration-300 cursor-default;
 }
 
-/* Base Typography */
-p, span, div {
-  font-size: 14px;
-  letter-spacing: -0.01em;
-  line-height: 1.5;
-}
+/* Base Typography — kept in @layer base so Tailwind's font-size
+   utilities (text-xl … text-9xl) always win over these defaults. */
+@layer base {
+  p, span, div {
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    line-height: 1.5;
+  }
 
-.text-tiny { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
-.text-xs { font-size: 12px; letter-spacing: -0.01em; }
-.text-sm { font-size: 14px; letter-spacing: -0.01em; }
-.text-base { font-size: 16px; letter-spacing: -0.015em; }
-.text-lg { font-size: 18px; letter-spacing: -0.02em; }
-.text-xl { font-size: 20px; letter-spacing: -0.025em; }
-.text-2xl { font-size: 24px; letter-spacing: -0.03em; }
-.text-3xl { font-size: 30px; letter-spacing: -0.035em; }
-.text-4xl { font-size: 36px; letter-spacing: -0.04em; }
+  .text-tiny { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+  .text-xs { font-size: 12px; letter-spacing: -0.01em; }
+  .text-sm { font-size: 14px; letter-spacing: -0.01em; }
+  .text-base { font-size: 16px; letter-spacing: -0.015em; }
+  .text-lg { font-size: 18px; letter-spacing: -0.02em; }
+  .text-xl { font-size: 20px; letter-spacing: -0.025em; }
+  .text-2xl { font-size: 24px; letter-spacing: -0.03em; }
+  .text-3xl { font-size: 30px; letter-spacing: -0.035em; }
+  .text-4xl { font-size: 36px; letter-spacing: -0.04em; }
+}
 
 button, a {
   touch-action: manipulation;

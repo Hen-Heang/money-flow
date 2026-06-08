@@ -441,6 +441,11 @@ export default function ChatBot() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-90"
+            style={{
+              background: 'rgba(2,6,23,0.5)',
+              backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
+            }}
             onClick={() => setOpen(false)}
           />
         )}
