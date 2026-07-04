@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Logo from '@/components/ui/Logo'
 import {
   ArrowRight,
@@ -14,6 +15,7 @@ import {
   ShieldCheck,
   TrendingUp,
   TrendingDown,
+  ChevronDown,
 } from 'lucide-react'
 
 const fadeUp = {
@@ -60,7 +62,46 @@ const features = [
   },
 ]
 
+const steps = [
+  {
+    icon: Wallet,
+    title: 'Log your flow',
+    desc: 'Add income and expenses in a couple of taps, with smart categories that keep everything organized.',
+  },
+  {
+    icon: PieChart,
+    title: 'See the picture',
+    desc: 'Watch real-time charts and an AI assistant turn your raw transactions into insight you can act on.',
+  },
+  {
+    icon: Target,
+    title: 'Hit your goals',
+    desc: 'Set budgets and savings targets, then track progress automatically as your money moves.',
+  },
+]
+
+const faqs = [
+  {
+    q: 'Is Money Flow free to use?',
+    a: 'Yes — the core app is free, with no card required to get started.',
+  },
+  {
+    q: 'Can I track more than one currency?',
+    a: 'Yes. Set your preferred currency in Settings and every page — Dashboard, Transactions, Budget, Analytics, and Savings — formats amounts consistently.',
+  },
+  {
+    q: 'Is my financial data secure?',
+    a: 'Your data is private to your account and never shared or sold. You stay in control of what you track.',
+  },
+  {
+    q: 'Do I need to link a bank account?',
+    a: 'No. Money Flow works by logging transactions yourself, so there’s nothing to connect and nothing to authorize.',
+  },
+]
+
 export default function LandingPage() {
+  const [openFaq, setOpenFaq] = useState<number | null>(0)
+
   return (
     <div className="relative min-h-[100dvh] overflow-x-hidden">
       {/* Ambient glow */}
@@ -69,17 +110,17 @@ export default function LandingPage() {
         className="pointer-events-none fixed inset-0 -z-10"
         style={{
           background:
-            'radial-gradient(60% 40% at 50% 0%, color-mix(in srgb, var(--color-income-base) 16%, transparent), transparent 70%)',
+            'radial-gradient(60% 40% at 50% 0%, color-mix(in srgb, var(--color-income-base) 16%, transparent), transparent 70%), radial-gradient(45% 35% at 90% 15%, color-mix(in srgb, var(--color-accent-base) 12%, transparent), transparent 70%)',
         }}
       />
 
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-30 px-mobile pt-safe">
+      <header className="glass-morphic sticky top-0 z-30 px-mobile pt-safe" style={{ borderWidth: '0 0 1px 0' }}>
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between">
           <Logo size={34} />
           <Link
             href="/login"
-            className="rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+            className="rounded-full px-4 py-2 text-sm font-semibold transition-all hover:opacity-80 active:scale-95"
             style={{
               color: 'var(--color-text-primary)',
               backgroundColor: 'var(--color-card-base)',
@@ -93,7 +134,7 @@ export default function LandingPage() {
 
       <main className="px-mobile pb-safe">
         {/* ── Hero ── */}
-        <section className="mx-auto flex w-full max-w-5xl flex-col items-center pt-10 text-center sm:pt-16">
+        <section className="mx-auto flex w-full max-w-5xl flex-col items-center pt-8 text-center sm:pt-16">
           <motion.div
             initial="hidden"
             animate="show"
@@ -155,7 +196,7 @@ export default function LandingPage() {
           >
             <Link
               href="/login?mode=signup"
-              className="flex h-13 flex-1 items-center justify-center gap-2 rounded-button px-6 text-base font-semibold text-white active:scale-[0.98] sm:flex-none"
+              className="flex h-13 flex-1 items-center justify-center gap-2 rounded-button px-6 text-base font-semibold text-white transition-transform hover:brightness-110 active:scale-[0.98] sm:flex-none"
               style={{ backgroundColor: 'var(--color-income-base)' }}
             >
               Get started free
@@ -163,7 +204,7 @@ export default function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="flex h-13 flex-1 items-center justify-center rounded-button px-6 text-base font-semibold active:scale-[0.98] sm:flex-none"
+              className="flex h-13 flex-1 items-center justify-center rounded-button px-6 text-base font-semibold transition-all hover:bg-white/5 active:scale-[0.98] sm:flex-none"
               style={{
                 color: 'var(--color-text-primary)',
                 backgroundColor: 'var(--color-card-base)',
@@ -172,6 +213,28 @@ export default function LandingPage() {
             >
               I have an account
             </Link>
+          </motion.div>
+
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={fadeUp}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs"
+            style={{ color: 'var(--color-text-secondary)' }}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Free forever
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5" />
+              Multi-currency
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              No card required
+            </span>
           </motion.div>
 
           {/* ── App preview card ── */}
@@ -285,7 +348,7 @@ export default function LandingPage() {
                 viewport={{ once: true, margin: '-60px' }}
                 variants={fadeUp}
                 transition={{ duration: 0.45, delay: (i % 2) * 0.06 }}
-                className="glass-card p-5"
+                className="glass-card p-5 transition-transform duration-300 hover:-translate-y-1"
               >
                 <div
                   className="flex h-11 w-11 items-center justify-center rounded-2xl"
@@ -304,6 +367,125 @@ export default function LandingPage() {
                 </p>
               </motion.div>
             ))}
+          </div>
+        </section>
+
+        {/* ── How it works ── */}
+        <section className="mx-auto mt-20 w-full max-w-5xl sm:mt-28">
+          <motion.div
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={fadeUp}
+            transition={{ duration: 0.5 }}
+            className="text-center"
+          >
+            <h2
+              className="text-2xl font-bold tracking-tight sm:text-4xl"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              How it works
+            </h2>
+            <p className="mt-2 text-sm sm:text-base" style={{ color: 'var(--color-text-secondary)' }}>
+              Three steps between you and a clearer picture of your money.
+            </p>
+          </motion.div>
+
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {steps.map((s, i) => (
+              <motion.div
+                key={s.title}
+                initial="hidden"
+                whileInView="show"
+                viewport={{ once: true, margin: '-60px' }}
+                variants={fadeUp}
+                transition={{ duration: 0.45, delay: i * 0.08 }}
+                className="glass-card relative p-5"
+              >
+                <span
+                  className="absolute right-5 top-5 text-3xl font-black"
+                  style={{ color: 'var(--color-border-base)' }}
+                >
+                  {i + 1}
+                </span>
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: 'color-mix(in srgb, var(--color-income-base) 16%, transparent)' }}
+                >
+                  <s.icon className="h-5 w-5" style={{ color: 'var(--color-income-base)' }} />
+                </div>
+                <h3
+                  className="mt-4 text-base font-semibold"
+                  style={{ color: 'var(--color-text-primary)' }}
+                >
+                  {s.title}
+                </h3>
+                <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                  {s.desc}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── FAQ ── */}
+        <section className="mx-auto mt-20 w-full max-w-3xl sm:mt-28">
+          <motion.div
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-80px' }}
+            variants={fadeUp}
+            transition={{ duration: 0.5 }}
+            className="text-center"
+          >
+            <h2
+              className="text-2xl font-bold tracking-tight sm:text-4xl"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Frequently asked
+            </h2>
+          </motion.div>
+
+          <div className="mt-8 flex flex-col gap-3">
+            {faqs.map((item, i) => {
+              const isOpen = openFaq === i
+              return (
+                <div key={item.q} className="glass-card overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(isOpen ? null : i)}
+                    className="flex w-full items-center justify-between gap-4 p-5 text-left"
+                    aria-expanded={isOpen}
+                  >
+                    <span className="text-sm font-semibold sm:text-base" style={{ color: 'var(--color-text-primary)' }}>
+                      {item.q}
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
+                      style={{ color: 'var(--color-text-secondary)' }}
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <p
+                          className="px-5 pb-5 text-sm leading-relaxed"
+                          style={{ color: 'var(--color-text-secondary)' }}
+                        >
+                          {item.a}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )
+            })}
           </div>
         </section>
 
