@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2, Loader2 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
@@ -81,7 +81,6 @@ export default function AddTransactionSheet({
   const [templates, setTemplates] = useState<Template[]>([])
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [isAiSuggesting, setIsAiSuggesting] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const supabase = useSupabaseClient()
@@ -419,7 +418,15 @@ export default function AddTransactionSheet({
 
       {/* Category for pc */}
       <div>
-        <p className={sectionLabelStyle}>Category</p>
+        <div className="flex items-center justify-between">
+          <p className={sectionLabelStyle}>Category</p>
+          {isAiSuggesting && (
+            <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-accent-base)]">
+              <Loader2 size={12} className="animate-spin" />
+              AI suggesting
+            </span>
+          )}
+        </div>
         <Controller
           control={control}
           name="category_id"
@@ -547,7 +554,15 @@ export default function AddTransactionSheet({
 
                   {/* Categories */}
                   <div>
-                    <p className={sectionLabelStyle}>Category</p>
+                    <div className="flex items-center justify-between">
+                      <p className={sectionLabelStyle}>Category</p>
+                      {isAiSuggesting && (
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-accent-base)]">
+                          <Loader2 size={12} className="animate-spin" />
+                          AI suggesting
+                        </span>
+                      )}
+                    </div>
                     <Controller
                       control={control}
                       name="category_id"
