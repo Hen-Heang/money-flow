@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { FALLBACK_EXCHANGE_RATE, EXCHANGE_RATE_CACHE_MINUTES } from '@/shared/presets'
 import { rateLimit } from '@/lib/rate-limit'
+
+// exchange_rates grants writes to service_role only (see 20260514_explicit_grants.sql),
+// so caching the fetched rate requires a service-role client — the session-scoped
+// client can only read it.
+function createServiceRoleClient() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!serviceRoleKey || !supabaseUrl) return null
+  return createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+}
 
 export async function GET() {
   const { allowed } = rateLimit('exchange-rate', 30, 60_000)
@@ -76,11 +87,17 @@ export async function GET() {
     const rate = data.conversion_rate
     const fetchedAt = new Date().toISOString()
 
-    // Upsert so the table doesn't grow unbounded
-    await supabase.from('exchange_rates').upsert(
-      { base_currency: 'USD', target_currency: 'KRW', rate, fetched_at: fetchedAt },
-      { onConflict: 'base_currency,target_currency' }
-    )
+    // Upsert so the table doesn't grow unbounded — needs the service-role client (see above)
+    const serviceRoleClient = createServiceRoleClient()
+    if (serviceRoleClient) {
+      const { error: upsertError } = await serviceRoleClient.from('exchange_rates').upsert(
+        { base_currency: 'USD', target_currency: 'KRW', rate, fetched_at: fetchedAt },
+        { onConflict: 'base_currency,target_currency' }
+      )
+      if (upsertError) console.error('[exchange-rate] cache upsert failed:', upsertError)
+    } else {
+      console.error('[exchange-rate] SUPABASE_SERVICE_ROLE_KEY not configured, skipping cache write')
+    }
 
     return NextResponse.json({
       rate,

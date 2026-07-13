@@ -4,6 +4,7 @@ import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provide
 import { createTelegramServiceClient, sendTelegramMessage, escapeHtml, fmtKRW } from '@/lib/telegram'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 import { rateLimit } from '@/lib/rate-limit'
+import { CATEGORY_MATCH_GUIDANCE, formatCategoriesForPrompt } from '@/lib/categorize'
 
 // Telegram delivers updates here as POST requests (webhook mode).
 // Secured by the secret token Telegram echoes back in a header — set when
@@ -193,17 +194,21 @@ interface ParsedTransaction {
 
 async function parseTransaction(
   text: string,
-  categories: Array<{ id: string; name: string; type: string }>,
+  categories: Array<{ id: string; name: string; type: string; icon?: string | null }>,
   provider: AIProvider = 'gemini',
 ): Promise<ParsedTransaction | null> {
-  const catList = categories.map((c) => ({ id: c.id, name: c.name, type: c.type }))
-
   const { text: raw } = await generateText({
     model: getFastModel(provider),
     system: `You parse a single short message into a money transaction for a tracking app.
 Default currency is KRW (Korean won) unless the user clearly writes USD or a $ sign.
 Treat the transaction as "expense" unless the message clearly describes earning money (salary, refund, income, deposit) — then "income".
-Pick the best matching category id from this list, or null if none fit: ${JSON.stringify(catList)}
+
+Available categories (id: name):
+${formatCategoriesForPrompt(categories)}
+
+${CATEGORY_MATCH_GUIDANCE}
+
+Pick the best matching category id from the list above, or null if none fit.
 Respond with ONLY a JSON object, no markdown, in this exact shape:
 {"amount": <positive number>, "currency": "KRW"|"USD", "type": "income"|"expense", "description": <short string>, "category_id": <id string or null>}
 If there is no clear amount, respond with {"amount": 0}.`,
@@ -232,7 +237,7 @@ If there is no clear amount, respond with {"amount": 0}.`,
 
 async function handleLogExpense(supabase: ServiceClient, userId: string, text: string): Promise<string> {
   const [{ data: categories }, { data: userPref }] = await Promise.all([
-    supabase.from('categories').select('id, name, type').eq('user_id', userId),
+    supabase.from('categories').select('id, name, type, icon').eq('user_id', userId),
     supabase.from('users').select('ai_provider').eq('id', userId).single(),
   ])
   const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')

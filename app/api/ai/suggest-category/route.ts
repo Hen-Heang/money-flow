@@ -2,6 +2,7 @@ import { generateText } from 'ai'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { rateLimit } from '@/lib/rate-limit'
 import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { CATEGORY_MATCH_GUIDANCE, formatCategoriesForPrompt } from '@/lib/categorize'
 
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient()
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   // Filter categories by type (income/expense)
   const availableCategories = categories
     .filter(c => c.type === type || c.type === 'both')
-    .map(c => ({ id: c.id, name: c.name }))
+    .map(c => ({ id: c.id, name: c.name, icon: c.icon }))
 
   if (availableCategories.length === 0) {
     return new Response(JSON.stringify({ categoryId: null }), { status: 200 })
@@ -32,12 +33,17 @@ export async function POST(req: Request) {
     const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
     const { text } = await generateText({
       model: getFastModel(provider),
-      system: `You are a financial assistant for a money tracking app. 
-      Your task is to categorize a user's transaction based on its description.
-      Available categories: ${JSON.stringify(availableCategories)}
-      Return ONLY the "id" of the most likely category. 
-      If no category fits well, return "null".
-      Do not explain. Do not return anything else.`,
+      system: `You are a financial assistant for a money tracking app.
+Your task is to categorize a user's transaction based on its description.
+
+Available categories (id: name):
+${formatCategoriesForPrompt(availableCategories)}
+
+${CATEGORY_MATCH_GUIDANCE}
+
+Return ONLY the "id" of the best-matching category from the list above.
+If no category fits well, return "null".
+Do not explain. Do not return anything else.`,
       prompt: `Description: "${description}" | Type: ${type}`,
     })
 
