@@ -267,7 +267,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:grid lg:grid-cols-[1fr_380px] lg:gap-12 xl:gap-16">
+      <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 xl:gap-16">
         
         {/* ─── LEFT COLUMN ─── */}
         <div className="space-y-10">
