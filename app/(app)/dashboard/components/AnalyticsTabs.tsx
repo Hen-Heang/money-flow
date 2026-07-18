@@ -38,20 +38,25 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
 }: AnalyticsTabsProps) {
   return (
     <div className="px-5 sm:px-0">
-      <div className="flex gap-8 sm:gap-12 border-b border-white/5 mb-8 overflow-x-auto no-scrollbar pt-2">
+      <div role="tablist" aria-label="Dashboard views" className="no-scrollbar mb-6 flex gap-6 overflow-x-auto border-b border-[var(--color-border-base)] pt-1 sm:gap-8">
         {(['overview', 'trends', 'categories'] as const).map(tab => (
           <button 
+            type="button"
+            role="tab"
             key={tab} 
+            id={`dashboard-tab-${tab}`}
+            aria-selected={activeTab === tab}
+            aria-controls={`dashboard-panel-${tab}`}
             onClick={() => { setActiveTab(tab) }} 
-            className={`pb-4 text-tiny font-black tracking-[0.25em] relative transition-all whitespace-nowrap ${
-              activeTab === tab ? 'text-white' : 'text-[var(--color-text-secondary)] opacity-40 hover:opacity-100'
+            className={`relative whitespace-nowrap pb-3 text-sm font-semibold capitalize transition-colors ${
+              activeTab === tab ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
             }`}
           >
             {tab}
             {activeTab === tab && (
               <motion.div 
                 layoutId="tab-line" 
-                className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500 rounded-full shadow-[0_0_12px_rgba(59,130,246,0.6)]" 
+                className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-[var(--color-accent-base)]"
               />
             )}
           </button>
@@ -61,6 +66,9 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
       <AnimatePresence mode="wait">
         <motion.div 
           key={activeTab} 
+          id={`dashboard-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`dashboard-tab-${activeTab}`}
           initial={{ opacity: 0, y: 10 }} 
           animate={{ opacity: 1, y: 0 }} 
           exit={{ opacity: 0, y: -10 }} 
@@ -69,8 +77,11 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
           {activeTab === 'overview' && children}
 
           {activeTab === 'trends' && (
-            <div className="card-premium p-6 sm:p-10 min-h-[420px] bg-white/[0.01]">
-              <h3 className="text-tiny font-black opacity-40 mb-10 text-center tracking-[0.3em]">Capital Flow Trendline</h3>
+            <div className="card-premium min-h-[390px] bg-[var(--color-card-base)] p-5 sm:p-8">
+              <div className="mb-6">
+                <h3 className="text-base font-semibold">Daily spending</h3>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Your expenses across the selected month</p>
+              </div>
               <div className="h-[320px] sm:h-[380px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyData}>
@@ -80,29 +91,29 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
                         <stop offset="95%" stopColor="var(--color-accent-base)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border-base)" />
                     <XAxis 
                       dataKey="day" 
                       axisLine={false} 
                       tickLine={false} 
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'rgba(255,255,255,0.3)' }} 
+                      tick={{ fontSize: 10, fontWeight: 600, fill: 'var(--color-text-secondary)' }}
                       interval={isDesktop ? 2 : 4} 
                     />
                     <YAxis 
                       axisLine={false} 
                       tickLine={false} 
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'rgba(255,255,255,0.3)' }} 
+                      tick={{ fontSize: 10, fontWeight: 600, fill: 'var(--color-text-secondary)' }}
                       width={45} 
                       tickFormatter={(v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${Math.round(v / 1000)}K` : String(v)} 
                     />
                     <Tooltip 
                       contentStyle={{ 
-                        backgroundColor: 'rgba(10, 15, 26, 0.95)', 
+                        backgroundColor: 'var(--color-card-elevated-base)',
                         backdropFilter: 'blur(20px)', 
-                        border: '1px solid rgba(255,255,255,0.1)', 
-                        borderRadius: '20px', 
-                        boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                        fontWeight: 900,
+                        border: '1px solid var(--color-border-base)',
+                        borderRadius: '16px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+                        fontWeight: 650,
                         fontSize: '12px'
                       }} 
                     />
@@ -121,9 +132,12 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
           )}
 
           {activeTab === 'categories' && (
-            <div className="card-premium p-6 sm:p-10 bg-white/[0.01]">
-               <h3 className="text-tiny font-black opacity-40 mb-10 text-center tracking-[0.3em]">Resource Distribution</h3>
-               <div className="flex flex-col xl:flex-row items-center gap-12">
+            <div className="card-premium bg-[var(--color-card-base)] p-5 sm:p-8">
+               <div className="mb-6">
+                 <h3 className="text-base font-semibold">Spending by category</h3>
+                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">See where most of your money went</p>
+               </div>
+               <div className="flex flex-col items-center gap-8 xl:flex-row">
                   <div className="w-full xl:w-1/2 h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -140,30 +154,30 @@ export const AnalyticsTabs = memo(function AnalyticsTabs({
                         />
                         <Tooltip 
                            contentStyle={{ 
-                            backgroundColor: 'rgba(10, 15, 26, 0.95)', 
+                            backgroundColor: 'var(--color-card-elevated-base)',
                             backdropFilter: 'blur(20px)', 
-                            border: '1px solid rgba(255,255,255,0.1)', 
-                            borderRadius: '20px',
-                            fontWeight: 900
+                            border: '1px solid var(--color-border-base)',
+                            borderRadius: '16px',
+                            fontWeight: 650
                           }}
                         />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  <div className="w-full xl:w-1/2 space-y-4">
+                  <div className="w-full space-y-3 xl:w-1/2">
                     {categoryTotals.map((cat, i) => (
-                      <div key={cat.name} className="flex items-center justify-between p-5 rounded-[24px] bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-all group">
+                      <div key={cat.name} className="group flex items-center justify-between rounded-[20px] border border-[var(--color-border-base)] bg-white/[0.03] p-4 transition-colors hover:bg-white/[0.06]">
                         <div className="flex items-center gap-4 min-w-0">
                            <div 
                              className="w-4 h-4 rounded-full shrink-0 shadow-[0_0_10px_rgba(0,0,0,0.5)] group-hover:scale-125 transition-transform" 
                              style={{ backgroundColor: cat.color || CHART_COLORS[i % CHART_COLORS.length] }} 
                            />
-                           <span className="text-lg font-bold truncate tracking-tight text-white/90">
-                             <span className="mr-2 text-2xl opacity-100">{cat.icon}</span>
+                           <span className="truncate text-sm font-semibold tracking-tight text-[var(--color-text-primary)] sm:text-base">
+                             <span className="mr-2 text-xl opacity-100">{cat.icon}</span>
                              {cat.name}
                            </span>
                         </div>
-                        <span className="text-2xl font-black shrink-0 ml-2 tracking-tighter">{fmt(cat.total)}</span>
+                        <span className="ml-2 shrink-0 text-sm font-bold tracking-tight tabular-nums sm:text-base">{fmt(cat.total)}</span>
                       </div>
                     ))}
                   </div>

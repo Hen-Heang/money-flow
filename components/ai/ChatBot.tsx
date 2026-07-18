@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bot, ChevronRight, RotateCcw, Send, Sparkles, X } from 'lucide-react'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePathname } from 'next/navigation'
+import { MessageResponse } from '@/components/ai-elements/message'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
 
@@ -32,110 +33,6 @@ interface Message {
   content: string
   error?: boolean
 }
-
-function renderInline(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
-
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>
-    }
-
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>
-    }
-
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code
-          key={i}
-          className="rounded px-1 py-0.5 font-mono text-xs"
-          style={{ background: 'var(--color-border-base)', color: 'var(--color-income-base)' }}
-        >
-          {part.slice(1, -1)}
-        </code>
-      )
-    }
-
-    return part
-  })
-}
-
-const MessageContent = memo(function MessageContent({ text, isUser }: { text: string; isUser: boolean }) {
-  if (isUser) return <span className="text-base leading-7">{text}</span>
-
-  const lines = text.split('\n')
-  const elements: React.ReactNode[] = []
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    if (line.trim() === '') {
-      i++
-      continue
-    }
-
-    if (/^[-*•]\s/.test(line)) {
-      const bullets: string[] = []
-      while (i < lines.length && /^[-*•]\s/.test(lines[i])) {
-        bullets.push(lines[i].replace(/^[-*•]\s/, ''))
-        i++
-      }
-
-      elements.push(
-        <ul key={`ul-${i}`} className="my-1 space-y-1 pl-1">
-          {bullets.map((bullet, index) => (
-            <li key={index} className="flex gap-2">
-              <span
-                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ background: 'var(--color-accent-base)' }}
-              />
-              <span>{renderInline(bullet)}</span>
-            </li>
-          ))}
-        </ul>,
-      )
-      continue
-    }
-
-    if (/^\d+\.\s/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\.\s/, ''))
-        i++
-      }
-
-      elements.push(
-        <ol key={`ol-${i}`} className="my-1 list-decimal space-y-1 pl-5">
-          {items.map((item, index) => (
-            <li key={index}>{renderInline(item)}</li>
-          ))}
-        </ol>,
-      )
-      continue
-    }
-
-    if (/^#{1,3}\s/.test(line)) {
-      elements.push(
-        <p key={`h-${i}`} className="mt-2 font-semibold">
-          {renderInline(line.replace(/^#{1,3}\s/, ''))}
-        </p>,
-      )
-      i++
-      continue
-    }
-
-    elements.push(
-      <p key={`p-${i}`} className={i > 0 ? 'mt-1.5' : ''}>
-        {renderInline(line)}
-      </p>,
-    )
-    i++
-  }
-
-  return <div className="space-y-0.5 text-base leading-7">{elements}</div>
-})
 
 function useStreamingChat(api: string) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -426,7 +323,6 @@ export default function ChatBot() {
     }
   }, [isMobile, open])
 
-  const showSuggestions = messages.length === 0 && !isLoading
   const hasMessages = messages.length > 0
   const lastMessage = messages[messages.length - 1]
   const showTyping = isLoading && lastMessage?.role === 'assistant' && lastMessage?.content === ''
@@ -616,7 +512,7 @@ export default function ChatBot() {
                                 boxShadow: '0 4px 16px rgba(29,78,216,0.22)',
                               }}
                             >
-                              <MessageContent text={message.content} isUser={isUser} />
+                              <span className="text-base leading-7">{message.content}</span>
                             </div>
                           </div>
                         ) : (
@@ -640,7 +536,12 @@ export default function ChatBot() {
                               </span>
                             </div>
                             <div className="pl-8" style={{ color: 'var(--color-text-primary)' }}>
-                              <MessageContent text={message.content} isUser={false} />
+                              <MessageResponse
+                                isAnimating={isLoading && message.id === lastMessage?.id}
+                                className="text-base leading-7 [&_a]:text-[var(--color-accent-base)] [&_li]:text-base [&_li]:leading-7 [&_p]:text-base [&_p]:leading-7 [&_span]:text-[inherit]"
+                              >
+                                {message.content}
+                              </MessageResponse>
                               {message.error && (
                                 <button
                                   type="button"

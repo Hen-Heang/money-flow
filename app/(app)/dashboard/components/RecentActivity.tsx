@@ -24,28 +24,30 @@ export const RecentActivity = memo(function RecentActivity({
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="card-premium shadow-2xl overflow-hidden border-white/5 bg-white/[0.01]"
+      className="card-premium overflow-hidden border-[var(--color-border-base)] bg-[var(--color-card-base)] shadow-lg"
     >
-      <div className="p-6 flex items-center justify-between border-b border-white/5 bg-white/[0.01]">
-        <h3 className="text-base font-black opacity-60 tracking-[0.2em]">Recent Activity</h3>
+      <div className="flex items-center justify-between border-b border-[var(--color-border-base)] p-5">
+        <h3 className="text-base font-semibold">Recent activity</h3>
         <button 
+          type="button"
           onClick={() => { haptic('light'); router.push('/transactions') }} 
-          className="text-tiny font-black text-blue-400 tracking-widest px-3 py-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 transition-all active:scale-95 border border-blue-500/10"
+          className="rounded-xl border border-blue-500/15 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-400 transition-[background-color,transform] hover:bg-blue-500/20 active:scale-95"
         >
-          ALL
+          View all
         </button>
       </div>
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-[var(--color-border-base)]">
         {transactions.slice(0, limit).map((t, i) => (
-          <motion.div 
+          <motion.button
+            type="button"
             key={t.id} 
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.05 }}
             onClick={() => { haptic('light'); router.push('/transactions') }} 
-            className="p-6 flex items-center gap-5 hover:bg-white/[0.03] transition-all cursor-pointer active:bg-white/[0.05] group"
+            className="group flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-white/[0.03] active:bg-white/[0.05] sm:gap-4 sm:p-5"
           >
-            <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center text-3xl shadow-inner transition-transform group-hover:scale-110 shrink-0 ${
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-2xl shadow-inner transition-transform group-hover:scale-105 ${
               t.type === 'income' 
                 ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/10' 
                 : 'bg-rose-500/10 text-rose-500 border border-rose-500/10'
@@ -53,29 +55,29 @@ export const RecentActivity = memo(function RecentActivity({
               {t.categories?.icon || (t.type === 'income' ? '💰' : '💸')}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-lg truncate tracking-tight text-white/90">{t.description}</p>
-              <p className="text-sm text-[var(--color-text-secondary)] font-bold opacity-50 mt-1">
+              <p className="truncate text-sm font-semibold tracking-tight text-[var(--color-text-primary)] sm:text-base">{t.description}</p>
+              <p className="mt-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
                 {format(new Date(t.date), 'MMM d, yyyy')}
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className={`font-black text-2xl tracking-tighter ${
-                t.type === 'income' ? 'text-emerald-400' : 'text-white'
+              <p className={`font-mono text-sm font-bold tracking-tight tabular-nums sm:text-base ${
+                t.type === 'income' ? 'text-emerald-400' : 'text-[var(--color-text-primary)]'
               }`}>
                 {t.type === 'income' ? '+' : ''}{fmt(t.amount_krw)}
               </p>
               {t.type === 'expense' && (
-                <p className="text-sm font-bold opacity-40 mt-0.5 uppercase tracking-tighter">
+                <p className="mt-0.5 max-w-24 truncate text-xs font-medium text-[var(--color-text-secondary)]">
                    {t.categories?.name || 'Uncategorized'}
                 </p>
               )}
             </div>
-          </motion.div>
+          </motion.button>
         ))}
       </div>
       {transactions.length === 0 && (
-        <div className="p-10 text-center opacity-30">
-          <p className="text-sm font-bold">No transactions logged yet.</p>
+        <div className="p-10 text-center">
+          <p className="text-sm font-medium text-[var(--color-text-secondary)]">No transactions yet. Add one to start your monthly overview.</p>
         </div>
       )}
     </motion.div>

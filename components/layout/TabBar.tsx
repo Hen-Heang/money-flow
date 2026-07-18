@@ -8,8 +8,8 @@ import { motion } from 'framer-motion'
 
 const PRIMARY_TABS = [
   { href: '/dashboard',    label: 'Home',      icon: LayoutDashboard },
-  { href: '/transactions', label: 'History',   icon: List },
-  { href: '/savings',      label: 'Goals',     icon: PiggyBank },
+  { href: '/transactions', label: 'Transactions', icon: List },
+  { href: '/savings',      label: 'Savings',   icon: PiggyBank },
   { href: '/budget',       label: 'Budget',    icon: Wallet },
   { href: '/analytics',   label: 'Analytics', icon: BarChart2 },
 ]
@@ -19,19 +19,20 @@ export default function TabBar() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-50 flex justify-center"
-      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', paddingLeft: 20, paddingRight: 20 }}
+      aria-label="Primary navigation"
+      className="fixed inset-x-0 bottom-0 z-50 flex justify-center lg:hidden"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 10px)', paddingLeft: 12, paddingRight: 12 }}
     >
       <div
-        className="w-full max-w-sm flex items-center justify-around"
+        className="flex w-full max-w-md items-center justify-around"
         style={{
-          height: 76,
-          background: 'rgba(10, 15, 26, 0.88)',
+          height: 68,
+          background: 'color-mix(in srgb, var(--color-card-base) 94%, transparent)',
           backdropFilter: 'blur(40px) saturate(220%)',
           WebkitBackdropFilter: 'blur(40px) saturate(220%)',
-          borderRadius: 38,
-          border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.1)',
+          borderRadius: 26,
+          border: '1px solid var(--color-border-base)',
+          boxShadow: '0 18px 45px -20px rgba(0,0,0,0.72), inset 0 1px 1px rgba(255,255,255,0.06)',
         }}
       >
         {PRIMARY_TABS.map(({ href, label, icon: Icon }) => {
@@ -40,36 +41,35 @@ export default function TabBar() {
             <Link
               key={href}
               href={href}
-              className="relative flex flex-col items-center justify-center gap-1 flex-1 h-full"
+              aria-current={isActive ? 'page' : undefined}
+              className="relative flex h-full flex-1 flex-col items-center justify-center gap-1"
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
             >
               <motion.div
                 whileTap={{ scale: 0.9 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                className="flex flex-col items-center gap-1.5"
+                className="flex flex-col items-center gap-1"
               >
                 <div
-                  className="flex items-center justify-center transition-all duration-400"
+                  className="flex items-center justify-center transition-[background-color,transform] duration-200"
                   style={{
-                    width: 46, height: 30, borderRadius: 15,
-                    background: isActive ? 'rgba(59,130,246,0.12)' : 'transparent',
-                    boxShadow: isActive ? '0 0 20px rgba(59,130,246,0.1)' : 'none',
+                    width: 42, height: 28, borderRadius: 14,
+                    background: isActive ? 'color-mix(in srgb, var(--color-accent-base) 13%, transparent)' : 'transparent',
                   }}
                 >
-                  <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-all ${isActive ? 'text-blue-400 scale-110' : 'text-white/40'}`} />
+                  <Icon
+                    size={19}
+                    strokeWidth={isActive ? 2.5 : 2}
+                    className={`transition-[color,transform] ${isActive ? 'scale-105 text-[var(--color-accent-base)]' : 'text-[var(--color-text-secondary)] opacity-65'}`}
+                  />
                 </div>
-                <span className={`transition-all duration-400 font-black tracking-tight ${isActive ? 'text-blue-400' : 'text-white/30'}`} style={{ fontSize: 9 }}>
+                <span
+                  className={`font-bold tracking-tight transition-colors duration-200 ${isActive ? 'text-[var(--color-accent-base)]' : 'text-[var(--color-text-secondary)] opacity-65'}`}
+                  style={{ fontSize: label === 'Transactions' ? 9 : 10 }}
+                >
                   {label}
                 </span>
               </motion.div>
-              {isActive && (
-                <motion.span
-                  layoutId="tab-dot"
-                  className="absolute bottom-1.5 w-1 h-1 rounded-full"
-                  style={{ background: '#60a5fa', boxShadow: '0 0 10px #60a5fa' }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-                />
-              )}
             </Link>
           )
         })}

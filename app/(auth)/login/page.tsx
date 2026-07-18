@@ -93,8 +93,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-6 pt-safe-top pb-safe-bottom"
+    <main
+      id="main-content"
+      className="flex min-h-screen flex-col items-center justify-center px-6 pb-safe pt-safe"
       style={{ backgroundColor: 'var(--color-bg)' }}
     >
       <motion.div
@@ -104,7 +105,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <Logo size={92} className="mb-4 drop-shadow-[0_16px_34px_rgba(16,185,129,0.2)]" />
+          <Logo size={76} className="mb-4 drop-shadow-[0_16px_34px_rgba(16,185,129,0.2)]" />
           <h1 className="text-3xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Money Flow</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-secondary)' }}>Track your finances beautifully</p>
         </div>
@@ -112,11 +113,16 @@ export default function LoginPage() {
         {/* Email Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
+            <label htmlFor="email" className="sr-only">Email address</label>
             <input
               {...register('email')}
+              id="email"
               type="email"
               inputMode="email"
+              autoComplete="email"
               placeholder="Email"
+              aria-invalid={Boolean(errors.email)}
+              aria-describedby={errors.email ? 'email-error' : undefined}
               className="w-full rounded-xl px-4 py-4 text-base placeholder:opacity-50 focus:outline-none transition-colors"
               style={{
                 backgroundColor: 'var(--color-card-base)',
@@ -125,13 +131,18 @@ export default function LoginPage() {
                 fontSize: '16px',
               }}
             />
-            {errors.email && <p className="text-xs mt-1 ml-1" style={{ color: 'var(--color-expense-base)' }}>{errors.email.message}</p>}
+            {errors.email && <p id="email-error" role="alert" className="text-xs mt-1 ml-1" style={{ color: 'var(--color-expense-base)' }}>{errors.email.message}</p>}
           </div>
           <div className="relative">
+            <label htmlFor="password" className="sr-only">Password</label>
             <input
               {...register('password')}
+              id="password"
               type={showPassword ? 'text' : 'password'}
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
               placeholder="Password"
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={errors.password ? 'password-error' : undefined}
               className="w-full rounded-xl px-4 py-4 pr-12 text-base placeholder:opacity-50 focus:outline-none transition-colors"
               style={{
                 backgroundColor: 'var(--color-card-base)',
@@ -143,12 +154,13 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               className="absolute right-4 top-1/2 -translate-y-1/2"
               style={{ color: 'var(--color-text-secondary)' }}
             >
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
-            {errors.password && <p className="text-xs mt-1 ml-1" style={{ color: 'var(--color-expense-base)' }}>{errors.password.message}</p>}
+            {errors.password && <p id="password-error" role="alert" className="text-xs mt-1 ml-1" style={{ color: 'var(--color-expense-base)' }}>{errors.password.message}</p>}
           </div>
           <button
             type="submit"
@@ -156,7 +168,7 @@ export default function LoginPage() {
             className="w-full text-white rounded-button py-4 font-semibold text-base active:scale-95 transition-transform disabled:opacity-50"
             style={{ backgroundColor: 'var(--color-income-base)' }}
           >
-            {loading ? 'Loading...' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading ? 'Please wait…' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>
         </form>
 
@@ -190,6 +202,7 @@ export default function LoginPage() {
         </button>
 
         <button
+          type="button"
           onClick={() => setIsSignUp(!isSignUp)}
           className="w-full text-center text-sm mt-6"
           style={{ color: 'var(--color-text-secondary)' }}
@@ -198,6 +211,6 @@ export default function LoginPage() {
           <span style={{ color: 'var(--color-accent-base)' }}>{isSignUp ? 'Sign In' : 'Sign Up'}</span>
         </button>
       </motion.div>
-    </div>
+    </main>
   )
 }

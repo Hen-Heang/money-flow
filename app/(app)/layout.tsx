@@ -18,14 +18,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <AppSidebar />
 
-      <div className="relative z-10 flex min-h-screen flex-1 flex-col md:pl-72 w-full">
+      <div className="relative z-10 flex min-h-screen w-full flex-1 flex-col lg:pl-72">
         <main
-          className="relative flex-1 w-full"
-          style={{
-            paddingTop: 'env(safe-area-inset-top, 0px)',
-            /* mobile: 80px space for TabBar; desktop: 0px (as sidebar handles it) */
-            paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
-          } as React.CSSProperties}
+          id="main-content"
+          className="relative w-full flex-1 pb-[calc(env(safe-area-inset-bottom,0px)+104px)] pt-[env(safe-area-inset-top,0px)] lg:pb-0"
         >
           <ErrorBoundary>
             {children}
