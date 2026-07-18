@@ -1,63 +1,87 @@
-import { generateText } from 'ai'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { rateLimit } from '@/lib/rate-limit'
-import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { generateText, Output } from 'ai'
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { consumeAIRateLimit } from '@/lib/ai-rate-limit'
+import {
+  getAIProviderOptions,
+  getFastModel,
+  withAIProviderFallback,
+  type AIProvider,
+} from '@/lib/ai-provider'
 import { CATEGORY_MATCH_GUIDANCE, formatCategoriesForPrompt } from '@/lib/categorize'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import type { Category } from '@/lib/types'
 
-export async function POST(req: Request) {
+const requestSchema = z.object({
+  description: z.string().trim().min(2).max(120),
+  type: z.enum(['income', 'expense']),
+})
+
+const suggestionSchema = z.object({
+  categoryId: z.string().nullable(),
+  confidence: z.number().min(0).max(1),
+})
+
+export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) return new Response('Unauthorized', { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { allowed } = rateLimit(`ai-suggest:${user.id}`, 30, 60_000)
-  if (!allowed) return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), { status: 429 })
+  const body = requestSchema.safeParse(await request.json().catch(() => null))
+  if (!body.success) return NextResponse.json({ error: 'Invalid transaction description.' }, { status: 400 })
 
-  const { description, type, categories } = await req.json()
-
-  if (!description || !categories || !Array.isArray(categories)) {
-    return new Response('Missing required fields', { status: 400 })
+  const limit = await consumeAIRateLimit(user.id, 'category-suggest', 30, 60)
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded', retryAfterSeconds: limit.retryAfterSeconds },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+    )
   }
 
-  // Filter categories by type (income/expense)
-  const availableCategories = categories
-    .filter(c => c.type === type || c.type === 'both')
-    .map(c => ({ id: c.id, name: c.name, icon: c.icon }))
+  const [userPrefResult, categoriesResult] = await Promise.all([
+    supabase.from('users').select('ai_provider').eq('id', user.id).single(),
+    supabase.from('categories').select('id, name, icon, color, type').order('name'),
+  ])
 
-  if (availableCategories.length === 0) {
-    return new Response(JSON.stringify({ categoryId: null }), { status: 200 })
+  if (categoriesResult.error) {
+    return NextResponse.json({ error: 'Could not load categories.' }, { status: 500 })
   }
+
+  const availableCategories = ((categoriesResult.data || []) as Category[])
+    .filter(category => category.type === body.data.type || category.type === 'both')
+    .map(category => ({ id: category.id, name: category.name, icon: category.icon }))
+
+  if (availableCategories.length === 0) return NextResponse.json({ categoryId: null })
 
   try {
-    const { data: userPref } = await supabase.from('users').select('ai_provider').eq('id', user.id).single()
-    const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
-    const { text } = await generateText({
-      model: getFastModel(provider),
-      system: `You are a financial assistant for a money tracking app.
-Your task is to categorize a user's transaction based on its description.
+    const { result } = await withAIProviderFallback(
+      (userPrefResult.data?.ai_provider as AIProvider) || 'gemini',
+      async provider => {
+        const response = await generateText({
+          model: getFastModel(provider),
+          output: Output.object({ schema: suggestionSchema }),
+          providerOptions: getAIProviderOptions(provider, user.id),
+          system: `You categorize a transaction for a money tracking app.
 
 Available categories (id: name):
 ${formatCategoriesForPrompt(availableCategories)}
 
 ${CATEGORY_MATCH_GUIDANCE}
 
-Return ONLY the "id" of the best-matching category from the list above.
-If no category fits well, return "null".
-Do not explain. Do not return anything else.`,
-      prompt: `Description: "${description}" | Type: ${type}`,
-    })
+Choose categoryId only from the supplied list. Use null if no category fits well.`,
+          prompt: `Description: ${body.data.description}\nType: ${body.data.type}`,
+        })
+        return response.output
+      }
+    )
 
-    const suggestedId = text.trim().replace(/['"]+/g, '')
-    const exists = availableCategories.some(c => c.id === suggestedId)
-
-    return new Response(JSON.stringify({ 
-      categoryId: exists ? suggestedId : null 
-    }), { 
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    const exists = availableCategories.some(category => category.id === result.categoryId)
+    return NextResponse.json({
+      categoryId: exists && result.confidence >= 0.45 ? result.categoryId : null,
     })
   } catch (error) {
-    console.error('AI Suggestion Error:', error)
-    return new Response(JSON.stringify({ error: 'AI service unavailable' }), { status: 500 })
+    console.error('[category-suggest] AI failed:', error instanceof Error ? error.name : 'UnknownError')
+    return NextResponse.json({ error: 'AI service unavailable' }, { status: 503 })
   }
 }

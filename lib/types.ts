@@ -30,6 +30,18 @@ export interface PaymentMethod {
   icon: string
 }
 
+export interface TransactionPreview {
+  amount: number
+  currency: 'KRW' | 'USD'
+  type: 'income' | 'expense'
+  date: string
+  description: string
+  categoryId: string | null
+  paymentMethodId: string | null
+  note: string | null
+  confidence: number
+}
+
 export interface Budget {
   category_id: string
   amount_krw: number

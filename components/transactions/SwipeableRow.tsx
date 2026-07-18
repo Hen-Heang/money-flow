@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useRef, memo } from 'react'
-import { motion, AnimatePresence, PanInfo } from 'framer-motion'
+import { useState, memo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import { format, parseISO } from 'date-fns'
-import { CheckSquare, Square, Copy, Edit3, Trash2 } from 'lucide-react'
+import { CheckSquare, Square, Copy, Edit3, MoreHorizontal, Trash2 } from 'lucide-react'
 import { formatKRW, formatUSD, haptic } from '@/lib/utils'
 import type { Transaction } from '@/lib/types'
-
-// Width of the revealed action panel on mobile (3 buttons × 56px + 2px gaps)
-const ACTION_WIDTH = 170
 
 export interface SwipeableRowProps {
   transaction: Transaction
@@ -33,24 +31,8 @@ const SwipeableRow = memo(function SwipeableRow({
   selected,
   onSelect,
 }: SwipeableRowProps) {
-  const [offset, setOffset] = useState(0)
-  const [dragging, setDragging] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const isDragging = useRef(false)
-  const dragEndTime = useRef(0)
-
-  const handleDragEnd = (_: unknown, info: PanInfo) => {
-    dragEndTime.current = Date.now()
-    setTimeout(() => { isDragging.current = false }, 80)
-    setDragging(false)
-    if (info.offset.x < -40) {
-      setOffset(-ACTION_WIDTH)
-      haptic('light')
-    } else {
-      setOffset(0)
-    }
-  }
 
   const handleDelete = () => {
     haptic('medium')
@@ -65,14 +47,9 @@ const SwipeableRow = memo(function SwipeableRow({
   }
 
   const handleTap = () => {
-    if (isDragging.current || Date.now() - dragEndTime.current < 100) return
     if (selectMode) {
       haptic('light')
       onSelect?.(transaction.id)
-      return
-    }
-    if (offset !== 0) {
-      setOffset(0)
       return
     }
     onEdit(transaction)
@@ -99,7 +76,7 @@ const SwipeableRow = memo(function SwipeableRow({
               Delete
             </button>
             <button
-              onClick={() => { setConfirmDelete(false); setOffset(0) }}
+              onClick={() => setConfirmDelete(false)}
               className="px-4 py-1.5 rounded-full text-sm font-semibold"
               style={{ backgroundColor: 'var(--color-card-elevated-base)', color: 'var(--color-text-secondary)' }}
             >
@@ -109,53 +86,9 @@ const SwipeableRow = memo(function SwipeableRow({
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-      {!selectMode && (offset !== 0 || dragging) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="md:hidden absolute right-0 top-0 bottom-0 flex z-0"
-          style={{ width: ACTION_WIDTH }}
-        >
-          <button
-            onClick={() => { haptic('light'); setOffset(0); onDuplicate(transaction) }}
-            className="flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-wide"
-            style={{ backgroundColor: 'var(--color-card-elevated-base)', color: 'var(--color-text-secondary)' }}
-          >
-            <Copy className="w-4 h-4" />
-            Copy
-          </button>
-          <button
-            onClick={() => { haptic('light'); setOffset(0); onEdit(transaction) }}
-            className="flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-wide text-white"
-            style={{ backgroundColor: 'var(--color-accent-base)' }}
-          >
-            <Edit3 className="w-4 h-4" />
-            Edit
-          </button>
-          <button
-            onClick={handleDelete}
-            className="flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-bold uppercase tracking-wide text-white"
-            style={{ backgroundColor: 'var(--color-expense-base)' }}
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        </motion.div>
-      )}
-      </AnimatePresence>
-
       <motion.div
-        drag={selectMode ? false : 'x'}
-        dragConstraints={{ left: -ACTION_WIDTH, right: 0 }}
-        dragElastic={0.05}
-        dragMomentum={false}
-        onDragStart={() => { isDragging.current = true; setDragging(true) }}
-        onDragEnd={selectMode ? undefined : handleDragEnd}
         onTap={handleTap}
-        animate={{ x: selectMode ? 0 : offset, opacity: deleting ? 0 : 1 }}
+        animate={{ opacity: deleting ? 0 : 1 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
         className="flex items-center gap-3 px-4 py-3 cursor-pointer relative z-10"
         style={{
@@ -198,7 +131,7 @@ const SwipeableRow = memo(function SwipeableRow({
           )}
         </div>
 
-        {/* Amount + date + mobile swipe hint dots */}
+        {/* Amount + date */}
         <div className="text-right shrink-0 flex items-center gap-2">
           <div>
             <p
@@ -212,43 +145,69 @@ const SwipeableRow = memo(function SwipeableRow({
               {format(parseISO(transaction.date), 'MMM d')}
             </p>
           </div>
-          {!selectMode && offset === 0 && (
-            <div className="md:hidden flex flex-col gap-[3px] opacity-30">
-              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-text-secondary)' }} />
-              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-accent-base)' }} />
-              <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-expense-base)' }} />
-            </div>
-          )}
         </div>
 
-        {/* Desktop: always-visible action buttons */}
+        {/* Transaction actions */}
         {!selectMode && (
-          <div className="hidden md:flex items-center gap-1.5 shrink-0 ml-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); haptic('light'); onDuplicate(transaction) }}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-              style={{ backgroundColor: 'var(--color-card-elevated-base)', border: '1px solid var(--color-border-base)' }}
-              title="Duplicate"
-            >
-              <Copy className="w-3.5 h-3.5" style={{ color: 'var(--color-text-secondary)' }} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); haptic('light'); onEdit(transaction) }}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-              style={{ backgroundColor: 'var(--color-accent-base)' }}
-              title="Edit"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-white" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleDelete() }}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-              style={{ backgroundColor: 'var(--color-expense-base)' }}
-              title="Delete"
-            >
-              <Trash2 className="w-3.5 h-3.5 text-white" />
-            </button>
-          </div>
+          <DropdownMenuPrimitive.Root>
+            <DropdownMenuPrimitive.Trigger asChild>
+              <button
+                type="button"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  haptic('light')
+                }}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors active:scale-90"
+                style={{ color: 'var(--color-text-secondary)' }}
+                aria-label={`Actions for ${transaction.description}`}
+                title="Transaction actions"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+            </DropdownMenuPrimitive.Trigger>
+
+            <DropdownMenuPrimitive.Portal>
+              <DropdownMenuPrimitive.Content
+                align="end"
+                sideOffset={6}
+                className="z-[250] min-w-40 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)] p-1.5 shadow-xl backdrop-blur-xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <DropdownMenuPrimitive.Item
+                  onSelect={() => {
+                    haptic('light')
+                    onDuplicate(transaction)
+                  }}
+                  className="flex cursor-pointer select-none items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium outline-none transition-colors hover:bg-[var(--color-card-base)] focus:bg-[var(--color-card-base)]"
+                  style={{ color: 'var(--color-text-primary)' }}
+                >
+                  <Copy className="h-4 w-4" style={{ color: 'var(--color-text-secondary)' }} />
+                  Copy
+                </DropdownMenuPrimitive.Item>
+                <DropdownMenuPrimitive.Item
+                  onSelect={() => {
+                    haptic('light')
+                    onEdit(transaction)
+                  }}
+                  className="flex cursor-pointer select-none items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium outline-none transition-colors hover:bg-[var(--color-card-base)] focus:bg-[var(--color-card-base)]"
+                  style={{ color: 'var(--color-text-primary)' }}
+                >
+                  <Edit3 className="h-4 w-4" style={{ color: 'var(--color-accent-base)' }} />
+                  Edit
+                </DropdownMenuPrimitive.Item>
+                <DropdownMenuPrimitive.Separator className="my-1 h-px bg-[var(--color-border-base)]" />
+                <DropdownMenuPrimitive.Item
+                  onSelect={handleDelete}
+                  className="flex cursor-pointer select-none items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10"
+                  style={{ color: 'var(--color-expense-base)' }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </DropdownMenuPrimitive.Item>
+              </DropdownMenuPrimitive.Content>
+            </DropdownMenuPrimitive.Portal>
+          </DropdownMenuPrimitive.Root>
         )}
       </motion.div>
     </div>

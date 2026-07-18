@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
+import { Plus, Target, Pencil, Trash2, Calendar, ArrowUpRight, CheckCircle2, X, Bell, SkipForward } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { haptic, formatNumber } from '@/lib/utils'
@@ -23,7 +23,32 @@ interface SavingsGoal {
   note: string | null
   purpose: string | null
   auto_monthly_usd: number
-  last_auto_month: string | null
+  reminder_day: number
+  last_reminder_month: string | null
+  last_contribution_month: string | null
+  skipped_month: string | null
+}
+
+type SavingsGoalInput = Pick<
+  SavingsGoal,
+  'name' | 'icon' | 'color' | 'target_usd' | 'current_usd' | 'deadline' | 'note' | 'purpose' | 'auto_monthly_usd' | 'reminder_day'
+>
+
+type ContributionMode = 'manual' | 'planned'
+
+interface SavingsContributionResult {
+  new_total: number
+  applied_amount: number
+  achieved: boolean
+  applied: boolean
+}
+
+function getKstMonthAndDay() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  return {
+    month: kst.toISOString().slice(0, 7),
+    day: kst.getUTCDate(),
+  }
 }
 
 const CONFETTI_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#fbbf24']
@@ -100,12 +125,10 @@ function ConfettiCelebration({ goalName, goalColor, onDone }: { goalName: string
 function GoalForm({
   initial,
   onSave,
-  onCancel,
   loading,
 }: {
   initial?: Partial<SavingsGoal>
-  onSave: (data: Omit<SavingsGoal, 'id'>) => void
-  onCancel: () => void
+  onSave: (data: SavingsGoalInput) => void
   loading: boolean
 }) {
   const [name, setName] = useState(initial?.name ?? '')
@@ -117,6 +140,7 @@ function GoalForm({
   const [note, setNote] = useState(initial?.note ?? '')
   const [purpose, setPurpose] = useState(initial?.purpose ?? '')
   const [autoMonthly, setAutoMonthly] = useState(initial?.auto_monthly_usd?.toString() ?? '0')
+  const [reminderDay, setReminderDay] = useState(initial?.reminder_day?.toString() ?? '1')
 
   const inputStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-card-elevated-base)',
@@ -135,6 +159,8 @@ function GoalForm({
     if (isNaN(target) || target <= 0) { toast.error('Invalid target amount'); return }
     const current = parseFloat(currentUsd) || 0
     const monthly = parseFloat(autoMonthly) || 0
+    const parsedReminderDay = Number.parseInt(reminderDay, 10)
+    const safeReminderDay = Number.isNaN(parsedReminderDay) ? 1 : Math.min(Math.max(parsedReminderDay, 1), 28)
     onSave({
       name: name.trim(),
       icon,
@@ -145,7 +171,7 @@ function GoalForm({
       note: note.trim() || null,
       purpose: purpose.trim() || null,
       auto_monthly_usd: Math.max(monthly, 0),
-      last_auto_month: initial?.last_auto_month ?? null,
+      reminder_day: safeReminderDay,
     })
   }
 
@@ -257,22 +283,41 @@ function GoalForm({
           style={{ ...inputStyle, resize: 'none' }}
         />
 
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-widest opacity-60 mb-2">Auto-Deposit on App Open</p>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-lg opacity-40">$</span>
-            <input
-              value={autoMonthly}
-              onChange={e => setAutoMonthly(e.target.value)}
-              inputMode="decimal"
-              placeholder="0 = disabled"
-              className="font-black"
-              style={{ ...inputStyle, paddingLeft: '32px' }}
-            />
+        <div className="space-y-3 rounded-2xl border border-[var(--color-border-base)] p-4">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest opacity-60">Monthly Savings Plan</p>
+            <p className="mt-1 text-[12px] font-medium opacity-50">Set a reminder. Your balance changes only after you confirm.</p>
           </div>
-          <p className="text-[11px] font-medium opacity-40 mt-1.5 ml-1">
-            Auto-deposited once per month when you open the app
-          </p>
+          <div className="grid grid-cols-[minmax(0,1fr)_112px] gap-3">
+            <label className="space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider opacity-50">Planned amount</span>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-lg opacity-40">$</span>
+                <input
+                  value={autoMonthly}
+                  onChange={e => setAutoMonthly(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="font-black"
+                  style={{ ...inputStyle, paddingLeft: '32px' }}
+                />
+              </div>
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider opacity-50">Reminder day</span>
+              <input
+                value={reminderDay}
+                onChange={e => setReminderDay(e.target.value)}
+                type="number"
+                min={1}
+                max={28}
+                inputMode="numeric"
+                className="font-black text-center"
+                style={inputStyle}
+              />
+            </label>
+          </div>
+          <p className="text-[11px] font-medium opacity-40">Choose day 1–28 so the reminder works every month.</p>
         </div>
       </div>
 
@@ -290,18 +335,21 @@ function GoalForm({
 
 function AddDepositSheet({
   goal,
+  mode,
   isOpen,
   onClose,
   onSuccess,
   onGoalComplete,
 }: {
   goal: SavingsGoal
+  mode: ContributionMode
   isOpen: boolean
   onClose: () => void
-  onSuccess: (newTotal: number) => void
+  onSuccess: (newTotal: number, mode: ContributionMode) => void
   onGoalComplete?: () => void
 }) {
-  const [amount, setAmount] = useState('')
+  const [amount, setAmount] = useState(mode === 'planned' ? String(goal.auto_monthly_usd) : '')
+  const [requestId] = useState(() => crypto.randomUUID())
   const [showKeypad, setShowKeypad] = useState(true)
   const [saving, setSaving] = useState(false)
   const isMobile = useIsMobile()
@@ -311,25 +359,40 @@ function AddDepositSheet({
     const deposit = parseFloat(amount.replace(/,/g, ''))
     if (isNaN(deposit) || deposit <= 0) { toast.error('Invalid amount'); return }
     setSaving(true)
-    const newTotal = goal.current_usd + deposit
-    const { error } = await supabase
-      .from('savings_goals')
-      .update({ current_usd: newTotal, updated_at: new Date().toISOString() })
-      .eq('id', goal.id)
+    const { data, error } = await supabase.rpc('record_savings_contribution', {
+      p_goal_id: goal.id,
+      p_amount_usd: deposit,
+      p_source: mode,
+      p_request_id: requestId,
+    })
     setSaving(false)
-    if (error) { toast.error('Failed to save'); return }
+    if (error) {
+      console.error('[savings] Contribution failed:', error)
+      toast.error('Failed to save contribution')
+      return
+    }
+
+    const result = (Array.isArray(data) ? data[0] : data) as SavingsContributionResult | undefined
+    if (!result) {
+      toast.error('No contribution result returned')
+      return
+    }
+
     haptic('medium')
-    const achieved = newTotal >= goal.target_usd
-    if (achieved) {
+    if (!result.applied) {
+      toast.info(mode === 'planned' ? 'This month is already confirmed' : 'This contribution was already saved')
+    } else if (result.achieved) {
       haptic('heavy')
       onGoalComplete?.()
     } else {
-      toast.success(`+$${deposit.toFixed(2)} added to ${goal.name}!`)
+      toast.success(`+$${Number(result.applied_amount).toFixed(2)} added to ${goal.name}!`)
     }
     setAmount('')
-    onSuccess(newTotal)
+    onSuccess(Number(result.new_total), mode)
     onClose()
   }
+
+  const sheetTitle = mode === 'planned' ? 'Confirm Monthly Savings' : 'Add Savings'
 
   const content = (
     <div className="px-5 pb-4 space-y-6">
@@ -343,6 +406,11 @@ function AddDepositSheet({
           <p className="text-[13px] font-bold opacity-60">
             Progress: ${formatNumber(goal.current_usd)} / ${formatNumber(goal.target_usd)}
           </p>
+          {mode === 'planned' && (
+            <p className="mt-1 text-[11px] font-black uppercase tracking-wider" style={{ color: goal.color }}>
+              Planned monthly contribution
+            </p>
+          )}
         </div>
       </div>
 
@@ -378,7 +446,7 @@ function AddDepositSheet({
 
   if (!isMobile) {
     return (
-      <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Savings">
+      <BottomSheet isOpen={isOpen} onClose={onClose} title={sheetTitle}>
         {content}
       </BottomSheet>
     )
@@ -406,7 +474,7 @@ function AddDepositSheet({
               <div className="w-10 h-1.5 rounded-full bg-[var(--color-border-base)]" />
             </div>
             <div className="px-5 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-black">Add Deposit</h2>
+              <h2 className="text-xl font-black">{sheetTitle}</h2>
               <button onClick={onClose} className="p-2 rounded-full bg-[var(--color-card-elevated-base)]">
                 <X size={20} />
               </button>
@@ -443,7 +511,7 @@ function AddDepositSheet({
                       className="w-full py-4 rounded-button font-black uppercase tracking-widest text-white active:scale-95 transition-all disabled:opacity-50 shadow-xl"
                       style={{ backgroundColor: goal.color, boxShadow: `0 12px 24px ${goal.color}30` }}
                     >
-                      Confirm ${parseFloat(amount || '0').toLocaleString()} Deposit
+                      {saving ? 'Saving...' : `Confirm $${parseFloat(amount || '0').toLocaleString()} Deposit`}
                     </button>
                   </motion.div>
                 )}
@@ -463,7 +531,8 @@ export default function SavingsPage() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editGoal, setEditGoal] = useState<SavingsGoal | null>(null)
-  const [depositGoal, setDepositGoal] = useState<SavingsGoal | null>(null)
+  const [depositGoal, setDepositGoal] = useState<{ goal: SavingsGoal; mode: ContributionMode } | null>(null)
+  const [skippingGoalId, setSkippingGoalId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [todayMs] = useState(() => Date.now())
   const [celebrating, setCelebrating] = useState<{ name: string; color: string } | null>(null)
@@ -475,7 +544,7 @@ export default function SavingsPage() {
     if (!user) { setLoading(false); return }
     const { data } = await supabase
       .from('savings_goals')
-      .select('id, name, icon, color, target_usd, current_usd, deadline, note, purpose, auto_monthly_usd, last_auto_month')
+      .select('id, name, icon, color, target_usd, current_usd, deadline, note, purpose, auto_monthly_usd, reminder_day, last_reminder_month, last_contribution_month, skipped_month')
       .eq('user_id', user.id)
       .order('created_at', { ascending: true })
     const loaded = (data as SavingsGoal[]) || []
@@ -485,43 +554,17 @@ export default function SavingsPage() {
   }, [supabase])
 
   useEffect(() => {
-    loadGoals().then(loaded => { if (loaded) applyAutoDeposits(loaded) })
+    // Initial load and focus refresh intentionally synchronize remote data into local UI state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadGoals()
 
     // Refresh when returning to the tab
     const handleFocus = () => loadGoals()
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadGoals])
 
-  const applyAutoDeposits = useCallback(async (loadedGoals: SavingsGoal[]) => {
-    const currentMonth = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
-    const due = loadedGoals.filter(
-      g => g.auto_monthly_usd > 0 && g.last_auto_month !== currentMonth && g.current_usd < g.target_usd
-    )
-    if (due.length === 0) return
-
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return
-
-    let applied = 0
-    for (const goal of due) {
-      const newTotal = Math.min(goal.current_usd + goal.auto_monthly_usd, goal.target_usd)
-      const { error } = await supabase
-        .from('savings_goals')
-        .update({ current_usd: newTotal, last_auto_month: currentMonth, updated_at: new Date().toISOString() })
-        .eq('id', goal.id)
-      if (!error) applied++
-    }
-
-    if (applied > 0) {
-      toast.success(`Auto-deposited to ${applied} goal${applied > 1 ? 's' : ''}`)
-      loadGoals()
-    }
-  }, [supabase, loadGoals])
-
-  const handleCreate = async (data: Omit<SavingsGoal, 'id'>) => {
+  const handleCreate = async (data: SavingsGoalInput) => {
     setSaving(true)
     const { data: { session } } = await supabase.auth.getSession()
     const user = session?.user
@@ -535,7 +578,7 @@ export default function SavingsPage() {
     loadGoals()
   }
 
-  const handleUpdate = async (data: Omit<SavingsGoal, 'id'>) => {
+  const handleUpdate = async (data: SavingsGoalInput) => {
     if (!editGoal) return
     setSaving(true)
     const { error } = await supabase
@@ -550,11 +593,28 @@ export default function SavingsPage() {
     loadGoals()
   }
 
+  const handleSkipMonth = async (goal: SavingsGoal) => {
+    const { month } = getKstMonthAndDay()
+    setSkippingGoalId(goal.id)
+    const { error } = await supabase
+      .from('savings_goals')
+      .update({ skipped_month: month, updated_at: new Date().toISOString() })
+      .eq('id', goal.id)
+    setSkippingGoalId(null)
+    if (error) {
+      toast.error('Failed to skip this month')
+      return
+    }
+    haptic('light')
+    setGoals(prev => prev.map(item => item.id === goal.id ? { ...item, skipped_month: month } : item))
+    toast.success('Monthly reminder skipped')
+  }
+
   const handleDelete = (goal: SavingsGoal) => {
     haptic('medium')
     setGoals(prev => prev.filter(g => g.id !== goal.id))
     let undone = false
-    const t = toast.custom(
+    toast.custom(
       (id) => (
         <span className="flex items-center gap-3 text-sm font-medium px-4 py-3 rounded-xl bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] shadow-xl">
           Goal removed
@@ -589,6 +649,7 @@ export default function SavingsPage() {
   const totalSaved = goals.reduce((s, g) => s + g.current_usd, 0)
   const totalTarget = goals.reduce((s, g) => s + g.target_usd, 0)
   const overallPct = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0
+  const { month: currentMonth, day: currentDay } = getKstMonthAndDay()
 
   const daysUntil = (deadline: string | null) => {
     if (!deadline) return null
@@ -700,6 +761,14 @@ export default function SavingsPage() {
               const done = pct >= 100
               const isOverdue = !done && days !== null && days < 0
               const dailyNeeded = days && days > 0 ? (remaining / days) : null
+              const hasMonthlyPlan = goal.auto_monthly_usd > 0
+              const monthlyPlanState = goal.last_contribution_month === currentMonth
+                ? 'confirmed'
+                : goal.skipped_month === currentMonth
+                  ? 'skipped'
+                  : currentDay >= goal.reminder_day
+                    ? 'due'
+                    : 'upcoming'
 
               return (
                 <motion.div
@@ -798,6 +867,61 @@ export default function SavingsPage() {
                     </div>
                   </div>
 
+                  {hasMonthlyPlan && (
+                    <div
+                      className="mb-5 rounded-2xl border p-4"
+                      style={{
+                        backgroundColor: monthlyPlanState === 'due' ? `${goal.color}10` : 'var(--color-card-elevated-base)',
+                        borderColor: monthlyPlanState === 'due' ? `${goal.color}35` : 'var(--color-border-base)',
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                          style={{ backgroundColor: monthlyPlanState === 'due' ? `${goal.color}20` : 'var(--color-card-base)' }}
+                        >
+                          {monthlyPlanState === 'confirmed'
+                            ? <CheckCircle2 size={18} className="text-green-400" />
+                            : monthlyPlanState === 'skipped'
+                              ? <SkipForward size={18} className="opacity-50" />
+                              : <Bell size={18} style={{ color: monthlyPlanState === 'due' ? goal.color : undefined }} />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-black uppercase tracking-widest opacity-50">Monthly plan</p>
+                          <p className="mt-0.5 text-sm font-black" style={{ color: 'var(--color-text-primary)' }}>
+                            ${formatNumber(goal.auto_monthly_usd)}
+                            <span className="ml-1.5 text-[11px] font-bold opacity-45">reminder day {goal.reminder_day}</span>
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold opacity-55">
+                            {monthlyPlanState === 'confirmed' && 'Confirmed for this month'}
+                            {monthlyPlanState === 'skipped' && 'Skipped for this month'}
+                            {monthlyPlanState === 'upcoming' && `Reminder in ${goal.reminder_day - currentDay} day${goal.reminder_day - currentDay === 1 ? '' : 's'}`}
+                            {monthlyPlanState === 'due' && 'Ready when your real transfer is complete'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {monthlyPlanState === 'due' && (
+                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                          <button
+                            onClick={() => { haptic('light'); setDepositGoal({ goal, mode: 'planned' }) }}
+                            className="rounded-xl px-4 py-2.5 text-[11px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+                            style={{ backgroundColor: goal.color }}
+                          >
+                            Confirm deposit
+                          </button>
+                          <button
+                            onClick={() => handleSkipMonth(goal)}
+                            disabled={skippingGoalId === goal.id}
+                            className="rounded-xl border border-[var(--color-border-base)] px-3 py-2.5 text-[11px] font-black uppercase tracking-wider opacity-60 transition-all active:scale-95 disabled:opacity-30"
+                          >
+                            {skippingGoalId === goal.id ? 'Skipping…' : 'Skip'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Pro Stats Footer */}
                   <div className="flex flex-col gap-4 border-t border-[var(--color-border-base)] pt-4 min-[431px]:flex-row min-[431px]:items-center min-[431px]:justify-between">
                     <div className="flex flex-col">
@@ -816,7 +940,7 @@ export default function SavingsPage() {
                     </div>
                     {!done ? (
                       <button
-                        onClick={() => { haptic('light'); setDepositGoal(goal) }}
+                        onClick={() => { haptic('light'); setDepositGoal({ goal, mode: 'manual' }) }}
                         className="flex w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-all active:scale-95 min-[431px]:w-auto"
                         style={{ 
                           backgroundColor: goal.color,
@@ -824,7 +948,7 @@ export default function SavingsPage() {
                         }}
                       >
                         <ArrowUpRight size={14} strokeWidth={3} />
-                        Deposit
+                        Add funds
                       </button>
                     ) : (
                       <div className="flex items-center gap-1.5 text-green-400">
@@ -896,7 +1020,6 @@ export default function SavingsPage() {
         <GoalForm
           initial={editGoal || undefined}
           onSave={editGoal ? handleUpdate : handleCreate}
-          onCancel={() => { setShowForm(false); setEditGoal(null) }}
           loading={saving}
         />
       </BottomSheet>
@@ -914,13 +1037,20 @@ export default function SavingsPage() {
 
       {depositGoal && (
         <AddDepositSheet
-          goal={depositGoal}
+          goal={depositGoal.goal}
+          mode={depositGoal.mode}
           isOpen={!!depositGoal}
           onClose={() => setDepositGoal(null)}
-          onSuccess={(newTotal) => {
-            setGoals(prev => prev.map(g => g.id === depositGoal.id ? { ...g, current_usd: newTotal } : g))
+          onSuccess={(newTotal, mode) => {
+            const { month } = getKstMonthAndDay()
+            setGoals(prev => prev.map(g => g.id === depositGoal.goal.id ? {
+              ...g,
+              current_usd: newTotal,
+              last_contribution_month: mode === 'planned' ? month : g.last_contribution_month,
+              skipped_month: mode === 'planned' ? null : g.skipped_month,
+            } : g))
           }}
-          onGoalComplete={() => setCelebrating({ name: depositGoal.name, color: depositGoal.color })}
+          onGoalComplete={() => setCelebrating({ name: depositGoal.goal.name, color: depositGoal.goal.color })}
         />
       )}
     </div>
