@@ -1,19 +1,37 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@source "../node_modules/streamdown/dist/*.js";
 
-@theme {
+@custom-variant dark (&:where(:root:not(.light), :root:not(.light) *));
+
+@theme inline {
   --color-app-bg: var(--color-bg);
-  --color-card: var(--color-card-base);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-card-elevated: var(--color-card-elevated-base);
-  --color-primary: var(--color-text-primary);
-  --color-secondary: var(--color-text-secondary);
-  --color-border: var(--color-border-base);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-income: var(--color-income-base);
   --color-expense: var(--color-expense-base);
-  --color-accent: var(--color-accent-base);
   --color-warning: var(--color-warning-base);
 
-  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Geist", "Geist Fallback", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --radius-xs: 8px;
   --radius-sm: 12px;
@@ -27,7 +45,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  
+
   --breakpoint-xs: 375px;
 }
 
@@ -45,29 +63,65 @@ html {
 }
 
 :root {
-  --color-bg: #030712;
-  --color-card-base: rgba(17, 24, 39, 0.6);
-  --color-card-elevated-base: rgba(31, 41, 55, 0.7);
+  --color-bg: #070b14;
+  --color-card-base: rgba(15, 23, 42, 0.72);
+  --color-card-elevated-base: rgba(30, 41, 59, 0.72);
   --color-text-primary: #f9fafb;
-  --color-text-secondary: #9ca3af;
-  --color-border-base: rgba(255, 255, 255, 0.06);
+  --color-text-secondary: #a8b3c5;
+  --color-border-base: rgba(255, 255, 255, 0.09);
   --color-income-base: #10b981;
   --color-expense-base: #ef4444;
   --color-accent-base: #3b82f6;
   --color-warning-base: #f59e0b;
+  --background: var(--color-bg);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-card-base);
+  --card-foreground: var(--color-text-primary);
+  --popover: #111827;
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--color-text-primary);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-card-elevated-base);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: var(--color-card-elevated-base);
+  --muted-foreground: var(--color-text-secondary);
+  --accent: var(--color-accent-base);
+  --accent-foreground: #ffffff;
+  --destructive: var(--color-expense-base);
+  --border: var(--color-border-base);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: var(--color-accent-base);
 }
 
 .light {
-  --color-bg: #f3f4f6;
-  --color-card-base: rgba(255, 255, 255, 0.7);
-  --color-card-elevated-base: rgba(243, 244, 246, 0.8);
-  --color-text-primary: #111827;
-  --color-text-secondary: #4b5563;
-  --color-border-base: rgba(0, 0, 0, 0.05);
+  --color-bg: #f4f7fb;
+  --color-card-base: rgba(255, 255, 255, 0.82);
+  --color-card-elevated-base: rgba(241, 245, 249, 0.9);
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #526077;
+  --color-border-base: rgba(15, 23, 42, 0.1);
   --color-income-base: #059669;
   --color-expense-base: #dc2626;
   --color-accent-base: #2563eb;
   --color-warning-base: #d97706;
+  --background: var(--color-bg);
+  --foreground: var(--color-text-primary);
+  --card: var(--color-card-base);
+  --card-foreground: var(--color-text-primary);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-text-primary);
+  --primary: var(--color-text-primary);
+  --primary-foreground: var(--color-bg);
+  --secondary: var(--color-card-elevated-base);
+  --secondary-foreground: var(--color-text-primary);
+  --muted: var(--color-card-elevated-base);
+  --muted-foreground: var(--color-text-secondary);
+  --accent: var(--color-accent-base);
+  --accent-foreground: #ffffff;
+  --destructive: var(--color-expense-base);
+  --border: var(--color-border-base);
+  --input: rgba(15, 23, 42, 0.14);
+  --ring: var(--color-accent-base);
 }
 
 * {
@@ -75,22 +129,13 @@ html {
   box-sizing: border-box;
 }
 
-/* Smooth colour transitions for all themed elements */
-*, *::before, *::after {
-  transition-property: background-color, border-color, color, fill, stroke;
-  transition-duration: 0.2s;
-  transition-timing-function: ease;
-}
-
 body {
   min-height: 100dvh;
   min-height: -webkit-fill-available;
   background-color: var(--color-bg);
-  background-image: 
-    radial-gradient(at 0% 0%, color-mix(in srgb, var(--color-accent-base) 12%, transparent) 0px, transparent 45%),
-    radial-gradient(at 100% 0%, color-mix(in srgb, var(--color-income-base) 10%, transparent) 0px, transparent 40%),
-    radial-gradient(at 100% 100%, color-mix(in srgb, var(--color-expense-base) 7%, transparent) 0px, transparent 45%),
-    radial-gradient(at 0% 100%, color-mix(in srgb, var(--color-warning-base) 7%, transparent) 0px, transparent 40%);
+  background-image:
+    radial-gradient(70% 45% at 10% -5%, color-mix(in srgb, var(--color-accent-base) 12%, transparent), transparent 72%),
+    radial-gradient(55% 40% at 95% 0%, color-mix(in srgb, var(--color-income-base) 9%, transparent), transparent 74%);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -107,8 +152,8 @@ body {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--color-border-base);
   border-radius: var(--radius-lg);
-  box-shadow: 
-    0 8px 32px -4px rgba(0, 0, 0, 0.3),
+  box-shadow:
+    0 18px 50px -24px rgba(0, 0, 0, 0.65),
     inset 0 1px 1px rgba(255, 255, 255, 0.03);
 }
 
@@ -118,10 +163,10 @@ body {
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--color-border-base);
   border-radius: var(--radius-lg);
-  box-shadow: 
-    0 4px 20px -1px rgba(0, 0, 0, 0.2),
+  box-shadow:
+    0 18px 44px -28px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  @apply p-6 hover:bg-white/[0.04] transition-all duration-300 cursor-default;
+  @apply p-5 sm:p-6 hover:bg-white/[0.04] transition-[background-color,border-color,box-shadow,transform] duration-300 cursor-default;
 }
 
 /* Base Typography — kept in @layer base so Tailwind's font-size
@@ -146,7 +191,8 @@ body {
 
 button, a {
   touch-action: manipulation;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 button:active {
@@ -156,6 +202,32 @@ button:active {
 input, select, textarea {
   touch-action: manipulation;
   font-size: 16px !important;
+}
+
+:where(a, button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-accent-base) 72%, white);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent-base) 35%, transparent);
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  transform: translateY(-160%);
+  border-radius: 12px;
+  background: var(--color-text-primary);
+  color: var(--color-bg);
+  padding: 10px 14px;
+  font-weight: 750;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 /* Layout Utilities */
@@ -228,7 +300,6 @@ input, select, textarea {
   border-radius: var(--radius-sm);
 }
 
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
@@ -261,7 +332,6 @@ input, select, textarea {
   border: 0.5px solid rgba(0, 0, 0, 0.08);
 }
 
-
 /* Recharts custom styles */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
@@ -275,6 +345,11 @@ input, select, textarea {
 /* Date input styling for dark mode */
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(1) opacity(0.5);
+}
+
+.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.55;
 }
 
 @media (prefers-reduced-motion: reduce) {

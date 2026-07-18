@@ -2,7 +2,6 @@
 
 import { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { haptic } from '@/lib/utils'
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 
 interface DailyBudgetPillProps {
@@ -35,7 +34,7 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
         className="px-5 sm:px-0"
       >
         <div
-          className="flex items-center justify-between gap-4 p-5 sm:p-7 rounded-[28px] border shadow-xl relative overflow-hidden group transition-colors duration-500"
+          className="group relative overflow-hidden rounded-[28px] border p-5 shadow-lg transition-colors duration-500 sm:p-6"
           style={{
             backgroundColor: over
               ? 'rgba(239,68,68,0.12)'
@@ -49,10 +48,17 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
               : 'rgba(16,185,129,0.25)',
           }}
         >
-          <div className="relative z-10 min-w-0">
-            <p className="text-xs sm:text-sm font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] opacity-50 mb-2 truncate">Strategic Reserve</p>
-            <p
-              className="text-3xl sm:text-5xl font-black tracking-tighter leading-none truncate"
+          <div className="relative z-10 mb-5">
+            <p className="text-sm font-semibold text-[var(--color-text-secondary)]">Daily spending guide</p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)] opacity-80">
+              Based on your remaining monthly budget
+            </p>
+          </div>
+          <div className="relative z-10 grid grid-cols-2 gap-5">
+            <div className="min-w-0">
+              <p className="mb-2 text-xs font-semibold text-[var(--color-text-secondary)]">Available per day</p>
+              <p
+              className="truncate font-mono text-2xl font-bold leading-none tracking-tight tabular-nums sm:text-3xl"
               style={{
                 color: over
                   ? 'var(--color-expense-base)'
@@ -62,17 +68,18 @@ export const DailyBudgetPill = memo(function DailyBudgetPill({
               }}
             >
               {over && '−'}<AnimatedNumber value={Math.abs(perDay)} format={fmt} />
-            </p>
-            <p className="text-sm font-bold mt-2 opacity-60 tracking-tight">
-              {over ? 'CRITICAL: REDUCE SPENDING' : `AVAILABLE PER DAY`}
-            </p>
-          </div>
-          <div className="text-right relative z-10 min-w-0">
-            <p className="text-xs sm:text-sm font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] opacity-50 mb-2 truncate">Tactical Deployment</p>
-            <p className="text-2xl sm:text-4xl font-black tracking-tighter leading-none text-rose-400 truncate">
-              <AnimatedNumber value={todaySpending} format={fmt} />
-            </p>
-            <p className="text-sm font-bold mt-2 opacity-60 tracking-tight">SPENT TODAY</p>
+              </p>
+              <p className="mt-2 text-xs font-medium text-[var(--color-text-secondary)]">
+                {over ? 'Monthly budget exceeded' : isWarning ? 'Close to today’s limit' : 'On track'}
+              </p>
+            </div>
+            <div className="min-w-0 border-l border-[var(--color-border-base)] pl-5 text-right">
+              <p className="mb-2 text-xs font-semibold text-[var(--color-text-secondary)]">Spent today</p>
+              <p className="truncate font-mono text-2xl font-bold leading-none tracking-tight text-rose-400 tabular-nums sm:text-3xl">
+                <AnimatedNumber value={todaySpending} format={fmt} />
+              </p>
+              <p className="mt-2 text-xs font-medium text-[var(--color-text-secondary)]">Today’s total</p>
+            </div>
           </div>
           
           {/* Subtle animated gradient overlay */}

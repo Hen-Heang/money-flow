@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { format, isSameMonth } from 'date-fns'
+import { format } from 'date-fns'
 import { X } from 'lucide-react'
 import { haptic } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
@@ -27,33 +27,34 @@ export const BudgetReviewPrompt = memo(function BudgetReviewPrompt({
           exit={{ opacity: 0, scale: 0.95, y: 10 }} 
           className="px-5 sm:px-0"
         >
-          <div className="rounded-[32px] border p-6 flex items-center gap-5 bg-indigo-500/10 border-indigo-500/25 shadow-2xl relative group overflow-hidden">
+          <div className="group relative flex items-start gap-4 overflow-hidden rounded-[28px] border border-indigo-500/25 bg-indigo-500/10 p-5 shadow-lg">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform">
                <span className="text-6xl">📅</span>
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-3xl shrink-0 border border-indigo-500/10">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-indigo-500/10 bg-indigo-500/20 text-2xl">
               📅
             </div>
-            <div className="flex-1 min-w-0 relative z-10">
-              <p className="text-base font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
-                Review {format(new Date(), 'MMMM')} Capital Plan
+            <div className="relative z-10 min-w-0 flex-1 pr-7">
+              <p className="text-base font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+                Review your {format(new Date(), 'MMMM')} budget
               </p>
-              <p className="text-xs mt-1 opacity-50 font-medium">Strategic check-in is recommended for this cycle.</p>
-            </div>
-            <div className="flex items-center gap-4 shrink-0 relative z-10">
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">A quick check now can prevent surprises later in the month.</p>
               <button 
+                type="button"
                 onClick={() => { haptic('medium'); router.push('/settings') }} 
-                className="px-6 py-2.5 rounded-2xl text-xs font-black text-white bg-indigo-500 hover:bg-indigo-600 transition-all shadow-xl active:scale-95 tracking-widest uppercase"
+                className="mt-4 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-[background-color,transform] hover:bg-indigo-600 active:scale-95"
               >
-                Review
-              </button>
-              <button 
-                onClick={() => { haptic('light'); onDismiss() }} 
-                className="p-2 rounded-full hover:bg-white/10 transition-colors opacity-40 hover:opacity-100"
-              >
-                <X size={18} />
+                Review budget
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => { haptic('light'); onDismiss() }}
+              aria-label="Dismiss budget review reminder"
+              className="absolute right-3 top-3 z-20 rounded-full p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-white/10 hover:text-[var(--color-text-primary)]"
+            >
+              <X size={17} />
+            </button>
           </div>
         </motion.div>
       )}

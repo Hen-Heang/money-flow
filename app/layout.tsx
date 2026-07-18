@@ -8,8 +8,11 @@ const geistSans = GeistSans
 const geistMono = GeistMono
 
 export const metadata: Metadata = {
-  title: 'Money Flow',
-  description: 'Personal finance tracker',
+  title: {
+    default: 'Money Flow',
+    template: '%s · Money Flow',
+  },
+  description: 'Track spending, plan budgets, and make steady progress toward your savings goals.',
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',
@@ -24,12 +27,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0a0f1a' },
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#070b14' },
+    { media: '(prefers-color-scheme: light)', color: '#f4f7fb' },
   ],
 }
 
@@ -39,7 +40,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      suppressHydrationWarning
+    >
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -56,10 +61,11 @@ export default function RootLayout({
         ` }} />
       </head>
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)]">
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         {children}
         <Toaster
           position="bottom-center"
-          theme="dark"
+          theme="system"
           richColors
           closeButton
           toastOptions={{

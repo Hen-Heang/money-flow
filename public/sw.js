@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-flow-v2'
+const CACHE_NAME = 'money-flow-v3'
 
 // App shell: pre-cache these on install
 const PRECACHE_URLS = [

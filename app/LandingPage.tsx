@@ -132,7 +132,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <main className="px-mobile pb-safe">
+      <main id="main-content" className="px-mobile pb-safe">
         {/* ── Hero ── */}
         <section className="mx-auto flex w-full max-w-5xl flex-col items-center pt-8 text-center sm:pt-16">
           <motion.div

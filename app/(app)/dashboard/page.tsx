@@ -33,13 +33,6 @@ import { DailyBudgetPill } from './components/DailyBudgetPill'
 import { BudgetReviewPrompt } from './components/BudgetReviewPrompt'
 import { AnalyticsTabs } from './components/AnalyticsTabs'
 
-interface CategoryTotal {
-  name: string
-  icon: string
-  color: string
-  total: number
-}
-
 export default function DashboardPage() {
   const router = useRouter()
   const [greeting, setGreeting] = useState('')
@@ -107,7 +100,7 @@ export default function DashboardPage() {
         .lt('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).end)
         .order('date', { ascending: false })
       setTransactions((txResult.data as Transaction[]) || [])
-    } catch (err) {
+    } catch {
       toast.error('Failed to sync data')
     } finally {
       setLoading(false)
@@ -239,38 +232,43 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="w-full max-w-full lg:max-w-6xl xl:max-w-7xl mx-auto pt-6 pb-24 md:pt-12 px-0 sm:px-6 lg:px-10 overflow-x-hidden">
+    <div className="mx-auto w-full max-w-[1240px] overflow-x-hidden px-0 pb-16 pt-5 sm:px-6 sm:pt-8 lg:px-8 lg:pb-10 lg:pt-10">
       {/* ─── Top Header ─── */}
-      <div className="px-5 sm:px-0 mb-10 flex items-center justify-between gap-4">
+      <div className="mb-7 flex items-center justify-between gap-4 px-5 sm:mb-8 sm:px-0">
         <div className="flex items-center gap-4 min-w-0">
-          <Link href="/settings" className="active:scale-95 transition-transform">
-            <Avatar src={avatarUrl} name={userName} size={48} className="ring-4 ring-white/5 shadow-2xl shrink-0 sm:w-16 sm:h-16" />
+          <Link href="/settings" aria-label="Open profile settings" className="rounded-full transition-transform active:scale-95">
+            <Avatar src={avatarUrl} name={userName} size={48} className="shrink-0 shadow-lg ring-2 ring-[var(--color-border-base)]" />
           </Link>
           <div className="min-w-0">
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} className="text-xs text-[var(--color-text-secondary)] font-black tracking-[0.3em] mb-1 uppercase">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-0.5 text-sm font-medium text-[var(--color-text-secondary)]">
               {greeting}
             </motion.p>
-            <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="text-2xl sm:text-4xl font-black tracking-tight truncate">
+            <motion.h1 initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="truncate text-2xl font-bold tracking-tight sm:text-3xl">
               {userName}
             </motion.h1>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <button onClick={() => { haptic('light'); setShowUSD(!showUSD) }} className="px-4 py-2 rounded-2xl glass-morphic text-tiny font-black active:scale-95 transition-all border border-white/5">
-            {showUSD ? '🇺🇸 USD' : '🇰🇷 KRW'}
+          <button
+            type="button"
+            onClick={() => { haptic('light'); setShowUSD(!showUSD) }}
+            className="glass-morphic rounded-xl border border-[var(--color-border-base)] px-3 py-2 text-xs font-bold transition-transform active:scale-95"
+            aria-label={`Display amounts in ${showUSD ? 'Korean won' : 'US dollars'}`}
+          >
+            {showUSD ? 'USD' : 'KRW'}
           </button>
           <ChatBot />
-          <Link href="/settings" className="md:hidden w-9 h-9 rounded-2xl glass-morphic border border-white/5 flex items-center justify-center active:scale-95 transition-transform">
-            <Settings size={16} className="text-white/60" />
+          <Link href="/settings" aria-label="Open settings" className="glass-morphic flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border-base)] transition-transform active:scale-95 lg:hidden">
+            <Settings size={17} className="text-[var(--color-text-secondary)]" />
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-12 xl:gap-16">
+      <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 xl:gap-10">
         
         {/* ─── LEFT COLUMN ─── */}
-        <div className="space-y-10">
+        <div className="space-y-7 sm:space-y-8">
           <SummaryCards 
             balance={balance} 
             totalIncome={totalIncome} 
@@ -292,18 +290,21 @@ export default function DashboardPage() {
             isDesktop={isDesktop}
             fmt={fmt}
           >
-            <div className="space-y-10">
+            <div className="space-y-7 sm:space-y-8">
               <div className="lg:hidden">
                 <RecentActivity transactions={transactions} fmt={fmt} />
               </div>
 
               {totalIncome > 0 && (
-                <div className="p-7 sm:p-10 rounded-[32px] sm:rounded-[40px] bg-[var(--color-card-elevated-base)] border border-white/5 shadow-2xl relative overflow-hidden group">
-                  <div className="flex items-center justify-between mb-6">
-                    <span className="text-sm font-black uppercase tracking-[0.3em] opacity-50">Capital Utilization</span>
-                    <span className="text-2xl sm:text-3xl font-black tracking-tighter">{Math.round((totalExpense / totalIncome) * 100)}% Used</span>
+                <div className="group relative overflow-hidden rounded-[28px] border border-[var(--color-border-base)] bg-[var(--color-card-base)] p-6 shadow-lg sm:p-7">
+                  <div className="mb-5 flex items-end justify-between gap-4">
+                    <div>
+                      <span className="text-sm font-semibold text-[var(--color-text-secondary)]">Income spent</span>
+                      <p className="mt-1 text-xs text-[var(--color-text-secondary)] opacity-75">How much of this month’s income has been used</p>
+                    </div>
+                    <span className="shrink-0 text-2xl font-bold tabular-nums sm:text-3xl">{Math.round((totalExpense / totalIncome) * 100)}%</span>
                   </div>
-                  <div className="h-4 sm:h-5 rounded-full bg-black/40 overflow-hidden p-1 border border-white/5">
+                  <div className="h-3 overflow-hidden rounded-full bg-[var(--color-card-elevated-base)] p-0.5">
                     <motion.div 
                       initial={{ width: 0 }} 
                       animate={{ width: `${Math.min((totalExpense / totalIncome) * 100, 100)}%` }} 
@@ -312,8 +313,8 @@ export default function DashboardPage() {
                       }`} 
                     />
                   </div>
-                  <p className="mt-5 text-base text-[var(--color-text-secondary)] font-bold text-center opacity-60 tracking-tight">
-                    Remaining cash flow: {fmt(Math.max(0, totalIncome - totalExpense))}
+                  <p className="mt-4 text-sm font-medium text-[var(--color-text-secondary)]">
+                    {fmt(Math.max(0, totalIncome - totalExpense))} remains after expenses
                   </p>
                 </div>
               )}
@@ -322,20 +323,20 @@ export default function DashboardPage() {
         </div>
 
         {/* ─── RIGHT COLUMN ─── */}
-        <div className="lg:sticky lg:top-28 lg:h-fit space-y-10 mt-14 lg:mt-0">
+        <div className="mt-10 space-y-8 lg:sticky lg:top-8 lg:mt-0 lg:h-fit">
           <Intelligence insights={insights} totalIncome={totalIncome} fmt={fmt} handleQuickAdd={handleQuickAdd} />
 
           <div className="px-5 sm:px-0">
             <button
               onClick={() => router.push('/analytics')}
-              className="w-full flex items-center gap-4 p-5 rounded-[28px] border border-white/5 hover:border-white/20 transition-all active:scale-[0.98] text-left bg-[var(--color-card-elevated-base)] group"
+              className="group flex w-full items-center gap-4 rounded-[24px] border border-[var(--color-border-base)] bg-[var(--color-card-base)] p-4 text-left transition-[border-color,transform] hover:border-[color-mix(in_srgb,var(--color-accent-base)_35%,transparent)] active:scale-[0.98]"
             >
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/10 group-hover:scale-110 transition-transform">
                 <FileText size={20} className="text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xl font-black tracking-tight">Analytics</p>
-                <p className="text-base font-bold opacity-40 mt-0.5">Trends & Monthly Summary</p>
+                <p className="text-base font-bold tracking-tight">View all analytics</p>
+                <p className="mt-0.5 text-sm text-[var(--color-text-secondary)]">Trends and monthly summary</p>
               </div>
               <ChevronRight size={18} className="opacity-20 group-hover:translate-x-1 transition-transform" />
             </button>

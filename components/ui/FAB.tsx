@@ -22,14 +22,14 @@ export default function FAB({ onClick }: FABProps) {
         mass: 0.8
       }}
       onClick={onClick}
-      className="fixed z-60 flex items-center justify-center shadow-[0_12px_30px_rgba(0,0,0,0.3)] active:shadow-none"
+      className="fixed z-60 flex items-center justify-center shadow-[0_12px_30px_rgba(0,0,0,0.3)] active:shadow-none lg:hidden"
       style={{
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
-        right: 'var(--spacing-mobile)',
-        width: '56px',
-        height: '56px',
-        borderRadius: '20px', // Modern squircle-like radius
-        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 90px)',
+        right: 'max(18px, env(safe-area-inset-right, 0px))',
+        width: '54px',
+        height: '54px',
+        borderRadius: '18px',
+        background: 'linear-gradient(135deg, var(--color-accent-base) 0%, color-mix(in srgb, var(--color-accent-base) 78%, black) 100%)',
         border: '1px solid rgba(255, 255, 255, 0.2)',
         boxShadow: '0 8px 24px rgba(37, 99, 235, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3)',
         touchAction: 'manipulation',

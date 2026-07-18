@@ -14,7 +14,7 @@ import { motion } from 'framer-motion'
 const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
 
 const TABS = [
-  { href: '/dashboard',    label: 'Home',         icon: LayoutDashboard },
+  { href: '/dashboard',    label: 'Overview',     icon: LayoutDashboard },
   { href: '/transactions', label: 'Transactions', icon: List },
   { href: '/savings',      label: 'Savings',      icon: PiggyBank },
   { href: '/budget',       label: 'Budget',       icon: Wallet },
@@ -52,26 +52,25 @@ export default memo(function Sidebar() {
   return (
     <>
       <aside
-        className="fixed left-0 top-0 hidden h-screen w-72 md:flex flex-col z-50 p-6"
+        className="fixed left-0 top-0 z-50 hidden h-screen w-72 flex-col p-5 lg:flex"
       >
         <div
-          className="flex h-full flex-col rounded-[32px] overflow-hidden glass-card"
+          className="glass-card flex h-full flex-col overflow-hidden rounded-[28px]"
           style={{
-            background: 'rgba(10, 15, 26, 0.8)',
-            backdropFilter: 'blur(40px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            boxShadow: '0 0 40px rgba(0,0,0,0.3)',
+            background: 'color-mix(in srgb, var(--color-card-base) 94%, transparent)',
+            borderColor: 'var(--color-border-base)',
+            boxShadow: '0 24px 60px -32px rgba(0,0,0,0.75)',
           }}
         >
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-4 px-6 pt-8 pb-10 hover:opacity-90 transition-all active:scale-[0.98]">
+          <Link href="/dashboard" className="flex items-center gap-3.5 px-6 pb-7 pt-7 transition-opacity hover:opacity-85 active:scale-[0.98]">
             <Logo size={36} />
             <div className="flex flex-col">
               <p
                 className="text-tiny opacity-40 font-black"
                 style={{ color: 'var(--color-text-secondary)', letterSpacing: '0.35em' }}
               >
-                Finance
+                Personal finance
               </p>
               <p
                 className="text-xl font-black tracking-tight leading-none mt-1"
@@ -83,10 +82,11 @@ export default memo(function Sidebar() {
           </Link>
 
           {/* Quick Add */}
-          <div className="px-5 pb-10">
+          <div className="px-5 pb-6">
             <button
+              type="button"
               onClick={() => setShowAdd(true)}
-              className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 text-xs font-black uppercase tracking-[0.2em] transition-all active:scale-95 hover:brightness-110 shadow-xl"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold transition-[filter,transform] hover:brightness-110 active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, var(--color-accent-base) 0%, color-mix(in srgb, var(--color-accent-base) 80%, black) 100%)',
                 color: '#fff',
@@ -94,28 +94,33 @@ export default memo(function Sidebar() {
               }}
             >
               <Plus size={18} strokeWidth={3} />
-              New Entry
+              Add transaction
             </button>
           </div>
 
           {/* Nav links */}
-          <nav className="flex flex-col gap-1.5 px-4 flex-1 overflow-y-auto no-scrollbar">
+          <nav aria-label="Primary navigation" className="no-scrollbar flex flex-1 flex-col gap-1 overflow-y-auto px-4">
             {TABS.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-4 rounded-2xl px-4 py-4 transition-all duration-300 group relative ${
-                    isActive 
-                      ? 'text-blue-400' 
-                      : 'text-[var(--color-text-secondary)] hover:bg-white/[0.04] hover:text-white'
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`group relative flex items-center gap-4 rounded-2xl px-4 py-3.5 transition-[color,background-color] duration-200 ${
+                    isActive
+                      ? 'text-[var(--color-accent-base)]'
+                      : 'text-[var(--color-text-secondary)] hover:bg-white/[0.04] hover:text-[var(--color-text-primary)]'
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="sidebar-active-bg"
-                      className="absolute inset-0 bg-blue-500/10 rounded-2xl border border-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.08)]"
+                      className="absolute inset-0 rounded-2xl border"
+                      style={{
+                        background: 'color-mix(in srgb, var(--color-accent-base) 11%, transparent)',
+                        borderColor: 'color-mix(in srgb, var(--color-accent-base) 24%, transparent)',
+                      }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
                   )}
@@ -124,7 +129,7 @@ export default memo(function Sidebar() {
                   {isActive && (
                     <motion.div 
                       layoutId="sidebar-active-dot"
-                      className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(96,165,250,0.8)] relative z-10"
+                      className="relative z-10 h-1.5 w-1.5 rounded-full bg-[var(--color-accent-base)]"
                     />
                   )}
                 </Link>
@@ -135,8 +140,8 @@ export default memo(function Sidebar() {
           {/* User profile */}
           <div className="p-4 mt-auto">
             <div
-              className="rounded-2xl p-4 flex items-center gap-3 border border-white/5"
-              style={{ background: 'rgba(255, 255, 255, 0.03)' }}
+              className="flex items-center gap-3 rounded-2xl border p-4"
+              style={{ background: 'var(--color-card-elevated-base)', borderColor: 'var(--color-border-base)' }}
             >
               <Avatar src={avatarUrl ?? undefined} name={displayName} size={36} className="ring-2 ring-white/5 shadow-xl" />
               <div className="flex-1 min-w-0">
@@ -146,13 +151,15 @@ export default memo(function Sidebar() {
                 >
                   {displayName || '—'}
                 </p>
-                <p className="text-[10px] truncate opacity-40 font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                <p className="truncate text-[11px] font-medium opacity-70" style={{ color: 'var(--color-text-secondary)' }}>
                   {email}
                 </p>
               </div>
               <button
+                type="button"
                 onClick={handleSignOut}
-                className="flex-shrink-0 p-2 rounded-xl transition-all hover:bg-red-500/10 hover:text-red-400 active:scale-90"
+                aria-label="Sign out"
+                className="flex-shrink-0 rounded-xl p-2.5 transition-[background-color,color,transform] hover:bg-red-500/10 hover:text-red-400 active:scale-90"
                 title="Sign out"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
