@@ -235,7 +235,7 @@ const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
       })
       if (!res.ok) throw new Error()
       setAiProvider(provider)
-      toast.success(`Switched to ${provider === 'openai' ? 'OpenAI GPT-4o' : 'Google Gemini'}`)
+      toast.success(`Switched to ${provider === 'openai' ? 'OpenAI GPT-5.6' : 'Google Gemini'}`)
     } catch {
       toast.error('Failed to switch AI provider')
     } finally {
@@ -537,13 +537,13 @@ const deleteCategory = async (id: string) => {
         <Row
           icon={Sparkles}
           color="#8b5cf6"
-          title={aiProvider === 'openai' ? 'OpenAI GPT-4o' : 'Google Gemini'}
-          subtitle="Powers chat & smart categorization"
+          title={aiProvider === 'openai' ? 'OpenAI GPT-5.6' : 'Google Gemini'}
+          subtitle="Powers chat, Smart Quick Add & categorization"
           onClick={() => { haptic('light'); setActiveSection(activeSection === 'ai' ? null : 'ai') }}
           active={activeSection === 'ai'}
           right={
             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${aiProvider === 'openai' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
-              {aiProvider === 'openai' ? 'GPT-4o' : 'Gemini'}
+              {aiProvider === 'openai' ? 'GPT-5.6' : 'Gemini'}
             </span>
           }
         />
@@ -552,11 +552,11 @@ const deleteCategory = async (id: string) => {
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
               <div className="bg-[var(--color-card-elevated-base)]/30 px-5 py-5 space-y-3">
                 <p className="text-[12px] font-medium opacity-60 leading-relaxed">
-                  Choose your AI engine for chat and smart categorization. Automatically falls back to the other if a key expires.
+                  Choose your preferred AI engine. Smart transaction tasks use the other configured provider if the first is unavailable.
                 </p>
                 {[
                   { id: 'gemini' as const, label: 'Google Gemini', desc: 'gemini-2.5-flash · Default', emoji: '🤖' },
-                  { id: 'openai' as const, label: 'OpenAI ChatGPT', desc: 'gpt-4o · Requires OPENAI_API_KEY', emoji: '✨' },
+                  { id: 'openai' as const, label: 'OpenAI ChatGPT', desc: 'GPT-5.6 · Requires OPENAI_API_KEY', emoji: '✨' },
                 ].map(opt => (
                   <button
                     key={opt.id}

@@ -51,6 +51,13 @@ EXCHANGE_RATE_API_KEY=<key>
 # Google Gemini AI
 GOOGLE_GENERATIVE_AI_API_KEY=<key>
 
+# OpenAI (optional alternative/fallback AI provider)
+OPENAI_API_KEY=<key>
+
+# Optional AI model overrides
+OPENAI_CHAT_MODEL=gpt-5.6-terra
+OPENAI_FAST_MODEL=gpt-5.6-luna
+
 # Cron job protection
 CRON_SECRET=<random-secret>
 

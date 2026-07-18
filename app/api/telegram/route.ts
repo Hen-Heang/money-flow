@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateText } from 'ai'
-import { getFastModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { parseTransactionText } from '@/lib/ai/transaction-parser'
 import { createTelegramServiceClient, sendTelegramMessage, escapeHtml, fmtKRW } from '@/lib/telegram'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 import { rateLimit } from '@/lib/rate-limit'
-import { CATEGORY_MATCH_GUIDANCE, formatCategoriesForPrompt } from '@/lib/categorize'
 
 // Telegram delivers updates here as POST requests (webhook mode).
 // Secured by the secret token Telegram echoes back in a header — set when
@@ -196,40 +195,28 @@ async function parseTransaction(
   text: string,
   categories: Array<{ id: string; name: string; type: string; icon?: string | null }>,
   provider: AIProvider = 'gemini',
+  userId = 'telegram',
 ): Promise<ParsedTransaction | null> {
-  const { text: raw } = await generateText({
-    model: getFastModel(provider),
-    system: `You parse a single short message into a money transaction for a tracking app.
-Default currency is KRW (Korean won) unless the user clearly writes USD or a $ sign.
-Treat the transaction as "expense" unless the message clearly describes earning money (salary, refund, income, deposit) — then "income".
-
-Available categories (id: name):
-${formatCategoriesForPrompt(categories)}
-
-${CATEGORY_MATCH_GUIDANCE}
-
-Pick the best matching category id from the list above, or null if none fit.
-Respond with ONLY a JSON object, no markdown, in this exact shape:
-{"amount": <positive number>, "currency": "KRW"|"USD", "type": "income"|"expense", "description": <short string>, "category_id": <id string or null>}
-If there is no clear amount, respond with {"amount": 0}.`,
-    prompt: text,
-  })
-
   try {
-    const cleaned = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-    const parsed = JSON.parse(cleaned) as Partial<ParsedTransaction>
-    const amount = Number(parsed.amount)
-    if (!Number.isFinite(amount) || amount <= 0) return null
-
-    const currency: 'KRW' | 'USD' = parsed.currency === 'USD' ? 'USD' : 'KRW'
-    const type: 'income' | 'expense' = parsed.type === 'income' ? 'income' : 'expense'
-    const description = String(parsed.description || text).trim().slice(0, 200) || 'Transaction'
-    const category_id =
-      typeof parsed.category_id === 'string' && categories.some((c) => c.id === parsed.category_id)
-        ? parsed.category_id
-        : null
-
-    return { amount, currency, type, description, category_id }
+    const parsed = await parseTransactionText({
+      text,
+      today: new Date(Date.now() + 9 * 60 * 60_000).toISOString().slice(0, 10),
+      categories: categories.map(category => ({
+        id: category.id,
+        name: category.name,
+        type: category.type === 'income' || category.type === 'expense' ? category.type : 'both',
+      })),
+      paymentMethods: [],
+      preferredProvider: provider,
+      userId,
+    })
+    return {
+      amount: parsed.amount,
+      currency: parsed.currency,
+      type: parsed.type,
+      description: parsed.description,
+      category_id: parsed.categoryId,
+    }
   } catch {
     return null
   }
@@ -242,7 +229,7 @@ async function handleLogExpense(supabase: ServiceClient, userId: string, text: s
   ])
   const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
 
-  const parsed = await parseTransaction(text, categories ?? [], provider)
+  const parsed = await parseTransaction(text, categories ?? [], provider, userId)
   if (!parsed) {
     return "I couldn't read an amount there. Try something like <code>coffee 4500</code> or <code>lunch 12000 food</code>."
   }

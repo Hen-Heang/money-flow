@@ -8,16 +8,16 @@ function botToken(): string | null {
   return process.env.TELEGRAM_BOT_TOKEN || null
 }
 
-/** Send a message to a Telegram chat. Swallows errors (best-effort delivery). */
+/** Send a message to a Telegram chat. Returns whether Telegram accepted it. */
 export async function sendTelegramMessage(
   chatId: number | string,
   text: string,
   extra: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<boolean> {
   const token = botToken()
   if (!token) {
     console.error('[telegram] TELEGRAM_BOT_TOKEN not configured')
-    return
+    return false
   }
   try {
     const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
@@ -33,9 +33,12 @@ export async function sendTelegramMessage(
     })
     if (!res.ok) {
       console.error('[telegram] sendMessage failed:', res.status, await res.text())
+      return false
     }
+    return true
   } catch (err) {
     console.error('[telegram] sendMessage error:', err)
+    return false
   }
 }
 
@@ -56,7 +59,7 @@ type ServiceClient = NonNullable<ReturnType<typeof createTelegramServiceClient>>
 
 /**
  * Send a message to a user's linked Telegram chat (if any).
- * Returns true if a linked chat existed and a message was attempted.
+ * Returns true if Telegram accepted the message.
  */
 export async function sendTelegramToUser(
   supabase: ServiceClient,
@@ -70,8 +73,7 @@ export async function sendTelegramToUser(
     .maybeSingle()
   const chatId = data?.chat_id
   if (!chatId) return false
-  await sendTelegramMessage(chatId, text)
-  return true
+  return sendTelegramMessage(chatId, text)
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────────

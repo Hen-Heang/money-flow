@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, X, BookmarkPlus, Trash2, Loader2 } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronUp, X, BookmarkPlus, Trash2, Loader2, Sparkles } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
+import { useDescriptionSuggestions, type DescriptionSuggestion } from '@/hooks/useDescriptionSuggestions'
 import { formatNumber, haptic } from '@/lib/utils'
-import type { Category, PaymentMethod } from '@/lib/types'
+import type { Category, PaymentMethod, TransactionPreview } from '@/lib/types'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
@@ -80,9 +81,14 @@ export default function AddTransactionSheet({
   const [showKeypad, setShowKeypad] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
   const [savingTemplate, setSavingTemplate] = useState(false)
-  const [isAiSuggesting, setIsAiSuggesting] = useState(false);
+  const [isAiSuggesting, setIsAiSuggesting] = useState(false)
+  const [quickAddText, setQuickAddText] = useState('')
+  const [quickAddPreview, setQuickAddPreview] = useState<TransactionPreview | null>(null)
+  const [quickAddError, setQuickAddError] = useState('')
+  const [isQuickAddLoading, setIsQuickAddLoading] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const lastLearnedDescriptionRef = useRef('')
   const supabase = useSupabaseClient()
   const isEditing = !!editTransaction && !isDuplicate
   const isMobile = useIsMobile()
@@ -105,7 +111,7 @@ export default function AddTransactionSheet({
     reset,
     setValue,
     getValues,
-    formState: { errors, isSubmitting },
+    formState: { isSubmitting },
   } = form
 
   const [type, currency, amountRaw, description, currentCategoryId] = useWatch({
@@ -114,9 +120,40 @@ export default function AddTransactionSheet({
   })
   const activeExchangeRate = editTransaction?.exchange_rate || liveRate
 
+  const {
+    suggestions: descriptionSuggestions,
+    exactMatch: learnedDescription,
+    isReady: descriptionHistoryReady,
+  } = useDescriptionSuggestions(isOpen && !isEditing, type, description || '')
+
+  useEffect(() => {
+    if (isEditing || !learnedDescription) return
+    const learnedKey = `${type}:${learnedDescription.description.toLocaleLowerCase()}`
+    if (lastLearnedDescriptionRef.current === learnedKey) return
+
+    let applied = false
+    if (!getValues('category_id') && learnedDescription.categoryId) {
+      setValue('category_id', learnedDescription.categoryId)
+      applied = true
+    }
+    if (!getValues('payment_method_id') && learnedDescription.paymentMethodId) {
+      setValue('payment_method_id', learnedDescription.paymentMethodId)
+      applied = true
+    }
+    lastLearnedDescriptionRef.current = learnedKey
+    if (applied) haptic('light')
+  }, [getValues, isEditing, learnedDescription, setValue, type])
+
   // AI Suggestion Logic
   useEffect(() => {
-    if (isEditing || !description || description.length < 2 || currentCategoryId) return
+    if (
+      isEditing ||
+      !description ||
+      description.length < 2 ||
+      currentCategoryId ||
+      !descriptionHistoryReady ||
+      learnedDescription?.categoryId
+    ) return
 
     const timeoutId = setTimeout(async () => {
       setIsAiSuggesting(true)
@@ -124,8 +161,9 @@ export default function AddTransactionSheet({
         const response = await fetch('/api/ai/suggest-category', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description, type, categories }),
+          body: JSON.stringify({ description, type }),
         })
+        if (!response.ok) return
         const { categoryId } = await response.json()
         if (categoryId && !getValues('category_id')) {
           setValue('category_id', categoryId)
@@ -139,7 +177,7 @@ export default function AddTransactionSheet({
     }, 1000)
 
     return () => clearTimeout(timeoutId)
-  }, [description, type, categories, setValue, getValues, isEditing, currentCategoryId])
+  }, [description, type, setValue, getValues, isEditing, currentCategoryId, descriptionHistoryReady, learnedDescription])
 
   const loadTemplates = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -195,6 +233,65 @@ export default function AddTransactionSheet({
     haptic('light')
   }
 
+  const parseQuickAdd = async () => {
+    const text = quickAddText.trim()
+    if (text.length < 3) {
+      setQuickAddError('Include what it was and the amount.')
+      return
+    }
+
+    setIsQuickAddLoading(true)
+    setQuickAddError('')
+    setQuickAddPreview(null)
+    if (isMobile) setShowKeypad(false)
+
+    try {
+      const response = await fetch('/api/ai/parse-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+        }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok || !body.preview) {
+        throw new Error(body.error || 'AI quick add is unavailable right now.')
+      }
+      setQuickAddPreview(body.preview as TransactionPreview)
+      haptic('light')
+    } catch (error) {
+      setQuickAddError(error instanceof Error ? error.message : 'AI quick add is unavailable right now.')
+    } finally {
+      setIsQuickAddLoading(false)
+    }
+  }
+
+  const applyQuickAddPreview = () => {
+    if (!quickAddPreview) return
+    setValue('type', quickAddPreview.type)
+    setValue('currency', quickAddPreview.currency)
+    setValue('amount', String(quickAddPreview.amount))
+    setValue('date', quickAddPreview.date)
+    setValue('description', quickAddPreview.description)
+    setValue('category_id', quickAddPreview.categoryId || '')
+    setValue('payment_method_id', quickAddPreview.paymentMethodId || '')
+    setValue('note', quickAddPreview.note || '')
+    if (quickAddPreview.paymentMethodId || quickAddPreview.note) setShowDetails(true)
+    setQuickAddPreview(null)
+    setQuickAddText('')
+    setQuickAddError('')
+    haptic('medium')
+    toast.success('Preview applied — review and save')
+  }
+
+  const applyDescriptionSuggestion = (suggestion: DescriptionSuggestion) => {
+    setValue('description', suggestion.description)
+    if (suggestion.categoryId) setValue('category_id', suggestion.categoryId)
+    if (suggestion.paymentMethodId) setValue('payment_method_id', suggestion.paymentMethodId)
+    haptic('light')
+  }
+
   const amountFormatted = (() => {
     if (!amountRaw) return '0'
     if (hasExpression) return amountRaw
@@ -210,6 +307,10 @@ export default function AddTransactionSheet({
 
   useEffect(() => {
     if (!isOpen) return
+    setQuickAddText('')
+    setQuickAddPreview(null)
+    setQuickAddError('')
+    lastLearnedDescriptionRef.current = ''
     const loadData = async () => {
       const [cats, methods] = await Promise.all([
         supabase.from('categories').select('*'),
@@ -249,7 +350,7 @@ export default function AddTransactionSheet({
       })
       if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
-  }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile])
+  }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile, loadTemplates])
 
   const handleClose = () => {
     setShowKeypad(false)
@@ -370,8 +471,115 @@ export default function AddTransactionSheet({
   ) : null
   const inputBaseStyle = "w-full bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] rounded-[var(--radius-md)] px-4 py-3.5 focus:border-[var(--color-accent-base)] transition-all outline-none"
 
+  const previewCategory = quickAddPreview?.categoryId
+    ? categories.find(category => category.id === quickAddPreview.categoryId)
+    : null
+  const previewPaymentMethod = quickAddPreview?.paymentMethodId
+    ? paymentMethods.find(method => method.id === quickAddPreview.paymentMethodId)
+    : null
+
+  const quickAddPanel = !editTransaction ? (
+    <section className="rounded-[var(--radius-lg)] border border-[var(--color-accent-base)]/25 bg-[var(--color-accent-base)]/[0.06] p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent-base)] text-white">
+            <Sparkles size={16} />
+          </span>
+          <div>
+            <p className="text-sm font-black">Smart Quick Add</p>
+            <p className="text-[11px] text-[var(--color-text-secondary)]">Describe it naturally, then review before saving.</p>
+          </div>
+        </div>
+        <span className="rounded-full bg-[var(--color-card-base)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent-base)]">AI</span>
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          value={quickAddText}
+          onChange={event => {
+            setQuickAddText(event.target.value)
+            setQuickAddError('')
+            setQuickAddPreview(null)
+          }}
+          onFocus={() => setShowKeypad(false)}
+          onKeyDown={event => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              if (!isQuickAddLoading) void parseQuickAdd()
+            }
+          }}
+          className={`${inputBaseStyle} min-w-0 flex-1`}
+          placeholder="e.g. Lunch 12,000 won today"
+          maxLength={300}
+          aria-label="Describe a transaction for AI quick add"
+        />
+        <button
+          type="button"
+          onClick={parseQuickAdd}
+          disabled={isQuickAddLoading || quickAddText.trim().length < 3}
+          className="flex w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent-base)] text-white transition-all active:scale-95 disabled:opacity-40"
+          aria-label="Create transaction preview"
+        >
+          {isQuickAddLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRight size={18} />}
+        </button>
+      </div>
+
+      {quickAddError && <p className="mt-2 text-xs font-semibold text-[var(--color-expense-base)]">{quickAddError}</p>}
+
+      {quickAddPreview && (
+        <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border-base)] bg-[var(--color-card-base)] p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-black">{quickAddPreview.description}</p>
+                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${quickAddPreview.type === 'expense' ? 'bg-red-500/10 text-[var(--color-expense-base)]' : 'bg-emerald-500/10 text-[var(--color-income-base)]'}`}>
+                  {quickAddPreview.type}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                {quickAddPreview.date} · {previewCategory ? `${previewCategory.icon} ${previewCategory.name}` : 'No category'}
+                {previewPaymentMethod ? ` · ${previewPaymentMethod.icon} ${previewPaymentMethod.name}` : ''}
+              </p>
+              {quickAddPreview.note && <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{quickAddPreview.note}</p>}
+            </div>
+            <p className="shrink-0 text-base font-black">
+              {quickAddPreview.currency === 'USD' ? '$' : '₩'}
+              {quickAddPreview.currency === 'KRW'
+                ? formatNumber(Math.round(quickAddPreview.amount))
+                : quickAddPreview.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={applyQuickAddPreview}
+            className="mt-3 w-full rounded-[var(--radius-sm)] bg-[var(--color-accent-base)] px-3 py-2.5 text-xs font-black text-white active:scale-[0.98]"
+          >
+            APPLY TO FORM
+          </button>
+        </div>
+      )}
+    </section>
+  ) : null
+
+  const descriptionSuggestionList = descriptionSuggestions.length > 0 ? (
+    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar" aria-label="Description suggestions from transaction history">
+      {descriptionSuggestions.map(suggestion => (
+        <button
+          key={`${type}:${suggestion.description}`}
+          type="button"
+          onClick={() => applyDescriptionSuggestion(suggestion)}
+          className="shrink-0 rounded-full border border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)] px-3 py-1.5 text-xs font-bold text-[var(--color-text-secondary)] active:scale-95"
+        >
+          {suggestion.description}
+          {suggestion.count > 1 ? <span className="ml-1 opacity-50">×{suggestion.count}</span> : null}
+        </button>
+      ))}
+    </div>
+  ) : null
+
   const desktopForm = (
     <form id="tx-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6 px-6 pb-8">
+      {quickAddPanel}
       {templateStrip}
       {/* Type & Amount */}
       <div className="space-y-4">
@@ -451,6 +659,7 @@ export default function AddTransactionSheet({
       <div className="space-y-4">
         <p className={sectionLabelStyle}>Details</p>
         <input {...register('description')} className={inputBaseStyle} placeholder="Description" />
+        {descriptionSuggestionList}
         <div className="grid grid-cols-2 gap-3">
           <input {...register('date')} type="date" className={inputBaseStyle} />
           <Controller
@@ -523,6 +732,7 @@ export default function AddTransactionSheet({
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
               <form id="tx-form-mobile" onSubmit={handleSubmit(onSubmit)}>
                 <div className="space-y-6">
+                  {quickAddPanel}
                   {templateStrip}
                   {/* Type Toggle */}
                   <div className="flex bg-[var(--color-card-elevated-base)] p-1 rounded-[var(--radius-lg)]">
@@ -584,7 +794,8 @@ export default function AddTransactionSheet({
 
                   {/* Basic Details */}
                   <div className="space-y-4">
-                    <input {...register('description')} className={`${inputBaseStyle} font-bold`} placeholder="Description" />
+                    <input {...register('description')} onFocus={() => setShowKeypad(false)} className={`${inputBaseStyle} font-bold`} placeholder="Description" />
+                    {descriptionSuggestionList}
                     <button type="button" onClick={() => setShowDetails(!showDetails)} className="flex items-center gap-2 text-sm font-black text-[var(--color-accent-base)]">
                       {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       {showDetails ? 'FEWER DETAILS' : 'MORE DETAILS'}

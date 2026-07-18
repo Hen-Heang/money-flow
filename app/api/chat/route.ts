@@ -1,43 +1,13 @@
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
+import { consumeAIRateLimit } from '@/lib/ai-rate-limit'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { getChatModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { getAIProviderOptions, getChatModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 
-// ── Rate limiter ─────────────────────────────────────────────────────────────
-// In-memory sliding-window: 20 requests per user per minute
 const RATE_LIMIT = 20
-const WINDOW_MS = 60_000
 const MAX_MESSAGES = 50
 const MAX_MESSAGE_LENGTH = 2_000
-
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
-
-function checkRateLimit(userId: string): { allowed: boolean; retryAfter: number } {
-  const now = Date.now()
-  const entry = rateLimitMap.get(userId)
-
-  if (!entry || now >= entry.resetAt) {
-    rateLimitMap.set(userId, { count: 1, resetAt: now + WINDOW_MS })
-    return { allowed: true, retryAfter: 0 }
-  }
-
-  if (entry.count >= RATE_LIMIT) {
-    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) }
-  }
-
-  entry.count++
-  return { allowed: true, retryAfter: 0 }
-}
-
-// Purge stale entries every 5 minutes to avoid unbounded memory growth
-setInterval(() => {
-  const now = Date.now()
-  for (const [id, entry] of rateLimitMap) {
-    if (now >= entry.resetAt) rateLimitMap.delete(id)
-  }
-}, 5 * 60_000)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   const supabase = await createServerSupabaseClient()
@@ -48,11 +18,11 @@ export async function POST(req: Request) {
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   // Rate limit check
-  const { allowed, retryAfter } = checkRateLimit(user.id)
+  const { allowed, retryAfterSeconds } = await consumeAIRateLimit(user.id, 'chat', RATE_LIMIT, 60)
   if (!allowed) {
-    return new Response(`Too many requests. Please wait ${retryAfter}s before trying again.`, {
+    return new Response(`Too many requests. Please wait ${retryAfterSeconds}s before trying again.`, {
       status: 429,
-      headers: { 'Retry-After': String(retryAfter) },
+      headers: { 'Retry-After': String(retryAfterSeconds) },
     })
   }
 
@@ -340,6 +310,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: getChatModel(provider),
+    providerOptions: getAIProviderOptions(provider, user.id),
     system: `You are a friendly and insightful personal finance assistant for the Money Flow app.
 Help users understand their spending habits, track budgets, and make smarter financial decisions.
 Be concise, practical, and encouraging. Use bullet points for lists. Use ₩ for Korean Won and $ for USD.
