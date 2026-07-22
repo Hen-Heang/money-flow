@@ -10,6 +10,7 @@ import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets } from '@/hooks/useBudgets'
 import { useUserProfile } from '@/hooks/useUserProfile'
+import { useTransactionsChanged, emitTransactionsChanged } from '@/hooks/useTransactionSync'
 import type { Transaction, ExchangeRateInfo } from '@/lib/types'
 import { formatKRW, formatUSD, getDisplayName, getGreeting, haptic } from '@/lib/utils'
 import { QUICK_TEMPLATES } from '@/shared/data'
@@ -86,7 +87,8 @@ export default function DashboardPage() {
     setLoading(true)
     setAlertsDismissed(false)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) {
         router.push('/login')
         return
@@ -112,6 +114,8 @@ export default function DashboardPage() {
     loadData()
   }, [loadData])
 
+  useTransactionsChanged(loadData)
+
   useEffect(() => {
     let active = true
     const loadExchangeRate = async () => {
@@ -128,7 +132,8 @@ export default function DashboardPage() {
 
   const handleQuickAdd = async (template: typeof QUICK_TEMPLATES[0]) => {
     haptic('medium')
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
     const category = categories.find(c => c.name === template.category)
     const rate = exchangeRateInfo?.rate || 1350
@@ -146,6 +151,7 @@ export default function DashboardPage() {
     if (error) { toast.error('Quick Add failed'); return }
     toast.success(`Logged ${template.iconEmoji} ${template.name}`)
     loadData()
+    emitTransactionsChanged()
   }
 
   const totalIncome = useMemo(() => transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0), [transactions])

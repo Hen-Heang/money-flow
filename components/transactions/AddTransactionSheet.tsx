@@ -14,6 +14,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
+import { emitTransactionsChanged } from '@/hooks/useTransactionSync'
 import { useWatch, Controller } from 'react-hook-form'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
 
@@ -180,7 +181,8 @@ export default function AddTransactionSheet({
   }, [description, type, setValue, getValues, isEditing, currentCategoryId, descriptionHistoryReady, learnedDescription])
 
   const loadTemplates = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
     const { data } = await supabase
       .from('transaction_templates')
@@ -207,7 +209,8 @@ export default function AddTransactionSheet({
     const values = getValues()
     if (!values.description.trim()) { toast.error('Enter a description first'); return }
     setSavingTemplate(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) { setSavingTemplate(false); return }
     const amtKrw = values.currency === 'USD' ? Math.round(amountNum * activeExchangeRate) : amountNum
     const { error } = await supabase.from('transaction_templates').insert({
@@ -376,7 +379,8 @@ export default function AddTransactionSheet({
       amountUsd = finalAmount / activeExchangeRate
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) return
 
     const payload = {
@@ -423,6 +427,7 @@ export default function AddTransactionSheet({
     }
     haptic('medium')
     toast.success(isEditing ? 'Updated' : 'Saved')
+    emitTransactionsChanged()
     onSuccess(saved)
     handleClose()
   }

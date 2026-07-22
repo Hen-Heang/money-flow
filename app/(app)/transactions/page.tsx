@@ -16,6 +16,7 @@ import FAB from '@/components/ui/FAB'
 import dynamic from 'next/dynamic'
 import { TRANSACTION_PAGE_SIZE, FALLBACK_EXCHANGE_RATE, SEARCH_HISTORY_MAX } from '@/shared/presets'
 import { useCategories } from '@/hooks/useCategories'
+import { useTransactionsChanged } from '@/hooks/useTransactionSync'
 import SwipeableRow from '@/components/transactions/SwipeableRow'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
 const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
@@ -163,8 +164,8 @@ function TransactionsPageInner() {
 
     try {
       if (!userIdRef.current) {
-        const { data: { user } } = await supabase.auth.getUser()
-        userIdRef.current = user?.id ?? null
+        const { data: { session } } = await supabase.auth.getSession()
+        userIdRef.current = session?.user?.id ?? null
       }
       const userId = userIdRef.current
       if (!userId) return
@@ -207,6 +208,8 @@ function TransactionsPageInner() {
   useEffect(() => {
     loadTransactions(true)
   }, [filter, debouncedSearch, filterDateFrom, filterDateTo, filterCategory, filterAmountMin, filterAmountMax]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useTransactionsChanged(useCallback(() => loadTransactions(true, true), [loadTransactions]))
 
   const searchParams = useSearchParams()
   useEffect(() => {
