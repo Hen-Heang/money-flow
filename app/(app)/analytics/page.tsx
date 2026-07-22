@@ -12,6 +12,7 @@ import { TrendingDown, TrendingUp, Minus, Download, Flame, CalendarClock, Shield
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { formatKRW } from '@/lib/utils'
 import { useMonthNavigation } from '@/hooks/useMonthNavigation'
+import { useTransactionsChanged } from '@/hooks/useTransactionSync'
 import { monthLabel, monthKey, getMonthRange } from '@/lib/dateHelpers'
 import type { Transaction, Budget } from '@/lib/types'
 import { CHART_COLORS } from '@/lib/constants'
@@ -136,8 +137,8 @@ export default function AnalyticsPage() {
     setMonthLoading(true)
     let cancelled = false
     const load = async () => {
-      const { data: { user: sessionUser } } = await supabase.auth.getUser()
-      const userId = sessionUser?.id
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id
       if (!userId || cancelled) return
       const [cur, prev] = await Promise.all([
         fetchMonthSummary(year, month, userId),
@@ -155,7 +156,8 @@ export default function AnalyticsPage() {
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
       if (!user) return
 
       const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5))
@@ -185,6 +187,8 @@ export default function AnalyticsPage() {
   }, [supabase])
 
   useEffect(() => { loadData() }, [loadData])
+
+  useTransactionsChanged(loadData)
 
   function handleExportPeriod() {
     const n = PERIOD_MONTHS[period]

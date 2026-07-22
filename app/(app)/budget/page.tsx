@@ -8,6 +8,7 @@ import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets, invalidateBudgetsCache } from '@/hooks/useBudgets'
 import { useMonthNavigation } from '@/hooks/useMonthNavigation'
+import { useTransactionsChanged } from '@/hooks/useTransactionSync'
 import { monthLabel, getMonthRange } from '@/lib/dateHelpers'
 import { formatKRW, formatNumber, haptic } from '@/lib/utils'
 import type { Category, Budget } from '@/lib/types'
@@ -52,7 +53,8 @@ export default function BudgetPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
     if (!user) { setLoading(false); return }
 
     const { start, end } = getMonthRange(year, month)
@@ -78,6 +80,8 @@ export default function BudgetPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
+
+  useTransactionsChanged(load)
 
   const saveBudget = async (categoryId: string) => {
     const raw = editInput.replace(/,/g, '')
