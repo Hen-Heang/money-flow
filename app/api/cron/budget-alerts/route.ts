@@ -1,19 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { sendTelegramToUser, fmtKRW, escapeHtml } from '@/lib/telegram'
+import { loadFinancialPreferences } from '@/lib/finance/server/data'
+import { isWithinQuietHours } from '@/lib/finance/weekly-checkin'
+import type { FinancialPreferences } from '@/lib/types'
 
-// Daily budget-alert sweep. For each budget, compares month-to-date spending
-// against the limit using the same thresholds as the dashboard (80% / 100%),
-// and sends a Telegram alert only when a category crosses to a HIGHER level
-// this month — so users get at most one warning and one over-budget ping.
-// Secured with CRON_SECRET header check.
+// Daily budget-alert sweep. Compares month-to-date spending against each
+// budget and alerts only when a category crosses to a HIGHER level this
+// month — so the user gets at most one alert per level, never a daily
+// repeat of the same warning.
+//
+// Levels (thresholds are per-user configurable in AI settings):
+//   1 = first warning (default 70%)
+//   2 = strong warning (default 90%)
+//   3 = over budget (default 100%)
 
-function levelFor(spent: number, limit: number): number {
+function levelFor(spent: number, limit: number, thresholds: FinancialPreferences['budget_warning_thresholds']): number {
   if (limit <= 0) return 0
-  const pct = spent / limit
-  if (pct >= 1) return 2
-  if (pct >= 0.8) return 1
+  const pct = (spent / limit) * 100
+  if (pct >= thresholds.over) return 3
+  if (pct >= thresholds.strong) return 2
+  if (pct >= thresholds.first) return 1
   return 0
+}
+
+const LEVEL_HEADING: Record<number, string> = {
+  1: '🟡 <b>Budget check-in</b>',
+  2: '🟠 <b>Approaching the limit</b>',
+  3: '🔴 <b>Over the plan</b>',
 }
 
 export async function GET(request: NextRequest) {
@@ -58,6 +72,14 @@ export async function GET(request: NextRequest) {
   }
   if (!budgets || budgets.length === 0) return NextResponse.json({ alerted: 0, message: 'No budgets' })
 
+  // Per-user thresholds and quiet hours, fetched once each.
+  const preferencesByUser = new Map<string, FinancialPreferences>()
+  await Promise.all(
+    userIds.map(async (userId) => {
+      preferencesByUser.set(userId, await loadFinancialPreferences(supabase, userId))
+    })
+  )
+
   // Month-to-date expenses for these users, summed per (user, category).
   const { data: txns } = await supabase
     .from('transactions')
@@ -74,12 +96,16 @@ export async function GET(request: NextRequest) {
   }
 
   let alerted = 0
+  let quietSkipped = 0
   const notifications: Array<Promise<unknown>> = []
 
   for (const b of budgets) {
+    const preferences = preferencesByUser.get(b.user_id)
+    if (!preferences) continue
+
     const limit = Number(b.amount_krw)
     const used = spent.get(`${b.user_id}|${b.category_id}`) || 0
-    const newLevel = levelFor(used, limit)
+    const newLevel = levelFor(used, limit, preferences.budget_warning_thresholds)
 
     // Effective prior level — reset when the stored month isn't the current one.
     const priorLevel = b.alert_month === month ? Number(b.alert_level) || 0 : 0
@@ -92,14 +118,25 @@ export async function GET(request: NextRequest) {
       continue
     }
 
+    // Record the level even while quiet so the user isn't hit with a backlog
+    // of every threshold once quiet hours end.
     await supabase.from('budgets').update({ alert_month: month, alert_level: newLevel }).eq('id', b.id)
+
+    if (isWithinQuietHours(preferences.quiet_hours, now)) {
+      quietSkipped++
+      continue
+    }
 
     const cat = b.categories as { name?: string; icon?: string } | null
     const pct = Math.round((used / limit) * 100)
-    const head = newLevel === 2 ? '🔴 <b>Over budget</b>' : '🟡 <b>Budget warning</b>'
+    const remaining = limit - used
+
     const text = [
-      head,
+      LEVEL_HEADING[newLevel],
       `${cat?.icon || ''} ${escapeHtml(cat?.name || 'Category')}: ${fmtKRW(used)} / ${fmtKRW(limit)} (${pct}%)`,
+      newLevel === 3
+        ? `This category exceeded its plan by ${fmtKRW(Math.abs(remaining))}.`
+        : `${fmtKRW(remaining)} left in this month's plan.`,
     ].join('\n')
 
     notifications.push(sendTelegramToUser(supabase, b.user_id, text).catch(() => false))
@@ -107,6 +144,6 @@ export async function GET(request: NextRequest) {
   }
 
   await Promise.all(notifications)
-  console.log(`[cron/budget-alerts] Sent ${alerted} alerts`)
-  return NextResponse.json({ alerted })
+  console.log(`[cron/budget-alerts] Sent ${alerted} alerts, ${quietSkipped} held for quiet hours`)
+  return NextResponse.json({ alerted, quietSkipped })
 }

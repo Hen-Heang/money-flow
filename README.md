@@ -11,6 +11,9 @@ A personal finance tracker built with Next.js 16, featuring AI-powered insights,
 - **Budgets** — Monthly budget limits with overspend alerts via push notification
 - **Savings Goals** — Track progress toward financial goals with automatic monthly updates
 - **Recurring Transactions** — Auto-create transactions on a schedule
+- **AI Money Coach** — Deterministic financial analysis surfaced as up to three reviewable insights
+- **Subscriptions** — Automatic detection of recurring payments with Keep / Review / Cancel tracking
+- **Monthly Review** — Month-end summary with an adaptive, confirmable budget plan for next month
 - **AI Chat** — Ask questions about your finances using Google Gemini
 - **Push Notifications** — Budget alerts and monthly reports via Web Push
 - **PWA** — Installable, works offline, service worker caching
@@ -76,6 +79,45 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Testing
+
+```bash
+npm test              # Vitest unit tests (finance engine, insights, weekly check-in)
+npm run test:watch    # Vitest in watch mode
+npm run test:e2e      # Playwright end-to-end tests
+```
+
+Playwright runs two projects: `desktop-chromium` and `mobile-428` (iPhone 12 Pro Max,
+428 × 926). Tests that need a signed-in session skip unless `E2E_EMAIL` and
+`E2E_PASSWORD` are set:
+
+```bash
+E2E_EMAIL=you@example.com E2E_PASSWORD=... npm run test:e2e
+```
+
+First run only: `npx playwright install chromium webkit`.
+
+## AI Money Coach architecture
+
+The language model never performs financial calculations. All arithmetic happens in
+the deterministic engine under `lib/finance/analysis/`, using `decimal.js` so summing
+many transactions can't drift.
+
+```
+transactions + budgets
+  → deterministic analysis engine   (lib/finance/analysis/)
+  → privacy-safe snapshot           (toAISafePayload — no ids, no email, no raw rows)
+  → AI phrasing                     (rewrites title/summary only)
+  → structured-output validation    (rejects any number the engine didn't produce)
+  → stored insight                  (ai_financial_insights)
+  → user review                     (Review / Apply / Snooze / Dismiss)
+  → confirmed action                (explicit dialog before any write)
+```
+
+AI recommendations never silently change transactions, budgets, or goals. Applying a
+budget change opens a confirmation dialog showing the old value, the proposed value,
+and the monthly impact.
+
 ## Neon Backup Schema
 
 Run `scripts/neon-schema.sql` once in the Neon SQL editor to create the backup tables before the first cron run.
@@ -92,6 +134,7 @@ All crons run on Vercel and require `Authorization: Bearer <CRON_SECRET>`.
 | `/api/cron/savings` | 1st of month 09:30 UTC | Update savings goal progress |
 | `/api/cron/cleanup-exchange-rates` | Sunday 03:00 UTC | Delete exchange rates older than 30 days |
 | `/api/cron/backup` | Daily 01:00 UTC | Sync all Supabase tables to Neon |
+| `/api/cron/weekly-summary` | Monday 00:00 UTC | Weekly AI check-in (respects quiet hours) |
 
 To test a cron locally:
 
