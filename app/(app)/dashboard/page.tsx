@@ -33,6 +33,7 @@ import { Intelligence } from './components/Intelligence'
 import { DailyBudgetPill } from './components/DailyBudgetPill'
 import { BudgetReviewPrompt } from './components/BudgetReviewPrompt'
 import { AnalyticsTabs } from './components/AnalyticsTabs'
+const MoneyCoach = dynamic(() => import('./components/MoneyCoach').then(m => m.MoneyCoach), { ssr: false })
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -287,6 +288,10 @@ export default function DashboardPage() {
           <DailyBudgetPill dailyBudgetRemaining={dailyBudgetRemaining} loading={loading} fmt={fmt} />
           
           <BudgetReviewPrompt show={showBudgetReview} onDismiss={dismissBudgetReview} />
+
+          <div className="px-5 sm:px-0">
+            <MoneyCoach />
+          </div>
 
           <AnalyticsTabs
             activeTab={activeTab}

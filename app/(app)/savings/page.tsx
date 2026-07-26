@@ -11,6 +11,7 @@ import { PRESET_ICONS, PRESET_COLORS } from '@/shared/presets'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
 import { createPortal } from 'react-dom'
+import { SavingsCoach } from './components/SavingsCoach'
 
 interface SavingsGoal {
   id: string
@@ -722,6 +723,8 @@ export default function SavingsPage() {
           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
         </motion.div>
       )}
+
+      <SavingsCoach onPlanSaved={() => { void loadGoals() }} />
 
       {/* Goals list */}
       <div className="space-y-5">

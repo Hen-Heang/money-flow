@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { consumeAIRateLimit } from '@/lib/ai-rate-limit'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { getAIProviderOptions, getChatModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
+import { createFinanceChatTools } from '@/lib/finance/chat-tools'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
 
 const RATE_LIMIT = 20
@@ -55,7 +56,13 @@ export async function POST(req: Request) {
   const { data: userPref } = await supabase.from('users').select('ai_provider').eq('id', user.id).single()
   const provider = resolveProvider((userPref?.ai_provider as AIProvider) || 'gemini')
 
+  // Engine-backed tools: every figure comes from lib/finance/analysis, so the
+  // model never performs financial arithmetic itself.
+  const financeTools = createFinanceChatTools(supabase, user.id)
+
   const tools = {
+    ...financeTools,
+
     getExchangeRate: tool({
       description: 'Get the current KRW-per-USD exchange rate to convert between currencies.',
       inputSchema: z.object({}),
@@ -74,7 +81,7 @@ export async function POST(req: Request) {
 
     getTransactions: tool({
       description:
-        "Get the user's transactions, optionally filtered by date range, type, or category name. Use this to answer questions about specific spending/income.",
+        "Look up individual transactions, optionally filtered by date range, type, or category name. Use this only when the user asks about specific purchases — for totals and summaries use getFinancialSummary or getCategorySpending instead.",
       inputSchema: z.object({
         from: z.string().optional().describe('Start date (YYYY-MM-DD), inclusive'),
         to: z.string().optional().describe('End date (YYYY-MM-DD), inclusive'),
@@ -116,167 +123,6 @@ export async function POST(req: Request) {
       },
     }),
 
-    getSpendingSummary: tool({
-      description:
-        'Get aggregated income/expense totals and top spending categories for a date range. Good for overview questions.',
-      inputSchema: z.object({
-        from: z.string().optional().describe('Start date (YYYY-MM-DD), inclusive. Defaults to 3 months ago.'),
-        to: z.string().optional().describe('End date (YYYY-MM-DD), inclusive. Defaults to today.'),
-      }),
-      execute: async ({ from, to }) => {
-        const defaultFrom = new Date()
-        defaultFrom.setMonth(defaultFrom.getMonth() - 3)
-        const fromDate = from || defaultFrom.toISOString().split('T')[0]
-        const toDate = to || new Date().toISOString().split('T')[0]
-
-        const { data } = await supabase
-          .from('transactions')
-          .select('type, amount_krw, categories(name)')
-          .eq('user_id', user.id)
-          .gte('date', fromDate)
-          .lte('date', toDate)
-
-        const rows = data ?? []
-        const totalIncome = rows.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount_krw, 0)
-        const totalExpense = rows.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount_krw, 0)
-
-        const catMap: Record<string, number> = {}
-        rows
-          .filter((t) => t.type === 'expense')
-          .forEach((t) => {
-            const cat = t.categories && !Array.isArray(t.categories) ? (t.categories as { name: string }) : null
-            const name = cat?.name || 'Uncategorized'
-            catMap[name] = (catMap[name] || 0) + t.amount_krw
-          })
-
-        return {
-          from: fromDate,
-          to: toDate,
-          total_income_krw: totalIncome,
-          total_expense_krw: totalExpense,
-          net_balance_krw: totalIncome - totalExpense,
-          savings_rate_pct: totalIncome > 0 ? Number(((1 - totalExpense / totalIncome) * 100).toFixed(1)) : 0,
-          spending_by_category_krw: catMap,
-          transaction_count: rows.length,
-        }
-      },
-    }),
-
-    getBudgets: tool({
-      description:
-        "Get the user's budgets per category along with how much they've actually spent in each category this month, so you can tell them if they're over or under budget.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const { data: budgets } = await supabase
-          .from('budgets')
-          .select('amount_krw, categories(name)')
-          .eq('user_id', user.id)
-
-        const monthStart = new Date()
-        monthStart.setDate(1)
-        const fromDate = monthStart.toISOString().split('T')[0]
-
-        const { data: spent } = await supabase
-          .from('transactions')
-          .select('amount_krw, categories(name)')
-          .eq('user_id', user.id)
-          .eq('type', 'expense')
-          .gte('date', fromDate)
-
-        const spentByCategory: Record<string, number> = {}
-        ;(spent ?? []).forEach((t) => {
-          const cat = t.categories && !Array.isArray(t.categories) ? (t.categories as { name: string }) : null
-          const name = cat?.name || 'Uncategorized'
-          spentByCategory[name] = (spentByCategory[name] || 0) + t.amount_krw
-        })
-
-        return (budgets ?? []).map((b) => {
-          const cat = b.categories && !Array.isArray(b.categories) ? (b.categories as { name: string }) : null
-          const name = cat?.name || 'Uncategorized'
-          const spentThisMonth = spentByCategory[name] || 0
-          return {
-            category: name,
-            budget_krw: b.amount_krw,
-            spent_this_month_krw: spentThisMonth,
-            remaining_krw: b.amount_krw - spentThisMonth,
-            over_budget: spentThisMonth > b.amount_krw,
-          }
-        })
-      },
-    }),
-
-    getSavingsGoals: tool({
-      description: "Get the user's savings goals and progress toward each.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const { data } = await supabase
-          .from('savings_goals')
-          .select('name, target_usd, current_usd, deadline, auto_monthly_usd, purpose')
-          .eq('user_id', user.id)
-
-        return (data ?? []).map((g) => ({
-          name: g.name,
-          target_usd: g.target_usd,
-          current_usd: g.current_usd,
-          progress_pct: g.target_usd > 0 ? Number(((g.current_usd / g.target_usd) * 100).toFixed(1)) : 0,
-          deadline: g.deadline,
-          auto_monthly_usd: g.auto_monthly_usd,
-          purpose: g.purpose,
-        }))
-      },
-    }),
-
-    suggestBudgetPlan: tool({
-      description:
-        "Analyze the user's expense history per category and propose a monthly budget for each, based on their average monthly spend. Use this when the user asks for help preparing/planning a budget. Always present the suggestions and ask for confirmation before calling applyBudgets.",
-      inputSchema: z.object({
-        months: z.number().int().min(1).max(12).optional().default(3).describe('How many past months of history to average over'),
-      }),
-      execute: async ({ months }) => {
-        const from = new Date()
-        from.setMonth(from.getMonth() - months)
-        const fromDate = from.toISOString().split('T')[0]
-
-        const { data: txns } = await supabase
-          .from('transactions')
-          .select('category_id, amount_krw, categories(name)')
-          .eq('user_id', user.id)
-          .eq('type', 'expense')
-          .gte('date', fromDate)
-          .not('category_id', 'is', null)
-
-        const { data: budgets } = await supabase
-          .from('budgets')
-          .select('category_id, amount_krw')
-          .eq('user_id', user.id)
-
-        const currentBudget = new Map((budgets ?? []).map((b) => [b.category_id, b.amount_krw]))
-
-        const totals = new Map<string, { name: string; total: number }>()
-        ;(txns ?? []).forEach((t) => {
-          if (!t.category_id) return
-          const cat = t.categories && !Array.isArray(t.categories) ? (t.categories as { name: string }) : null
-          const entry = totals.get(t.category_id) || { name: cat?.name || 'Uncategorized', total: 0 }
-          entry.total += t.amount_krw
-          totals.set(t.category_id, entry)
-        })
-
-        return Array.from(totals.entries())
-          .map(([categoryId, { name, total }]) => {
-            const avgMonthly = total / months
-            const suggested = Math.ceil(avgMonthly / 1000) * 1000
-            return {
-              category_id: categoryId,
-              category_name: name,
-              avg_monthly_spend_krw: Math.round(avgMonthly),
-              current_budget_krw: currentBudget.get(categoryId) ?? 0,
-              suggested_budget_krw: suggested,
-            }
-          })
-          .sort((a, b) => b.avg_monthly_spend_krw - a.avg_monthly_spend_krw)
-      },
-    }),
-
     applyBudgets: tool({
       description:
         'Save monthly budget amounts for one or more categories. ONLY call this after the user has explicitly confirmed the specific amounts (e.g. "yes, apply that" or their own numbers) — never call it right after suggestBudgetPlan without confirmation.',
@@ -284,7 +130,7 @@ export async function POST(req: Request) {
         budgets: z
           .array(
             z.object({
-              category_id: z.string().describe('The category_id from suggestBudgetPlan or getBudgets'),
+              category_id: z.string().describe('The categoryId from suggestBudgetPlan or getBudgetStatus'),
               amount_krw: z.number().min(0),
             }),
           )
@@ -321,15 +167,39 @@ short, warm sentence redirecting to finance, e.g. "I'm just your finance assista
 but I'd love to help you check your budget or spending!" Do this every time, no exceptions.
 Today's date: ${today}
 
-You have tools to look up the user's real transactions, spending summaries, budgets, savings goals, and the
-current exchange rate — always call the relevant tool instead of guessing or estimating numbers. Never state
-a specific amount, balance, or budget status unless it came from a tool result.
+NUMBERS RULE — this is absolute:
+Every amount, percentage, projection, or date you state must come from a tool result. Never add, subtract,
+divide, average, or project figures yourself, and never estimate. If you need a number you don't have, call
+the tool that provides it. If no tool provides it, say you don't have that figure rather than guessing.
 
-If the user wants help preparing or planning a budget, call suggestBudgetPlan, present the suggested amounts
-per category clearly, and ask them to confirm before saving anything. Only call applyBudgets after they
-explicitly confirm — if they want changes, adjust the numbers and confirm again before applying.`,
+Tools you have:
+- getFinancialSummary — the verified snapshot for this month (income, expenses, savings rate, pace, budgets, goals)
+- compareMonths — two months side by side
+- getCategorySpending — spending by category for a date range
+- getBudgetStatus — budget usage, projections, and how much is safe to spend for the rest of the month
+- getSubscriptions — detected recurring payments and their yearly cost
+- getSavingsGoalPlan — planned vs required monthly contribution, projected completion, on-track status
+- simulateBudget — "what if I set X to Y" (simulation only, saves nothing)
+- suggestBudgetPlan — adaptive per-category budget recommendations with rationale
+- getRecentInsights — the AI Money Coach insights already shown to the user
+- getTransactions — individual transactions, for questions about specific purchases
+- getExchangeRate — current KRW/USD rate
+- applyBudgets — saves budgets (requires explicit confirmation first)
+
+Tone: calm, supportive, and non-judgemental. Never say the user was bad, failed, or wasted money. Prefer
+phrasing like "this category exceeded its plan", "here is one adjustment you could try", or "this expense may
+be worth reviewing".
+
+Budget changes: if the user wants help planning a budget, call suggestBudgetPlan, present the amounts and the
+reasoning per category, and ask them to confirm. Only call applyBudgets after they explicitly confirm — if they
+want changes, adjust and confirm again before applying.
+
+Subscriptions: you can point out recurring payments worth reviewing, but never suggest anything has been or
+will be cancelled automatically. The user decides and cancels with the provider themselves.
+
+Savings goals: never imply a balance changed. Contributions only count once the user confirms them in the app.`,
     tools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(6),
     messages,
   })
 
