@@ -16,6 +16,8 @@
 /playwright-report
 /blob-report
 /playwright/.cache
+# Saved sign-in session for end-to-end tests — contains real auth cookies
+/e2e/.auth
 
 # next.js
 /.next/

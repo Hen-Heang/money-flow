@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { requiresAuth, signIn, expectNoHorizontalOverflow } from './helpers/auth'
+import { requiresAuth, expectNoHorizontalOverflow } from './helpers/auth'
 
 const CATEGORIES = [
   { id: '11111111-1111-4111-8111-111111111111', name: 'Food', icon: '🍔', color: '#ef4444', type: 'expense', spending_class: null },
@@ -18,8 +18,6 @@ test.describe('Category classification', () => {
       }
       return route.fulfill({ status: 200, json: CATEGORIES })
     })
-
-    await signIn(page)
     await page.goto('/budget')
   })
 

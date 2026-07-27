@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
-import { RefreshCw, Repeat, Layers, Info } from 'lucide-react'
+import { RefreshCw, Repeat, Layers, Info, Tags, ChevronRight } from 'lucide-react'
 import { formatKRW, haptic } from '@/lib/utils'
 import { findSubscriptionOverlaps } from '@/lib/finance/analysis/subscription-groups'
+import MerchantNamesSheet from '@/components/budget/MerchantNamesSheet'
 import type { SubscriptionDecisionStatus } from '@/lib/types'
 
 interface SubscriptionRow {
@@ -61,6 +62,7 @@ export default function SubscriptionsPage() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingKey, setSavingKey] = useState<string | null>(null)
+  const [showMerchantNames, setShowMerchantNames] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -170,6 +172,27 @@ export default function SubscriptionsPage() {
           <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-violet-500/10 blur-3xl" />
         </motion.section>
       )}
+
+      {/* Grouping inconsistent spellings directly improves detection below */}
+      <button
+        type="button"
+        onClick={() => { haptic('light'); setShowMerchantNames(true) }}
+        className="mb-6 flex min-h-[44px] w-full items-center gap-3.5 rounded-[24px] border border-[var(--color-border-base)] p-4 text-left transition-transform active:scale-[0.98]"
+        style={{ backgroundColor: 'var(--color-card-base)' }}
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-teal-500/10 bg-teal-500/10">
+          <Tags size={19} className="text-teal-400" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+            Merchant names
+          </p>
+          <p className="mt-0.5 text-[12px] font-medium opacity-55">
+            Group different spellings of the same shop
+          </p>
+        </div>
+        <ChevronRight size={18} className="shrink-0 opacity-25" aria-hidden />
+      </button>
 
       {overlaps.length > 0 && (
         <div className="mb-6 space-y-3">
@@ -311,6 +334,12 @@ export default function SubscriptionsPage() {
           </p>
         </div>
       )}
+
+      <MerchantNamesSheet
+        isOpen={showMerchantNames}
+        onClose={() => setShowMerchantNames(false)}
+        onChanged={() => { void load() }}
+      />
     </div>
   )
 }

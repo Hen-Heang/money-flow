@@ -3,6 +3,10 @@ import { expectNoHorizontalOverflow } from './helpers/auth'
 
 // These run without credentials — they cover the auth boundary and the
 // responsive baseline that every other page inherits.
+//
+// Explicitly anonymous: the other projects load a signed-in session, which
+// would defeat the point of asserting that protected routes redirect.
+test.use({ storageState: { cookies: [], origins: [] } })
 
 test.describe('Authentication boundary', () => {
   test('protected routes redirect an anonymous visitor to login', async ({ page }) => {

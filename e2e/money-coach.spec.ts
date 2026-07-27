@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { requiresAuth, signIn, expectNoHorizontalOverflow } from './helpers/auth'
+import { requiresAuth, expectNoHorizontalOverflow } from './helpers/auth'
 import { mockInsights } from './helpers/mocks'
 
 test.describe('AI Money Coach dashboard', () => {
   test.beforeEach(async ({ page }) => {
     requiresAuth()
     await mockInsights(page)
-    await signIn(page)
+    await page.goto('/dashboard')
   })
 
   test('shows at most three insight cards with evidence, period and confidence', async ({ page }) => {

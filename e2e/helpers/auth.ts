@@ -1,9 +1,13 @@
 import { test, type Page } from '@playwright/test'
+import path from 'node:path'
 
 export const E2E_EMAIL = process.env.E2E_EMAIL
 export const E2E_PASSWORD = process.env.E2E_PASSWORD
 
 export const hasCredentials = Boolean(E2E_EMAIL && E2E_PASSWORD)
+
+/** Session saved once by auth.setup.ts and reused by every authenticated spec. */
+export const STORAGE_STATE = path.resolve(__dirname, '../.auth/state.json')
 
 /**
  * Skips the current test when E2E credentials aren't configured.
@@ -19,6 +23,7 @@ export function requiresAuth() {
   )
 }
 
+/** Used only by auth.setup.ts — specs inherit the saved session instead. */
 export async function signIn(page: Page) {
   await page.goto('/login')
 

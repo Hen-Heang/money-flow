@@ -9,8 +9,10 @@ import type {
   EngineSavingsGoal,
   EngineSavingsContribution,
   SpendingClass,
+  StoredAlias,
 } from '@/lib/finance/analysis'
 import type { RecurringTemplateHint } from '@/lib/finance/analysis'
+import { applyAliasesToTransactions } from '@/lib/finance/analysis'
 import type { FinancialPreferences } from '@/lib/types'
 
 // Supabase returns embedded relations as an object or a single-element array
@@ -29,12 +31,14 @@ export function lookbackStartDate(referenceDate: Date, months = DEFAULT_LOOKBACK
 }
 
 export interface FinanceDataset {
+  /** Descriptions already resolved to their user-confirmed canonical form. */
   transactions: EngineTransaction[]
   budgets: EngineBudget[]
   savingsGoals: EngineSavingsGoal[]
   savingsContributions: EngineSavingsContribution[]
   recurringTemplates: RecurringTemplateHint[]
   classifications: Record<string, SpendingClass>
+  aliases: StoredAlias[]
 }
 
 export async function loadTransactions(
@@ -148,6 +152,20 @@ export async function loadRecurringTemplates(
   }))
 }
 
+export async function loadAliases(supabase: SupabaseClient, userId: string): Promise<StoredAlias[]> {
+  const { data, error } = await supabase
+    .from('transaction_description_aliases')
+    .select('normalized_key, canonical_description')
+    .eq('user_id', userId)
+
+  if (error) throw error
+
+  return (data ?? []).map((row): StoredAlias => ({
+    normalizedKey: row.normalized_key,
+    canonicalDescription: row.canonical_description,
+  }))
+}
+
 export async function loadCategoryClassifications(
   supabase: SupabaseClient,
   userId: string
@@ -219,7 +237,7 @@ export async function loadFinanceDataset(
 ): Promise<FinanceDataset> {
   const fromDate = lookbackStartDate(referenceDate, lookbackMonths)
 
-  const [transactions, budgets, savingsGoals, savingsContributions, recurringTemplates, classifications] =
+  const [transactions, budgets, savingsGoals, savingsContributions, recurringTemplates, classifications, aliases] =
     await Promise.all([
       loadTransactions(supabase, userId, fromDate),
       loadBudgets(supabase, userId),
@@ -227,7 +245,18 @@ export async function loadFinanceDataset(
       loadSavingsContributions(supabase, userId),
       loadRecurringTemplates(supabase, userId),
       loadCategoryClassifications(supabase, userId),
+      loadAliases(supabase, userId),
     ])
 
-  return { transactions, budgets, savingsGoals, savingsContributions, recurringTemplates, classifications }
+  return {
+    // Resolved once here so every downstream calculation — totals, top
+    // descriptions, subscription grouping — respects confirmed merges.
+    transactions: applyAliasesToTransactions(transactions, aliases),
+    budgets,
+    savingsGoals,
+    savingsContributions,
+    recurringTemplates,
+    classifications,
+    aliases,
+  }
 }
