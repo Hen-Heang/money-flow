@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Wallet, ChevronLeft, ChevronRight, Pencil, Check, X, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Wallet, ChevronLeft, ChevronRight, Pencil, Check, X, TrendingUp, AlertTriangle, Shapes } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
@@ -11,7 +11,9 @@ import { useMonthNavigation } from '@/hooks/useMonthNavigation'
 import { useTransactionsChanged } from '@/hooks/useTransactionSync'
 import { monthLabel, getMonthRange } from '@/lib/dateHelpers'
 import { formatKRW, formatNumber, haptic } from '@/lib/utils'
-import type { Category, Budget } from '@/lib/types'
+import { spendingClassColor, spendingClassLabel } from '@/lib/finance/spending-class'
+import CategoryTypesSheet from '@/components/budget/CategoryTypesSheet'
+import type { Category, Budget, SpendingClassValue } from '@/lib/types'
 
 interface CategorySpend {
   category_id: string
@@ -50,6 +52,15 @@ export default function BudgetPage() {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
+  const [showCategoryTypes, setShowCategoryTypes] = useState(false)
+  // useCategories caches at module level and won't refetch for an already-
+  // mounted component, so the sheet reports changes back and we overlay them.
+  const [classOverrides, setClassOverrides] = useState<Record<string, SpendingClassValue | null>>({})
+
+  const classFor = useCallback(
+    (category: Category) => (category.id in classOverrides ? classOverrides[category.id] : category.spending_class ?? null),
+    [classOverrides]
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,6 +134,8 @@ export default function BudgetPage() {
     .sort((a, b) => b.pct - a.pct)
 
   const unbudgeted = categories.filter(c => !(budgetMap[c.id] > 0))
+
+  const classifiedCount = categories.filter(c => classFor(c) !== null).length
 
   const totalBudget = budgets.reduce((s, b) => s + b.amount_krw, 0)
   const totalSpent = budgeted.reduce((s, r) => s + r.spent, 0)
@@ -236,6 +249,31 @@ export default function BudgetPage() {
         </motion.div>
       )}
 
+      {/* Category types — drives what budget suggestions are allowed to trim */}
+      {!loading && categories.length > 0 && (
+        <button
+          type="button"
+          onClick={() => { haptic('light'); setShowCategoryTypes(true) }}
+          className="mb-8 flex min-h-[44px] w-full items-center gap-3.5 rounded-[24px] border border-[var(--color-border-base)] p-4 text-left transition-transform active:scale-[0.98]"
+          style={{ backgroundColor: 'var(--color-card-base)' }}
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-500/10 border border-indigo-500/10">
+            <Shapes size={19} className="text-indigo-400" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-black tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+              Category types
+            </p>
+            <p className="mt-0.5 text-[12px] font-medium opacity-55">
+              {classifiedCount === 0
+                ? 'Set which categories are flexible to unlock budget suggestions'
+                : `${classifiedCount} of ${categories.length} classified`}
+            </p>
+          </div>
+          <ChevronRight size={18} className="shrink-0 opacity-25" aria-hidden />
+        </button>
+      )}
+
       {/* Budgeted categories */}
       {!loading && budgeted.length > 0 && (
         <div className="space-y-4 mb-8">
@@ -266,9 +304,22 @@ export default function BudgetPage() {
                         {row.category.icon}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-black text-[15px] truncate" style={{ color: 'var(--color-text-primary)' }}>
-                          {row.category.name}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate font-black text-[15px]" style={{ color: 'var(--color-text-primary)' }}>
+                            {row.category.name}
+                          </p>
+                          {classFor(row.category) && (
+                            <span
+                              className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                              style={{
+                                backgroundColor: `${spendingClassColor(classFor(row.category))}1f`,
+                                color: spendingClassColor(classFor(row.category)),
+                              }}
+                            >
+                              {spendingClassLabel(classFor(row.category))}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] font-bold opacity-40">
                           {remaining >= 0
                             ? `${formatKRW(remaining)} remaining`
@@ -465,6 +516,12 @@ export default function BudgetPage() {
           </p>
         </div>
       )}
+
+      <CategoryTypesSheet
+        isOpen={showCategoryTypes}
+        onClose={() => setShowCategoryTypes(false)}
+        onSaved={(categoryId, value) => setClassOverrides(prev => ({ ...prev, [categoryId]: value }))}
+      />
     </div>
   )
 }

@@ -16,12 +16,16 @@ export interface Transaction {
   payment_methods?: { name: string; icon: string } | null
 }
 
+export type SpendingClassValue = 'essential' | 'commitment' | 'growth' | 'flexible' | 'avoidable'
+
 export interface Category {
   id: string
   name: string
   icon: string
   color: string
   type: 'income' | 'expense' | 'both'
+  /** Drives adaptive budget recommendations. NULL means never auto-reduced. */
+  spending_class?: SpendingClassValue | null
 }
 
 export interface PaymentMethod {
