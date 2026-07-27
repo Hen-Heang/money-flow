@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { requiresAuth, signIn, expectNoHorizontalOverflow } from './helpers/auth'
+import { requiresAuth, expectNoHorizontalOverflow } from './helpers/auth'
 
 const MOCK_REVIEW = {
   month: '2026-06',
@@ -58,7 +58,6 @@ test.describe('Monthly review', () => {
     await page.route('**/api/finance/monthly-review**', (route) =>
       route.fulfill({ status: 200, json: MOCK_REVIEW })
     )
-    await signIn(page)
     await page.goto('/review')
   })
 

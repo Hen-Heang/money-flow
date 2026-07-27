@@ -1,12 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { requiresAuth, signIn, expectNoHorizontalOverflow } from './helpers/auth'
+import { requiresAuth, expectNoHorizontalOverflow } from './helpers/auth'
 import { mockSubscriptions } from './helpers/mocks'
 
 test.describe('Subscription review', () => {
   test.beforeEach(async ({ page }) => {
     requiresAuth()
     await mockSubscriptions(page)
-    await signIn(page)
     await page.goto('/subscriptions')
   })
 
