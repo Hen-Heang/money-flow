@@ -131,7 +131,8 @@ export default function SubscriptionsPage() {
       </div>
 
       {summary && summary.totalCount > 0 && (
-        <motion.div
+        <motion.section
+          aria-label="Recurring cost"
           initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative mb-6 overflow-hidden rounded-[32px] border border-white/10 p-5 shadow-2xl sm:p-6"
@@ -167,7 +168,7 @@ export default function SubscriptionsPage() {
             </div>
           </div>
           <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full bg-violet-500/10 blur-3xl" />
-        </motion.div>
+        </motion.section>
       )}
 
       {overlaps.length > 0 && (

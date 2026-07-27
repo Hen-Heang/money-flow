@@ -42,7 +42,7 @@ test.describe('Category classification', () => {
 
   test('offers all five types with their effect on budget suggestions', async ({ page }) => {
     await page.getByRole('button', { name: /category types/i }).click()
-    await expect(page.getByText('Category types')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Category types' })).toBeVisible()
 
     await page.getByRole('button', { name: /Food/ }).first().click()
 
@@ -79,7 +79,7 @@ test.describe('Category classification', () => {
 
   test('fits the mobile viewport without horizontal overflow', async ({ page }) => {
     await page.getByRole('button', { name: /category types/i }).click()
-    await expect(page.getByText('Category types')).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Category types' })).toBeVisible()
     await expectNoHorizontalOverflow(page)
   })
 })

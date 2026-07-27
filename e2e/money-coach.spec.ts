@@ -27,7 +27,8 @@ test.describe('AI Money Coach dashboard', () => {
 
   test('Review expands the evidence panel', async ({ page }) => {
     const warning = page.getByRole('article').filter({ hasText: 'Food spending may exceed its budget' })
-    const reviewButton = warning.getByRole('button', { name: 'Review' })
+    // Exact match — this card also has a "Review category" action button.
+    const reviewButton = warning.getByRole('button', { name: 'Review', exact: true })
 
     await expect(reviewButton).toHaveAttribute('aria-expanded', 'false')
     await reviewButton.click()
@@ -42,17 +43,18 @@ test.describe('AI Money Coach dashboard', () => {
     const actionCard = page.getByRole('article').filter({ hasText: 'A ₩380,000 target for Food' })
     await actionCard.getByRole('button', { name: /review budget change/i }).click()
 
-    const dialog = page.getByText('Confirm budget change')
+    // Scope to the dialog — these amounts also appear in the card behind it.
+    const dialog = page.getByRole('dialog', { name: 'Confirm budget change' })
     await expect(dialog).toBeVisible()
 
     // Old value, proposed value and the monthly impact must all be shown
     // before anything is applied.
-    await expect(page.getByText('₩350,000')).toBeVisible()
-    await expect(page.getByText('₩380,000').first()).toBeVisible()
-    await expect(page.getByText(/monthly impact/i)).toBeVisible()
+    await expect(dialog.getByText('₩350,000', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('₩380,000', { exact: true })).toBeVisible()
+    await expect(dialog.getByText(/monthly impact/i)).toBeVisible()
 
     // Cancelling leaves the card in place — nothing was changed.
-    await page.getByRole('button', { name: 'Cancel' }).click()
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
     await expect(actionCard).toBeVisible()
   })

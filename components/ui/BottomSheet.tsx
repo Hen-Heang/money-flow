@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import { Drawer } from 'vaul'
 import { AnimatePresence, motion } from 'framer-motion'
 
@@ -13,6 +13,7 @@ interface BottomSheetProps {
 }
 
 export default function BottomSheet({ isOpen, onClose, children, title, footer }: BottomSheetProps) {
+  const titleId = useId()
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
   )
@@ -38,6 +39,10 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
               onClick={onClose}
             />
             <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={title ? titleId : undefined}
+              aria-label={title ? undefined : 'Dialog'}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -47,7 +52,7 @@ export default function BottomSheet({ isOpen, onClose, children, title, footer }
             >
               {title && (
                 <div className="px-6 pt-7 pb-4 shrink-0">
-                  <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
+                  <h2 id={titleId} className="text-xl font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>
                     {title}
                   </h2>
                 </div>
