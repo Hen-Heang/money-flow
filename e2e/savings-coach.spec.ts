@@ -43,12 +43,15 @@ test.describe('Savings goal coach', () => {
     const card = page.getByRole('article').filter({ hasText: 'Life' })
     await card.getByRole('button', { name: /create contribution plan/i }).click()
 
-    await expect(page.getByText('Confirm contribution plan')).toBeVisible()
-    await expect(page.getByText(/your saved balance does not change/i)).toBeVisible()
-    await expect(page.getByText('No plan').or(page.getByText('$150'))).toBeVisible()
+    // Scope to the dialog — $150 also appears on the coach card behind it.
+    const dialog = page.getByRole('dialog', { name: 'Confirm contribution plan' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByText(/your saved balance does not change/i)).toBeVisible()
+    await expect(dialog.getByText('$150', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('$375', { exact: true })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Cancel' }).click()
-    await expect(page.getByText('Confirm contribution plan')).toBeHidden()
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(dialog).toBeHidden()
   })
 
   test('fits the mobile viewport without horizontal overflow', async ({ page }) => {

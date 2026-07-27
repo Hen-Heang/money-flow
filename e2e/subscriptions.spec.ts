@@ -22,8 +22,11 @@ test.describe('Subscription review', () => {
   })
 
   test('shows the monthly and yearly recurring totals', async ({ page }) => {
-    await expect(page.getByText('₩57,000')).toBeVisible()
-    await expect(page.getByText('₩684,000')).toBeVisible()
+    // Scope to the summary card — the yearly figure is also quoted in the
+    // overlap hint below it.
+    const summary = page.getByRole('region', { name: /recurring cost/i })
+    await expect(summary.getByText('₩57,000', { exact: true })).toBeVisible()
+    await expect(summary.getByText('₩684,000', { exact: true })).toBeVisible()
   })
 
   test('highlights overlapping subscriptions in the same family', async ({ page }) => {
