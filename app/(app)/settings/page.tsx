@@ -576,6 +576,20 @@ const deleteCategory = async (id: string) => {
             </motion.div>
           )}
         </AnimatePresence>
+        <Row
+          icon={Sparkles}
+          color="#6366f1"
+          title="AI Money Coach"
+          subtitle="Coaching, notification thresholds & privacy"
+          onClick={() => { haptic('light'); router.push('/settings/ai') }}
+        />
+        <Row
+          icon={CreditCard}
+          color="#a855f7"
+          title="Subscriptions"
+          subtitle="Review detected recurring payments"
+          onClick={() => { haptic('light'); router.push('/subscriptions') }}
+        />
       </Group>
 
       <Group title="Personalization">
