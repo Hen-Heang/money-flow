@@ -16,12 +16,16 @@ export interface Transaction {
   payment_methods?: { name: string; icon: string } | null
 }
 
+export type SpendingClassValue = 'essential' | 'commitment' | 'growth' | 'flexible' | 'avoidable'
+
 export interface Category {
   id: string
   name: string
   icon: string
   color: string
   type: 'income' | 'expense' | 'both'
+  /** Drives adaptive budget recommendations. NULL means never auto-reduced. */
+  spending_class?: SpendingClassValue | null
 }
 
 export interface PaymentMethod {
@@ -56,4 +60,71 @@ export interface ExchangeRateInfo {
   cached?: boolean
   fallback?: boolean
   error?: boolean
+}
+
+// ── AI Money Coach ──────────────────────────────────────────────────────
+
+export type InsightType =
+  | 'positive_trend'
+  | 'category_overspend'
+  | 'budget_recommendation'
+  | 'subscription_review'
+  | 'savings_goal'
+  | 'small_purchases'
+  | 'duplicate_transaction'
+  | 'income_baseline'
+  | 'unusual_transaction'
+  | 'double_counting'
+  | 'general'
+
+export type InsightSeverity = 'positive' | 'info' | 'warning' | 'critical'
+export type InsightConfidence = 'low' | 'medium' | 'high'
+export type InsightStatus = 'new' | 'reviewed' | 'accepted' | 'dismissed' | 'snoozed'
+
+export interface AIFinancialInsight {
+  id: string
+  user_id?: string
+  period_start: string
+  period_end: string
+  insight_type: InsightType
+  severity: InsightSeverity
+  title: string
+  summary: string
+  evidence: Record<string, unknown>
+  estimated_monthly_savings_krw: number | null
+  confidence: InsightConfidence
+  status: InsightStatus
+  snoozed_until: string | null
+  expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FinancialPreferences {
+  user_id?: string
+  target_savings_rate: number
+  monthly_spending_limit_krw: number | null
+  ai_coach_enabled: boolean
+  weekly_review_enabled: boolean
+  monthly_review_enabled: boolean
+  share_descriptions_with_ai: boolean
+  budget_warning_thresholds: { first: number; strong: number; over: number }
+  quiet_hours: { enabled: boolean; start: string; end: string; timezone: string }
+}
+
+export type SubscriptionDecisionStatus = 'keep' | 'review' | 'plan_to_cancel' | 'cancelled'
+
+export interface SubscriptionStatusRecord {
+  id: string
+  subscription_key: string
+  display_name: string
+  status: SubscriptionDecisionStatus
+  note: string | null
+}
+
+export interface TransactionDescriptionAlias {
+  id: string
+  canonical_description: string
+  variant_description: string
+  normalized_key: string
 }
