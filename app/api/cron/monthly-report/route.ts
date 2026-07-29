@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendTelegramToUser, fmtKRW, escapeHtml } from '@/lib/telegram'
+import { sendTelegramToUserDetailed, escapeHtml } from '@/lib/telegram'
+import { sendMonthlyReportEmail } from '@/lib/email'
+import { renderMonthlyReportTelegramMessage } from '@/lib/finance/monthly-report'
+import { buildMonthlyReport } from '@/lib/finance/server/monthly-report'
+import { loadFinancialPreferences } from '@/lib/finance/server/data'
+import { runMonthlyReportCron, type MonthlyReportCronDeps } from '@/lib/finance/server/monthly-report-cron'
+import type { MonthlyReportDeliveryChannel } from '@/lib/types'
 
-// Runs on the 1st of every month at 9 AM KST (00:00 UTC).
-// Reports on the previous month: income, expenses, savings rate, top category.
+// Runs daily (see vercel.json). Each user's own report month is resolved
+// from their timezone (financial_preferences.quiet_hours.timezone) — a
+// monthly-only schedule would send some timezones' reports up to a day
+// early or a day late. Delivery is idempotent per (user, month, channel):
+// a duplicate run is a no-op once a channel has already been delivered.
+
+function resolveAppUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -22,75 +37,90 @@ export async function GET(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  const appUrl = resolveAppUrl()
   const now = new Date()
-  // Previous month range
-  const firstOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const lastOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0)
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
-  const monthStart = fmt(firstOfPrevMonth)
-  const monthEnd = fmt(lastOfPrevMonth)
-  const monthName = firstOfPrevMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })
 
-  const { data: linked } = await supabase
-    .from('telegram_accounts')
-    .select('user_id')
-    .not('chat_id', 'is', null)
+  const deps: MonthlyReportCronDeps = {
+    async listEligibleUserIds() {
+      const [{ data: linked }, { data: emailOptIn }] = await Promise.all([
+        supabase.from('telegram_accounts').select('user_id').not('chat_id', 'is', null),
+        supabase.from('financial_preferences').select('user_id').eq('monthly_report_channel_email', true),
+      ])
+      const ids = new Set<string>()
+      for (const row of linked ?? []) ids.add(row.user_id)
+      for (const row of emailOptIn ?? []) ids.add(row.user_id)
+      return Array.from(ids)
+    },
 
-  const userIds = (linked ?? []).map((r) => r.user_id)
-  if (userIds.length === 0) return NextResponse.json({ sent: 0 })
+    loadPreferences(userId) {
+      return loadFinancialPreferences(supabase, userId)
+    },
 
-  const { data: txns } = await supabase
-    .from('transactions')
-    .select('user_id, type, amount_krw, category_id, categories(name, icon)')
-    .in('user_id', userIds)
-    .gte('date', monthStart)
-    .lte('date', monthEnd)
+    async isTelegramLinked(userId) {
+      const { data } = await supabase.from('telegram_accounts').select('chat_id').eq('user_id', userId).maybeSingle()
+      return Boolean(data?.chat_id)
+    },
 
-  let sent = 0
-  const notifications: Array<Promise<unknown>> = []
+    async loadAccountEmail(userId) {
+      const { data } = await supabase.from('users').select('email').eq('id', userId).maybeSingle()
+      return data?.email || null
+    },
 
-  for (const userId of userIds) {
-    const all = (txns ?? []).filter((t) => t.user_id === userId)
-    if (all.length === 0) continue
+    async loadDeliveredChannels(userId, reportMonth) {
+      const { data } = await supabase
+        .from('monthly_report_deliveries')
+        .select('channel')
+        .eq('user_id', userId)
+        .eq('report_month', reportMonth)
+        .eq('status', 'sent')
+      const channels = new Set<MonthlyReportDeliveryChannel>()
+      for (const row of data ?? []) channels.add(row.channel as MonthlyReportDeliveryChannel)
+      return channels
+    },
 
-    const totalIncome = all
-      .filter((t) => t.type === 'income')
-      .reduce((s, t) => s + (Number(t.amount_krw) || 0), 0)
-    const totalExpense = all
-      .filter((t) => t.type === 'expense')
-      .reduce((s, t) => s + (Number(t.amount_krw) || 0), 0)
-    const saved = totalIncome - totalExpense
-    const savingsRate = totalIncome > 0 ? Math.round((saved / totalIncome) * 100) : 0
+    buildReport(userId, reportMonth) {
+      return buildMonthlyReport(supabase, userId, reportMonth, now)
+    },
 
-    // Top spending category
-    const catMap = new Map<string, { name: string; icon: string; total: number }>()
-    for (const t of all.filter((t) => t.type === 'expense')) {
-      const cat = t.categories as { name?: string; icon?: string } | null
-      const key = t.category_id || '__none__'
-      const prev = catMap.get(key) ?? { name: cat?.name || 'Other', icon: cat?.icon || '•', total: 0 }
-      catMap.set(key, { ...prev, total: prev.total + (Number(t.amount_krw) || 0) })
-    }
-    const topCat = Array.from(catMap.values()).sort((a, b) => b.total - a.total)[0]
+    renderTelegramMessage(report, reviewUrl) {
+      return renderMonthlyReportTelegramMessage(report, escapeHtml, reviewUrl)
+    },
 
-    const savingsEmoji = savingsRate >= 30 ? '🎉' : savingsRate >= 10 ? '👍' : '😬'
-    const savedLine = saved >= 0
-      ? `💰 Saved: ${fmtKRW(saved)} (${savingsRate}%) ${savingsEmoji}`
-      : `⚠️ Overspent: ${fmtKRW(Math.abs(saved))}`
+    sendTelegram(userId, message) {
+      return sendTelegramToUserDetailed(supabase, userId, message)
+    },
 
-    const text = [
-      `📅 <b>${monthName} recap</b>`,
-      '',
-      totalIncome > 0 ? `📈 Income: ${fmtKRW(totalIncome)}` : '',
-      totalExpense > 0 ? `📉 Spent: ${fmtKRW(totalExpense)}` : '',
-      savedLine,
-      topCat ? `\n🏆 Biggest: ${topCat.icon} ${escapeHtml(topCat.name)} ${fmtKRW(topCat.total)}` : '',
-    ].filter(Boolean).join('\n')
+    async sendEmail(to, report, reviewUrl) {
+      const result = await sendMonthlyReportEmail(to, report, reviewUrl)
+      return { ok: result.ok, providerMessageId: result.id, error: result.error }
+    },
 
-    notifications.push(sendTelegramToUser(supabase, userId, text).catch(() => false))
-    sent++
+    async recordDelivery(input) {
+      const now2 = new Date().toISOString()
+      const { error } = await supabase.from('monthly_report_deliveries').upsert(
+        {
+          user_id: input.userId,
+          report_month: input.reportMonth,
+          channel: input.channel,
+          status: input.status,
+          provider_message_id: input.providerMessageId ?? null,
+          error_message: input.errorMessage ?? null,
+          attempted_at: now2,
+          delivered_at: input.status === 'sent' ? now2 : null,
+        },
+        { onConflict: 'user_id,report_month,channel' }
+      )
+      if (error) console.error('[cron/monthly-report] Failed to record delivery:', error)
+    },
+
+    reviewUrlFor(reportMonth) {
+      return `${appUrl}/review?month=${reportMonth}`
+    },
   }
 
-  await Promise.all(notifications)
-  console.log(`[cron/monthly-report] Sent ${sent} reports`)
-  return NextResponse.json({ sent })
+  const result = await runMonthlyReportCron(deps, now)
+  console.log(
+    `[cron/monthly-report] usersEligible=${result.usersEligible} delivered=${result.delivered} failed=${result.failed} skipped=${result.skipped}`
+  )
+  return NextResponse.json(result)
 }

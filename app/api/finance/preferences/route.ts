@@ -12,7 +12,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const preferences = await loadFinancialPreferences(supabase, user.id)
-  return NextResponse.json({ preferences })
+  return NextResponse.json({ preferences, accountEmail: user.email ?? null })
 }
 
 const timeString = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected HH:MM')
@@ -39,6 +39,12 @@ const preferencesSchema = z.object({
       timezone: z.string().min(1).max(64),
     })
     .optional(),
+  monthly_report_channel_telegram: z.boolean().optional(),
+  monthly_report_channel_email: z.boolean().optional(),
+  monthly_report_email: z.preprocess(
+    (v) => (v === '' ? null : v),
+    z.string().trim().email().max(320).nullable().optional()
+  ),
 })
 
 export async function PUT(request: Request) {
