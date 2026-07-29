@@ -110,6 +110,27 @@ export interface FinancialPreferences {
   share_descriptions_with_ai: boolean
   budget_warning_thresholds: { first: number; strong: number; over: number }
   quiet_hours: { enabled: boolean; start: string; end: string; timezone: string }
+  /** Send the monthly report to Telegram (requires a linked chat). */
+  monthly_report_channel_telegram: boolean
+  /** Send the monthly report by email. */
+  monthly_report_channel_email: boolean
+  /** Overrides the account email for report delivery. Null = use the account email. */
+  monthly_report_email: string | null
+}
+
+export type MonthlyReportDeliveryChannel = 'telegram' | 'email'
+export type MonthlyReportDeliveryStatus = 'pending' | 'sent' | 'failed'
+
+export interface MonthlyReportDelivery {
+  id: string
+  user_id: string
+  report_month: string
+  channel: MonthlyReportDeliveryChannel
+  status: MonthlyReportDeliveryStatus
+  provider_message_id: string | null
+  error_message: string | null
+  attempted_at: string
+  delivered_at: string | null
 }
 
 export type SubscriptionDecisionStatus = 'keep' | 'review' | 'plan_to_cancel' | 'cancelled'

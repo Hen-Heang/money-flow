@@ -8,16 +8,21 @@ function botToken(): string | null {
   return process.env.TELEGRAM_BOT_TOKEN || null
 }
 
-/** Send a message to a Telegram chat. Returns whether Telegram accepted it. */
-export async function sendTelegramMessage(
+export interface TelegramSendResult {
+  ok: boolean
+  messageId?: string
+  error?: string
+}
+
+async function postTelegramMessage(
   chatId: number | string,
   text: string,
   extra: Record<string, unknown> = {},
-): Promise<boolean> {
+): Promise<TelegramSendResult> {
   const token = botToken()
   if (!token) {
     console.error('[telegram] TELEGRAM_BOT_TOKEN not configured')
-    return false
+    return { ok: false, error: 'TELEGRAM_BOT_TOKEN not configured' }
   }
   try {
     const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
@@ -32,14 +37,35 @@ export async function sendTelegramMessage(
       }),
     })
     if (!res.ok) {
-      console.error('[telegram] sendMessage failed:', res.status, await res.text())
-      return false
+      const body = await res.text()
+      console.error('[telegram] sendMessage failed:', res.status, body)
+      return { ok: false, error: `Telegram API responded ${res.status}` }
     }
-    return true
+    const json = (await res.json()) as { result?: { message_id?: number } }
+    return { ok: true, messageId: json.result?.message_id !== undefined ? String(json.result.message_id) : undefined }
   } catch (err) {
     console.error('[telegram] sendMessage error:', err)
-    return false
+    return { ok: false, error: err instanceof Error ? err.message : 'Unknown Telegram error' }
   }
+}
+
+/** Send a message to a Telegram chat. Returns whether Telegram accepted it. */
+export async function sendTelegramMessage(
+  chatId: number | string,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<boolean> {
+  const result = await postTelegramMessage(chatId, text, extra)
+  return result.ok
+}
+
+/** Same as sendTelegramMessage but returns the provider message id / error for auditing. */
+export async function sendTelegramMessageDetailed(
+  chatId: number | string,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<TelegramSendResult> {
+  return postTelegramMessage(chatId, text, extra)
 }
 
 // ── Service-role Supabase client ─────────────────────────────────────────────
@@ -74,6 +100,22 @@ export async function sendTelegramToUser(
   const chatId = data?.chat_id
   if (!chatId) return false
   return sendTelegramMessage(chatId, text)
+}
+
+/** Same as sendTelegramToUser but returns the provider message id / error for auditing. */
+export async function sendTelegramToUserDetailed(
+  supabase: ServiceClient,
+  userId: string,
+  text: string,
+): Promise<TelegramSendResult> {
+  const { data } = await supabase
+    .from('telegram_accounts')
+    .select('chat_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const chatId = data?.chat_id
+  if (!chatId) return { ok: false, error: 'No linked Telegram chat' }
+  return sendTelegramMessageDetailed(chatId, text)
 }
 
 // ── Formatting ───────────────────────────────────────────────────────────────

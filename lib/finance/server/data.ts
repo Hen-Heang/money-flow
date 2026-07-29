@@ -194,6 +194,9 @@ const DEFAULT_PREFERENCES: FinancialPreferences = {
   share_descriptions_with_ai: true,
   budget_warning_thresholds: { first: 70, strong: 90, over: 100 },
   quiet_hours: { enabled: false, start: '22:00', end: '08:00', timezone: 'Asia/Seoul' },
+  monthly_report_channel_telegram: true,
+  monthly_report_channel_email: false,
+  monthly_report_email: null,
 }
 
 // Returns saved preferences merged over defaults. A user who has never
@@ -222,6 +225,9 @@ export async function loadFinancialPreferences(
     share_descriptions_with_ai: data.share_descriptions_with_ai ?? true,
     budget_warning_thresholds: data.budget_warning_thresholds ?? DEFAULT_PREFERENCES.budget_warning_thresholds,
     quiet_hours: data.quiet_hours ?? DEFAULT_PREFERENCES.quiet_hours,
+    monthly_report_channel_telegram: data.monthly_report_channel_telegram ?? true,
+    monthly_report_channel_email: data.monthly_report_channel_email ?? false,
+    monthly_report_email: data.monthly_report_email ?? null,
   }
 }
 

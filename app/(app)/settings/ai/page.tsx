@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
-import { ChevronLeft, Sparkles, ShieldCheck, Bell, Trash2, Info, Eye } from 'lucide-react'
+import { ChevronLeft, Sparkles, ShieldCheck, Bell, Trash2, Info, Eye, Send, Mail } from 'lucide-react'
 import { haptic } from '@/lib/utils'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import type { FinancialPreferences } from '@/lib/types'
@@ -89,10 +89,13 @@ const DATA_NEVER_SENT = [
 export default function AISettingsPage() {
   const reduceMotion = useReducedMotion()
   const [preferences, setPreferences] = useState<FinancialPreferences | null>(null)
+  const [accountEmail, setAccountEmail] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showDataDetail, setShowDataDetail] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [reportEmailDraft, setReportEmailDraft] = useState('')
+  const [sendingTestReport, setSendingTestReport] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -100,6 +103,8 @@ export default function AISettingsPage() {
       if (!response.ok) return
       const data = await response.json()
       setPreferences(data.preferences)
+      setAccountEmail(data.accountEmail ?? null)
+      setReportEmailDraft(data.preferences.monthly_report_email ?? '')
     } catch {
       toast.error('Could not load AI settings')
     } finally {
@@ -139,6 +144,39 @@ export default function AISettingsPage() {
       setConfirmDelete(false)
     } catch {
       toast.error('Could not delete insights')
+    }
+  }
+
+  const saveReportEmail = () => {
+    if (!preferences) return
+    const trimmed = reportEmailDraft.trim()
+    if (trimmed === (preferences.monthly_report_email ?? '')) return
+    save({ monthly_report_email: trimmed === '' ? null : trimmed })
+  }
+
+  const sendTestReport = async () => {
+    if (!preferences) return
+    if (!preferences.monthly_report_channel_telegram && !preferences.monthly_report_channel_email) {
+      toast.error('Enable a delivery channel first')
+      return
+    }
+    setSendingTestReport(true)
+    try {
+      const response = await fetch('/api/finance/monthly-report/test', { method: 'POST' })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to send test report')
+
+      const outcomes: string[] = []
+      if (data.results?.telegram) outcomes.push(`Telegram: ${data.results.telegram.ok ? 'sent' : data.results.telegram.error}`)
+      if (data.results?.email) outcomes.push(`Email: ${data.results.email.ok ? 'sent' : data.results.email.error}`)
+
+      const anyFailed = [data.results?.telegram, data.results?.email].some((r) => r && !r.ok)
+      if (anyFailed) toast.error(outcomes.join(' · '))
+      else toast.success(outcomes.length > 0 ? outcomes.join(' · ') : 'Test report sent')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not send test report')
+    } finally {
+      setSendingTestReport(false)
     }
   }
 
@@ -251,6 +289,64 @@ export default function AISettingsPage() {
             />
           </div>
         </div>
+      </Section>
+
+      <Section title="Monthly Report Delivery" icon={Mail} color="#0ea5e9">
+        <p className="text-[12px] leading-relaxed opacity-55">
+          When &ldquo;Monthly review&rdquo; above is on, choose where the month-end report is delivered.
+        </p>
+        <Toggle
+          checked={preferences.monthly_report_channel_telegram}
+          onChange={(v) => save({ monthly_report_channel_telegram: v })}
+          disabled={saving}
+          label="Send via Telegram"
+          description="Requires a linked Telegram bot (Settings → Connections)."
+        />
+        <div className="h-px bg-[var(--color-border-base)]" />
+        <Toggle
+          checked={preferences.monthly_report_channel_email}
+          onChange={(v) => save({ monthly_report_channel_email: v })}
+          disabled={saving}
+          label="Send via email"
+          description="A detailed HTML report delivered to your inbox."
+        />
+        {preferences.monthly_report_channel_email && (
+          <div>
+            <label htmlFor="report-email" className="mb-1.5 block text-[12px] font-bold" style={{ color: 'var(--color-text-primary)' }}>
+              Report email
+            </label>
+            <input
+              id="report-email"
+              type="email"
+              inputMode="email"
+              placeholder={accountEmail ?? 'your@email.com'}
+              value={reportEmailDraft}
+              onChange={(e) => setReportEmailDraft(e.target.value)}
+              onBlur={saveReportEmail}
+              className="min-h-[44px] w-full rounded-2xl border px-4 outline-none"
+              style={{
+                backgroundColor: 'var(--color-card-elevated-base)',
+                borderColor: 'var(--color-border-base)',
+                color: 'var(--color-text-primary)',
+                fontSize: '16px',
+              }}
+            />
+            <p className="mt-1.5 text-[11px] leading-relaxed opacity-50">
+              Leave blank to use your account email{accountEmail ? ` (${accountEmail})` : ''}.
+            </p>
+          </div>
+        )}
+        <div className="h-px bg-[var(--color-border-base)]" />
+        <button
+          type="button"
+          onClick={() => { haptic('light'); void sendTestReport() }}
+          disabled={sendingTestReport}
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl text-xs font-black uppercase tracking-widest transition-opacity disabled:opacity-50"
+          style={{ backgroundColor: 'var(--color-accent-base)', color: '#fff', padding: '12px 0' }}
+        >
+          <Send size={14} />
+          {sendingTestReport ? 'Sending…' : 'Send test report'}
+        </button>
       </Section>
 
       <Section title="Notifications" icon={Bell} color="#f59e0b">

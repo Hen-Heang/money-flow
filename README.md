@@ -14,6 +14,7 @@ A personal finance tracker built with Next.js 16, featuring AI-powered insights,
 - **AI Money Coach** — Deterministic financial analysis surfaced as up to three reviewable insights
 - **Subscriptions** — Automatic detection of recurring payments with Keep / Review / Cancel tracking
 - **Monthly Review** — Month-end summary with an adaptive, confirmable budget plan for next month
+- **Monthly Report** — Deterministic month-end report (income, expenses, savings rate, top categories, budget status, savings goals, recurring expenses, 3 coach insights) delivered via Telegram and/or a detailed HTML email; configurable per-user in Settings → AI Money Coach
 - **AI Chat** — Ask questions about your finances using Google Gemini
 - **Push Notifications** — Budget alerts and monthly reports via Web Push
 - **PWA** — Installable, works offline, service worker caching
@@ -39,14 +40,13 @@ A personal finance tracker built with Next.js 16, featuring AI-powered insights,
 
 Create `.env.local` at the project root:
 
+See `.env.example` for the full, up-to-date list. Summary:
+
 ```env
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-
-# Neon backup database
-NEON_DATABASE_URL=postgresql://<user>:<pass>@<host>/neondb?sslmode=require
 
 # Exchange rates (https://www.exchangerate-api.com)
 EXCHANGE_RATE_API_KEY=<key>
@@ -58,16 +58,25 @@ GOOGLE_GENERATIVE_AI_API_KEY=<key>
 OPENAI_API_KEY=<key>
 
 # Optional AI model overrides
-OPENAI_CHAT_MODEL=gpt-5.6-terra
-OPENAI_FAST_MODEL=gpt-5.6-luna
+OPENAI_CHAT_MODEL=<model>
+OPENAI_FAST_MODEL=<model>
+GEMINI_CHAT_MODEL=<model>
+GEMINI_FAST_MODEL=<model>
 
-# Cron job protection
+# Telegram bot (expense logging + weekly/monthly report + alert delivery)
+TELEGRAM_BOT_TOKEN=<bot-token>
+TELEGRAM_WEBHOOK_SECRET=<random-secret>
+NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=<bot-username>
+
+# Monthly report email delivery (Resend + React Email). Server-only.
+RESEND_API_KEY=<key>
+RESEND_FROM_EMAIL="Money Flow <reports@yourdomain.com>"
+
+# Base URL used for in-app links (e.g. the monthly report's review link)
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Cron job protection — required on every /api/cron/* route
 CRON_SECRET=<random-secret>
-
-# Web Push (generate with: npx web-push generate-vapid-keys)
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=<public-key>
-VAPID_PRIVATE_KEY=<private-key>
-VAPID_SUBJECT=mailto:you@example.com
 ```
 
 ## Local Setup
@@ -82,7 +91,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Testing
 
 ```bash
-npm test              # Vitest unit tests (finance engine, insights, weekly check-in)
+npm test              # Vitest unit tests (finance engine, insights, weekly/monthly report, cron logic)
 npm run test:watch    # Vitest in watch mode
 npm run test:e2e      # Playwright end-to-end tests
 ```
@@ -130,10 +139,9 @@ All crons run on Vercel and require `Authorization: Bearer <CRON_SECRET>`.
 | --- | --- | --- |
 | `/api/cron/recurring` | Daily 00:00 UTC | Create recurring transactions |
 | `/api/cron/budget-alerts` | Daily 08:00 UTC | Send budget overspend notifications |
-| `/api/cron/monthly-report` | 1st of month 09:00 UTC | Email monthly spending report |
+| `/api/cron/monthly-report` | Daily 02:00 UTC | Monthly report via Telegram/email — resolves each user's own just-completed month from their timezone, so a daily check is required for correctness across timezones. Idempotent per user/month/channel. |
 | `/api/cron/savings` | 1st of month 09:30 UTC | Update savings goal progress |
 | `/api/cron/cleanup-exchange-rates` | Sunday 03:00 UTC | Delete exchange rates older than 30 days |
-| `/api/cron/backup` | Daily 01:00 UTC | Sync all Supabase tables to Neon |
 | `/api/cron/weekly-summary` | Monday 00:00 UTC | Weekly AI check-in (respects quiet hours) |
 
 To test a cron locally:
