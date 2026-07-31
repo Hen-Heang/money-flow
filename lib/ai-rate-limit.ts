@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { rateLimit } from '@/lib/rate-limit'
 
 export interface AIRateLimitResult {
@@ -19,13 +19,9 @@ export async function consumeAIRateLimit(
   maxRequests: number,
   windowSeconds = 60
 ): Promise<AIRateLimitResult> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const serviceClient = createAdminClient()
 
-  if (supabaseUrl && serviceRoleKey) {
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    })
+  if (serviceClient) {
     const { data, error } = await serviceClient.rpc('consume_ai_rate_limit', {
       p_user_id: userId,
       p_feature: feature,

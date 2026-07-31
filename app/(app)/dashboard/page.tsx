@@ -18,9 +18,9 @@ import { BUDGET_REVIEW_DAY_THRESHOLD } from '@/shared/presets'
 
 import Avatar from '@/components/ui/Avatar'
 import FAB from '@/components/ui/FAB'
+import DeferredChatBot from '@/components/ai/DeferredChatBot'
 import dynamic from 'next/dynamic'
 const AddTransactionSheet = dynamic(() => import('@/components/transactions/AddTransactionSheet'), { ssr: false })
-const ChatBot = dynamic(() => import('@/components/ai/ChatBot'), { ssr: false })
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -265,7 +265,7 @@ export default function DashboardPage() {
           >
             {showUSD ? 'USD' : 'KRW'}
           </button>
-          <ChatBot />
+          <DeferredChatBot />
           <Link href="/settings" aria-label="Open settings" className="glass-morphic flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--color-border-base)] transition-transform active:scale-95 lg:hidden">
             <Settings size={17} className="text-[var(--color-text-secondary)]" />
           </Link>

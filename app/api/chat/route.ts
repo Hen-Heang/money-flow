@@ -1,7 +1,7 @@
 import { streamText, tool, stepCountIs } from 'ai'
 import { z } from 'zod'
 import { consumeAIRateLimit } from '@/lib/ai-rate-limit'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { getAIProviderOptions, getChatModel, resolveProvider, type AIProvider } from '@/lib/ai-provider'
 import { createFinanceChatTools } from '@/lib/finance/chat-tools'
 import { FALLBACK_EXCHANGE_RATE } from '@/shared/presets'
@@ -11,10 +11,7 @@ const MAX_MESSAGES = 50
 const MAX_MESSAGE_LENGTH = 2_000
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return new Response('Unauthorized', { status: 401 })
 

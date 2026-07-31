@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import type { createClient } from '@/lib/supabase'
+import type { createClient } from '@/lib/supabase/client'
 
 type SupabaseClient = ReturnType<typeof createClient>
 

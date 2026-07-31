@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // ── Bot API helpers ──────────────────────────────────────────────────────────
 
@@ -73,12 +73,7 @@ export async function sendTelegramMessageDetailed(
 // Always scope every query by user_id derived from the linked chat.
 
 export function createTelegramServiceClient() {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!serviceRoleKey || !supabaseUrl) return null
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+  return createAdminClient()
 }
 
 type ServiceClient = NonNullable<ReturnType<typeof createTelegramServiceClient>>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { Plus, Trash2, X, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
@@ -49,7 +49,7 @@ interface Props {
 
 export default function RecurringSheet({ isOpen, onClose }: Props) {
   const [rules, setRules] = useState<RecurringRule[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const [categories, setCategories] = useState<Pick<Category, 'id' | 'name' | 'icon'>[]>([])
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
 
@@ -75,11 +75,13 @@ export default function RecurringSheet({ isOpen, onClose }: Props) {
     fetch('/api/transactions?pageSize=0')
       .catch(() => {})
 
-    import('@/lib/supabase').then(({ createClient }) => {
+    import('@/lib/supabase/client').then(({ createClient }) => {
       const supabase = createClient()
-      supabase.from('categories').select('id, name, icon').then(({ data }) => {
-        if (data) setCategories(data)
-      })
+      supabase.from('categories').select('id, name, icon').then(
+        ({ data }: { data: Pick<Category, 'id' | 'name' | 'icon'>[] | null }) => {
+          if (data) setCategories(data)
+        }
+      )
     })
   }, [isOpen])
 

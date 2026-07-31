@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { suggestAliasGroups, normalizeDescription } from '@/lib/finance/analysis'
 import { loadTransactions, loadAliases, lookbackStartDate } from '@/lib/finance/server/data'
 
@@ -8,10 +8,7 @@ import { loadTransactions, loadAliases, lookbackStartDate } from '@/lib/finance/
 // confirmed. Suggestions are derived fresh each time; only confirmations are
 // stored, and confirming never rewrites a transaction.
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -39,10 +36,7 @@ const confirmSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -93,10 +87,7 @@ const removeSchema = z.object({
 })
 
 export async function DELETE(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { SPENDING_CLASSES, SPENDING_CLASS_BY_VALUE, spendingClassLabel, spendingClassColor, UNCLASSIFIED_META } from '../spending-class'
-import { buildBudgetPlan } from '@/lib/finance/analysis'
+import { buildBudgetPlan, type SpendingClass } from '@/lib/finance/analysis'
 import { tx } from '@/lib/finance/analysis/__tests__/fixtures'
 
 const REFERENCE = new Date('2026-07-15T12:00:00')
@@ -34,7 +34,7 @@ describe('spending class metadata', () => {
 // The metadata is user-facing copy describing engine behaviour — if the two
 // ever drift, the UI would be lying about what happens.
 describe('metadata matches engine behaviour', () => {
-  function planFor(spendingClass: Parameters<typeof buildBudgetPlan>[0]['classifications'] extends Record<string, infer C> ? C : never) {
+  function planFor(spendingClass: SpendingClass) {
     return buildBudgetPlan({
       transactions: [
         tx({ category_id: 'c1', category_name: 'Test', amount_krw: 100_000, date: '2026-04-10' }),

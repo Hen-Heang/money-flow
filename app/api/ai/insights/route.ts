@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { consumeAIRateLimit } from '@/lib/ai-rate-limit'
 import { buildInsightsForUser, persistInsights } from '@/lib/finance/insights/generate'
 import type { AIProvider } from '@/lib/ai-provider'
@@ -24,10 +24,7 @@ function isVisible(insight: AIFinancialInsight, now: Date): boolean {
 }
 
 export async function GET(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -93,10 +90,7 @@ const STATUS_BY_ACTION = {
 } as const
 
 export async function PATCH(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -140,10 +134,7 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

@@ -1,0 +1,11 @@
+-- Default categories and payment methods are seeded by lib/profile.ts through
+-- the authenticated Supabase client, where the existing RLS policies enforce
+-- that every inserted row belongs to the signed-in user.
+--
+-- This legacy RPC duplicated that path as a SECURITY DEFINER function and
+-- accepted an arbitrary user ID. It is unused by the application, so removing
+-- it is safer than retaining a privileged public entry point.
+--
+-- Deliberately omit CASCADE: if an untracked database object depends on this
+-- function, the migration must fail for review instead of deleting it.
+drop function if exists public.seed_default_user_data(uuid);

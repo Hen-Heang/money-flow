@@ -10,7 +10,7 @@ import {
   computeGoalPlan,
   detectSubscriptionCandidates,
 } from '@/lib/finance/analysis'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { loadFinanceDataset, loadFinancialPreferences } from '@/lib/finance/server/data'
 
 function monthBounds(year: number, month: number) {
@@ -23,10 +23,7 @@ function monthBounds(year: number, month: number) {
 // Full month-end review (Feature 9). Read-only — accepting the proposed
 // plan is a separate, explicitly-confirmed write.
 export async function GET(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

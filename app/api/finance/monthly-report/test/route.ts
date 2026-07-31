@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { loadFinancialPreferences } from '@/lib/finance/server/data'
 import { buildMonthlyReport } from '@/lib/finance/server/monthly-report'
 import { renderMonthlyReportTelegramMessage, resolveTargetReportMonth } from '@/lib/finance/monthly-report'
@@ -17,10 +17,7 @@ function resolveAppUrl(): string {
 // it never reads or writes monthly_report_deliveries, so it can't interfere
 // with the cron's idempotency bookkeeping for a real scheduled send.
 export async function POST() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
