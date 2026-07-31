@@ -1,6 +1,6 @@
 # Money Flow
 
-A personal finance tracker built with Next.js 16, featuring AI-powered insights, real-time analytics, push notifications, and automatic Neon database backups.
+A personal finance tracker built with Next.js 16, featuring AI-powered insights, real-time analytics, and push notifications.
 
 **Live:** [money-flow.henheang.site](https://money-flow.henheang.site)
 
@@ -15,20 +15,18 @@ A personal finance tracker built with Next.js 16, featuring AI-powered insights,
 - **Subscriptions** — Automatic detection of recurring payments with Keep / Review / Cancel tracking
 - **Monthly Review** — Month-end summary with an adaptive, confirmable budget plan for next month
 - **Monthly Report** — Deterministic month-end report (income, expenses, savings rate, top categories, budget status, savings goals, recurring expenses, 3 coach insights) delivered via Telegram and/or a detailed HTML email; configurable per-user in Settings → AI Money Coach
-- **AI Chat** — Ask questions about your finances using Google Gemini
+- **AI Chat** — Ask questions about your finances, powered by Google Gemini or OpenAI (switchable in Settings)
 - **Push Notifications** — Budget alerts and monthly reports via Web Push
 - **PWA** — Installable, works offline, service worker caching
 - **Multi-currency** — Exchange rate fetching with weekly cleanup
-- **Neon Backup** — Daily sync of all data to Neon Postgres
 
 ## Tech Stack
 
 | Layer | Tech |
 | --- | --- |
 | Framework | Next.js 16 (App Router) |
-| Database (primary) | Supabase (Postgres + Auth + RLS) |
-| Database (backup) | Neon (serverless Postgres) |
-| AI | Google Gemini via Vercel AI SDK |
+| Database | Supabase (Postgres + Auth + RLS) |
+| AI | Google Gemini / OpenAI via Vercel AI SDK |
 | Email | Resend |
 | Push | Web Push (VAPID) |
 | Charts | Recharts |
@@ -127,27 +125,25 @@ AI recommendations never silently change transactions, budgets, or goals. Applyi
 budget change opens a confirmation dialog showing the old value, the proposed value,
 and the monthly impact.
 
-## Neon Backup Schema
-
-Run `scripts/neon-schema.sql` once in the Neon SQL editor to create the backup tables before the first cron run.
-
 ## Cron Jobs
 
-All crons run on Vercel and require `Authorization: Bearer <CRON_SECRET>`.
+All crons run on Vercel (see `vercel.json` for the authoritative schedule) and require `Authorization: Bearer <CRON_SECRET>`.
 
 | Endpoint | Schedule | Purpose |
 | --- | --- | --- |
 | `/api/cron/recurring` | Daily 00:00 UTC | Create recurring transactions |
-| `/api/cron/budget-alerts` | Daily 08:00 UTC | Send budget overspend notifications |
-| `/api/cron/monthly-report` | Daily 02:00 UTC | Monthly report via Telegram/email — resolves each user's own just-completed month from their timezone, so a daily check is required for correctness across timezones. Idempotent per user/month/channel. |
-| `/api/cron/savings` | 1st of month 09:30 UTC | Update savings goal progress |
+| `/api/cron/savings` | Daily 00:30 UTC | Send/apply due monthly savings contributions |
 | `/api/cron/cleanup-exchange-rates` | Sunday 03:00 UTC | Delete exchange rates older than 30 days |
+| `/api/cron/budget-alerts` | Daily 10:00 UTC | Send budget overspend notifications |
+| `/api/cron/daily-reminder` | Daily 03:00 and 12:00 UTC | Telegram expense-logging reminder for linked users |
+| `/api/cron/spending-spike` | Daily 12:00 UTC | Alert when today's spend exceeds 2x the monthly daily average |
 | `/api/cron/weekly-summary` | Monday 00:00 UTC | Weekly AI check-in (respects quiet hours) |
+| `/api/cron/monthly-report` | Daily 02:00 UTC | Monthly report via Telegram/email — resolves each user's own just-completed month from their timezone, so a daily check is required for correctness across timezones. Idempotent per user/month/channel. |
 
 To test a cron locally:
 
 ```bash
-curl http://localhost:3000/api/cron/backup \
+curl http://localhost:3000/api/cron/recurring \
   -H "Authorization: Bearer test-secret-123"
 ```
 

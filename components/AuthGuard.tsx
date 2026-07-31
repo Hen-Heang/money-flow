@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
+import type { AuthChangeEvent } from '@supabase/supabase-js'
 
 export default function AuthGuard() {
   const router = useRouter()
@@ -10,7 +11,7 @@ export default function AuthGuard() {
   useEffect(() => {
     const supabase = createClient()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
       if (event === 'SIGNED_OUT') {
         try {
           localStorage.removeItem('searchHistory')

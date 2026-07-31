@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import type { Budget } from '@/lib/types'
 
 // Module-level cache — invalidated on upsert via invalidateBudgetsCache()
@@ -13,8 +13,8 @@ async function fetchBudgets(): Promise<Budget[]> {
     pendingFetch = supabase
       .from('budgets')
       .select('category_id, amount_krw, categories(name, icon, color)')
-      .then(({ data }) => {
-        const result = (data as Budget[]) ?? []
+      .then(({ data }: { data: Budget[] | null }) => {
+        const result = data ?? []
         cachedBudgets = result
         pendingFetch = null
         return result
@@ -24,7 +24,8 @@ async function fetchBudgets(): Promise<Budget[]> {
         return []
       })
   }
-  return pendingFetch
+  // The branch above always assigns pendingFetch when it was null.
+  return pendingFetch!
 }
 
 export function invalidateBudgetsCache() {

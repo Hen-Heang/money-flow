@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 import type { Category } from '@/lib/types'
 
 // Module-level cache — shared across all hook instances in the same session.
@@ -14,8 +14,8 @@ async function fetchCategories(): Promise<Category[]> {
     pendingFetch = supabase
       .from('categories')
       .select('*')
-      .then(({ data }) => {
-        const result = (data as Category[]) ?? []
+      .then(({ data }: { data: Category[] | null }) => {
+        const result = data ?? []
         cachedCategories = result
         pendingFetch = null
         return result
@@ -25,7 +25,8 @@ async function fetchCategories(): Promise<Category[]> {
         return []
       })
   }
-  return pendingFetch
+  // The branch above always assigns pendingFetch when it was null.
+  return pendingFetch!
 }
 
 export function invalidateCategoriesCache() {

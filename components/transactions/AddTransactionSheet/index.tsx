@@ -1,64 +1,32 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ArrowRight, ChevronDown, ChevronUp, X, BookmarkPlus, Trash2, Loader2, Sparkles } from 'lucide-react'
+import { ChevronDown, ChevronUp, X, BookmarkPlus } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useDescriptionSuggestions, type DescriptionSuggestion } from '@/hooks/useDescriptionSuggestions'
 import { formatNumber, haptic } from '@/lib/utils'
-import type { Category, PaymentMethod, TransactionPreview } from '@/lib/types'
+import type { Category, PaymentMethod } from '@/lib/types'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import BottomSheet from '@/components/ui/BottomSheet'
 import NumericKeypad from '@/components/ui/NumericKeypad'
-import { useTransactionForm, TransactionFormData } from '@/hooks/useTransactionForm'
+import { useTransactionForm, type TransactionFormData } from '@/hooks/useTransactionForm'
 import { emitTransactionsChanged } from '@/hooks/useTransactionSync'
-import { useWatch, Controller } from 'react-hook-form'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/Select'
+import { useWatch } from 'react-hook-form'
+import { useKeyboardVisible } from './useKeyboardVisible'
+import { useTemplates } from './useTemplates'
+import { useQuickAdd } from './useQuickAdd'
+import { TemplateStrip } from './TemplateStrip'
+import { QuickAddPanel } from './QuickAddPanel'
+import { CategoryField } from './CategoryField'
+import { PaymentMethodField } from './PaymentMethodField'
+import { DescriptionSuggestions } from './DescriptionSuggestions'
+import type { EditTransaction } from './types'
 
-
-
-function useKeyboardVisible() {
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const vv = window.visualViewport
-    if (!vv) return
-    const update = () => setVisible(window.innerHeight - vv.height > 100)
-    vv.addEventListener('resize', update)
-    return () => vv.removeEventListener('resize', update)
-  }, [])
-  return visible
-}
-
-
-interface Template {
-  id: string
-  type: 'income' | 'expense'
-  description: string
-  amount_krw: number
-  currency: string
-  category_id: string | null
-  payment_method_id: string | null
-  note: string | null
-  categories?: { icon: string } | null
-}
-
-export interface EditTransaction {
-  id: string
-  type: 'income' | 'expense'
-  currency?: string
-  amount_krw: number
-  amount_usd: number
-  date: string
-  description: string
-  category_id: string | null
-  payment_method_id: string | null
-  note: string | null
-  exchange_rate?: number
-}
+export type { EditTransaction }
 
 interface Props {
   isOpen: boolean
@@ -80,13 +48,7 @@ export default function AddTransactionSheet({
   const [canDrag, setCanDrag] = useState(true)
   const [showDetails, setShowDetails] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
-  const [templates, setTemplates] = useState<Template[]>([])
-  const [savingTemplate, setSavingTemplate] = useState(false)
   const [isAiSuggesting, setIsAiSuggesting] = useState(false)
-  const [quickAddText, setQuickAddText] = useState('')
-  const [quickAddPreview, setQuickAddPreview] = useState<TransactionPreview | null>(null)
-  const [quickAddError, setQuickAddError] = useState('')
-  const [isQuickAddLoading, setIsQuickAddLoading] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const lastLearnedDescriptionRef = useRef('')
@@ -126,6 +88,20 @@ export default function AddTransactionSheet({
     exactMatch: learnedDescription,
     isReady: descriptionHistoryReady,
   } = useDescriptionSuggestions(isOpen && !isEditing, type, description || '')
+
+  const { templates, savingTemplate, loadTemplates, applyTemplate, saveAsTemplate, deleteTemplate } = useTemplates({
+    supabase, activeExchangeRate, amountNum, getValues, setValue,
+  })
+
+  const {
+    quickAddText, setQuickAddText,
+    quickAddPreview, setQuickAddPreview,
+    quickAddError, setQuickAddError,
+    isQuickAddLoading,
+    resetQuickAdd,
+    parseQuickAdd,
+    applyQuickAddPreview,
+  } = useQuickAdd({ isMobile, setValue, setShowKeypad, setShowDetails })
 
   useEffect(() => {
     if (isEditing || !learnedDescription) return
@@ -180,114 +156,6 @@ export default function AddTransactionSheet({
     return () => clearTimeout(timeoutId)
   }, [description, type, setValue, getValues, isEditing, currentCategoryId, descriptionHistoryReady, learnedDescription])
 
-  const loadTemplates = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) return
-    const { data } = await supabase
-      .from('transaction_templates')
-      .select('*, categories(icon)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(10)
-    if (data) setTemplates(data as Template[])
-  }, [supabase])
-
-  const applyTemplate = (t: Template) => {
-    haptic('light')
-    setValue('type', t.type)
-    setValue('currency', t.currency as 'KRW' | 'USD')
-    setValue('amount', t.currency === 'USD' ? (t.amount_krw / activeExchangeRate).toFixed(2) : String(Math.round(t.amount_krw)))
-    setValue('description', t.description)
-    setValue('category_id', t.category_id || '')
-    setValue('payment_method_id', t.payment_method_id || '')
-    setValue('note', t.note || '')
-  }
-
-  const saveAsTemplate = async () => {
-    if (amountNum <= 0) { toast.error('Enter an amount first'); return }
-    const values = getValues()
-    if (!values.description.trim()) { toast.error('Enter a description first'); return }
-    setSavingTemplate(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) { setSavingTemplate(false); return }
-    const amtKrw = values.currency === 'USD' ? Math.round(amountNum * activeExchangeRate) : amountNum
-    const { error } = await supabase.from('transaction_templates').insert({
-      user_id: user.id,
-      type: values.type,
-      description: values.description.trim(),
-      amount_krw: amtKrw,
-      currency: values.currency,
-      category_id: values.category_id || null,
-      payment_method_id: values.payment_method_id || null,
-      note: values.note || null,
-    })
-    setSavingTemplate(false)
-    if (error) { toast.error('Failed to save template'); return }
-    haptic('medium')
-    toast.success('Template saved!')
-    loadTemplates()
-  }
-
-  const deleteTemplate = async (id: string) => {
-    await supabase.from('transaction_templates').delete().eq('id', id)
-    setTemplates(prev => prev.filter(t => t.id !== id))
-    haptic('light')
-  }
-
-  const parseQuickAdd = async () => {
-    const text = quickAddText.trim()
-    if (text.length < 3) {
-      setQuickAddError('Include what it was and the amount.')
-      return
-    }
-
-    setIsQuickAddLoading(true)
-    setQuickAddError('')
-    setQuickAddPreview(null)
-    if (isMobile) setShowKeypad(false)
-
-    try {
-      const response = await fetch('/api/ai/parse-transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          timezoneOffsetMinutes: new Date().getTimezoneOffset(),
-        }),
-      })
-      const body = await response.json().catch(() => ({}))
-      if (!response.ok || !body.preview) {
-        throw new Error(body.error || 'AI quick add is unavailable right now.')
-      }
-      setQuickAddPreview(body.preview as TransactionPreview)
-      haptic('light')
-    } catch (error) {
-      setQuickAddError(error instanceof Error ? error.message : 'AI quick add is unavailable right now.')
-    } finally {
-      setIsQuickAddLoading(false)
-    }
-  }
-
-  const applyQuickAddPreview = () => {
-    if (!quickAddPreview) return
-    setValue('type', quickAddPreview.type)
-    setValue('currency', quickAddPreview.currency)
-    setValue('amount', String(quickAddPreview.amount))
-    setValue('date', quickAddPreview.date)
-    setValue('description', quickAddPreview.description)
-    setValue('category_id', quickAddPreview.categoryId || '')
-    setValue('payment_method_id', quickAddPreview.paymentMethodId || '')
-    setValue('note', quickAddPreview.note || '')
-    if (quickAddPreview.paymentMethodId || quickAddPreview.note) setShowDetails(true)
-    setQuickAddPreview(null)
-    setQuickAddText('')
-    setQuickAddError('')
-    haptic('medium')
-    toast.success('Preview applied — review and save')
-  }
-
   const applyDescriptionSuggestion = (suggestion: DescriptionSuggestion) => {
     setValue('description', suggestion.description)
     if (suggestion.categoryId) setValue('category_id', suggestion.categoryId)
@@ -310,9 +178,7 @@ export default function AddTransactionSheet({
 
   useEffect(() => {
     if (!isOpen) return
-    setQuickAddText('')
-    setQuickAddPreview(null)
-    setQuickAddError('')
+    resetQuickAdd()
     lastLearnedDescriptionRef.current = ''
     const loadData = async () => {
       const [cats, methods] = await Promise.all([
@@ -353,6 +219,7 @@ export default function AddTransactionSheet({
       })
       if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile, loadTemplates])
 
   const handleClose = () => {
@@ -435,152 +302,41 @@ export default function AddTransactionSheet({
   const filteredCategories = categories.filter((c) => c.type === type || c.type === 'both')
   // UI Styles
   const sectionLabelStyle = "text-tiny text-[var(--color-text-secondary)] mb-3"
-
-  const templateStrip = !isEditing && templates.length > 0 ? (
-    <div className="mb-4">
-      <p className={sectionLabelStyle}>Templates</p>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-        {templates.map(t => (
-          <div key={t.id} className="group relative shrink-0">
-            <button
-              type="button"
-              onClick={() => applyTemplate(t)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all active:scale-95"
-              style={{
-                backgroundColor: t.type === 'expense'
-                  ? 'rgba(239,68,68,0.12)'
-                  : 'rgba(16,185,129,0.12)',
-                color: t.type === 'expense'
-                  ? 'var(--color-expense-base)'
-                  : 'var(--color-income-base)',
-                border: `1px solid ${t.type === 'expense' ? 'rgba(239,68,68,0.25)' : 'rgba(16,185,129,0.25)'}`,
-              }}
-            >
-              <span>{t.categories?.icon ?? (t.type === 'expense' ? '💸' : '💰')}</span>
-              <span className="max-w-[80px] truncate">{t.description}</span>
-              <span className="opacity-60">
-                {t.currency === 'USD' ? `$${(t.amount_krw / activeExchangeRate).toFixed(0)}` : `₩${Math.round(t.amount_krw).toLocaleString()}`}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => deleteTemplate(t.id)}
-              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white items-center justify-center hidden group-hover:flex active:scale-90"
-            >
-              <Trash2 size={8} />
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  ) : null
   const inputBaseStyle = "w-full bg-[var(--color-card-elevated-base)] border border-[var(--color-border-base)] rounded-[var(--radius-md)] px-4 py-3.5 focus:border-[var(--color-accent-base)] transition-all outline-none"
 
-  const previewCategory = quickAddPreview?.categoryId
-    ? categories.find(category => category.id === quickAddPreview.categoryId)
-    : null
-  const previewPaymentMethod = quickAddPreview?.paymentMethodId
-    ? paymentMethods.find(method => method.id === quickAddPreview.paymentMethodId)
-    : null
+  const quickAddPanel = (
+    <QuickAddPanel
+      isEditing={!!editTransaction}
+      quickAddText={quickAddText}
+      setQuickAddText={setQuickAddText}
+      setQuickAddError={setQuickAddError}
+      setQuickAddPreview={setQuickAddPreview}
+      setShowKeypad={setShowKeypad}
+      isQuickAddLoading={isQuickAddLoading}
+      parseQuickAdd={parseQuickAdd}
+      quickAddError={quickAddError}
+      quickAddPreview={quickAddPreview}
+      categories={categories}
+      paymentMethods={paymentMethods}
+      applyQuickAddPreview={applyQuickAddPreview}
+      inputBaseStyle={inputBaseStyle}
+    />
+  )
 
-  const quickAddPanel = !editTransaction ? (
-    <section className="rounded-[var(--radius-lg)] border border-[var(--color-accent-base)]/25 bg-[var(--color-accent-base)]/[0.06] p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent-base)] text-white">
-            <Sparkles size={16} />
-          </span>
-          <div>
-            <p className="text-sm font-black">Smart Quick Add</p>
-            <p className="text-[11px] text-[var(--color-text-secondary)]">Describe it naturally, then review before saving.</p>
-          </div>
-        </div>
-        <span className="rounded-full bg-[var(--color-card-base)] px-2 py-1 text-[10px] font-bold text-[var(--color-accent-base)]">AI</span>
-      </div>
+  const templateStrip = (
+    <TemplateStrip
+      isEditing={isEditing}
+      templates={templates}
+      activeExchangeRate={activeExchangeRate}
+      applyTemplate={applyTemplate}
+      deleteTemplate={deleteTemplate}
+      sectionLabelStyle={sectionLabelStyle}
+    />
+  )
 
-      <div className="flex gap-2">
-        <input
-          value={quickAddText}
-          onChange={event => {
-            setQuickAddText(event.target.value)
-            setQuickAddError('')
-            setQuickAddPreview(null)
-          }}
-          onFocus={() => setShowKeypad(false)}
-          onKeyDown={event => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              if (!isQuickAddLoading) void parseQuickAdd()
-            }
-          }}
-          className={`${inputBaseStyle} min-w-0 flex-1`}
-          placeholder="e.g. Lunch 12,000 won today"
-          maxLength={300}
-          aria-label="Describe a transaction for AI quick add"
-        />
-        <button
-          type="button"
-          onClick={parseQuickAdd}
-          disabled={isQuickAddLoading || quickAddText.trim().length < 3}
-          className="flex w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-accent-base)] text-white transition-all active:scale-95 disabled:opacity-40"
-          aria-label="Create transaction preview"
-        >
-          {isQuickAddLoading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRight size={18} />}
-        </button>
-      </div>
-
-      {quickAddError && <p className="mt-2 text-xs font-semibold text-[var(--color-expense-base)]">{quickAddError}</p>}
-
-      {quickAddPreview && (
-        <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border-base)] bg-[var(--color-card-base)] p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-black">{quickAddPreview.description}</p>
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${quickAddPreview.type === 'expense' ? 'bg-red-500/10 text-[var(--color-expense-base)]' : 'bg-emerald-500/10 text-[var(--color-income-base)]'}`}>
-                  {quickAddPreview.type}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                {quickAddPreview.date} · {previewCategory ? `${previewCategory.icon} ${previewCategory.name}` : 'No category'}
-                {previewPaymentMethod ? ` · ${previewPaymentMethod.icon} ${previewPaymentMethod.name}` : ''}
-              </p>
-              {quickAddPreview.note && <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{quickAddPreview.note}</p>}
-            </div>
-            <p className="shrink-0 text-base font-black">
-              {quickAddPreview.currency === 'USD' ? '$' : '₩'}
-              {quickAddPreview.currency === 'KRW'
-                ? formatNumber(Math.round(quickAddPreview.amount))
-                : quickAddPreview.amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={applyQuickAddPreview}
-            className="mt-3 w-full rounded-[var(--radius-sm)] bg-[var(--color-accent-base)] px-3 py-2.5 text-xs font-black text-white active:scale-[0.98]"
-          >
-            APPLY TO FORM
-          </button>
-        </div>
-      )}
-    </section>
-  ) : null
-
-  const descriptionSuggestionList = descriptionSuggestions.length > 0 ? (
-    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar" aria-label="Description suggestions from transaction history">
-      {descriptionSuggestions.map(suggestion => (
-        <button
-          key={`${type}:${suggestion.description}`}
-          type="button"
-          onClick={() => applyDescriptionSuggestion(suggestion)}
-          className="shrink-0 rounded-full border border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)] px-3 py-1.5 text-xs font-bold text-[var(--color-text-secondary)] active:scale-95"
-        >
-          {suggestion.description}
-          {suggestion.count > 1 ? <span className="ml-1 opacity-50">×{suggestion.count}</span> : null}
-        </button>
-      ))}
-    </div>
-  ) : null
+  const descriptionSuggestionList = (
+    <DescriptionSuggestions type={type} suggestions={descriptionSuggestions} onApply={applyDescriptionSuggestion} />
+  )
 
   const desktopForm = (
     <form id="tx-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6 px-6 pb-8">
@@ -602,7 +358,7 @@ export default function AddTransactionSheet({
             </button>
           ))}
         </div>
-        
+
         <div className="relative group">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-[var(--color-text-secondary)]">
             {currency === 'USD' ? '$' : '₩'}
@@ -628,37 +384,14 @@ export default function AddTransactionSheet({
         {convertedHint && <p className="text-xs text-[var(--color-text-secondary)] font-medium pl-1">{convertedHint}</p>}
       </div>
 
-
       {/* Category for pc */}
-      <div>
-        <div className="flex items-center justify-between">
-          <p className={sectionLabelStyle}>Category</p>
-          {isAiSuggesting && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-accent-base)]">
-              <Loader2 size={12} className="animate-spin" />
-              AI suggesting
-            </span>
-          )}
-        </div>
-        <Controller
-          control={control}
-          name="category_id"
-          render={({ field }) => (
-            <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-              <SelectTrigger className={inputBaseStyle}>
-                <SelectValue placeholder="No category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">No category</SelectItem>
-                {filteredCategories.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        />
-      </div>
-
+      <CategoryField
+        control={control}
+        filteredCategories={filteredCategories}
+        isAiSuggesting={isAiSuggesting}
+        inputBaseStyle={inputBaseStyle}
+        sectionLabelStyle={sectionLabelStyle}
+      />
 
       {/* Details */}
       <div className="space-y-4">
@@ -667,23 +400,7 @@ export default function AddTransactionSheet({
         {descriptionSuggestionList}
         <div className="grid grid-cols-2 gap-3">
           <input {...register('date')} type="date" className={inputBaseStyle} />
-          <Controller
-            control={control}
-            name="payment_method_id"
-            render={({ field }) => (
-              <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-                <SelectTrigger className={inputBaseStyle}>
-                  <SelectValue placeholder="Payment Method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No method</SelectItem>
-                  {paymentMethods.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.icon} {m.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
+          <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
         </div>
         <textarea {...register('note')} className={inputBaseStyle} placeholder="Optional note" rows={2} />
         {!isEditing && (
@@ -768,34 +485,13 @@ export default function AddTransactionSheet({
                   </div>
 
                   {/* Categories */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <p className={sectionLabelStyle}>Category</p>
-                      {isAiSuggesting && (
-                        <span className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-accent-base)]">
-                          <Loader2 size={12} className="animate-spin" />
-                          AI suggesting
-                        </span>
-                      )}
-                    </div>
-                    <Controller
-                      control={control}
-                      name="category_id"
-                      render={({ field }) => (
-                        <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-                          <SelectTrigger className={inputBaseStyle}>
-                            <SelectValue placeholder="No category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">No category</SelectItem>
-                            {filteredCategories.map(c => (
-                              <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
+                  <CategoryField
+                    control={control}
+                    filteredCategories={filteredCategories}
+                    isAiSuggesting={isAiSuggesting}
+                    inputBaseStyle={inputBaseStyle}
+                    sectionLabelStyle={sectionLabelStyle}
+                  />
 
                   {/* Basic Details */}
                   <div className="space-y-4">
@@ -808,23 +504,7 @@ export default function AddTransactionSheet({
                     {showDetails && (
                       <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden">
                         <input {...register('date')} type="date" className={inputBaseStyle} />
-                        <Controller
-                          control={control}
-                          name="payment_method_id"
-                          render={({ field }) => (
-                            <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-                              <SelectTrigger className={inputBaseStyle}>
-                                <SelectValue placeholder="Payment Method" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="__none__">No method</SelectItem>
-                                {paymentMethods.map(m => (
-                                  <SelectItem key={m.id} value={m.id}>{m.icon} {m.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                        />
+                        <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
                         <textarea {...register('note')} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
                         {!isEditing && (
                           <button

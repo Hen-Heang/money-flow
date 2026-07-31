@@ -9,7 +9,7 @@ import {
   type AIProvider,
 } from '@/lib/ai-provider'
 import { CATEGORY_MATCH_GUIDANCE, formatCategoriesForPrompt } from '@/lib/categorize'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import type { Category } from '@/lib/types'
 
 const requestSchema = z.object({
@@ -23,8 +23,7 @@ const suggestionSchema = z.object({
 })
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

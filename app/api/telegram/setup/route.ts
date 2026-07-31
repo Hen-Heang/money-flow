@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireCronAuthorization } from '@/lib/server/cron'
 
 // One-time (idempotent) webhook registration with Telegram.
 // Protected with CRON_SECRET so randoms can't re-point your bot.
@@ -8,11 +9,8 @@ import { NextRequest, NextResponse } from 'next/server'
 // If ?url is omitted, the request origin is used.
 
 export async function GET(request: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET
-  const authHeader = request.headers.get('authorization')
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const unauthorized = requireCronAuthorization(request)
+  if (unauthorized) return unauthorized
 
   const token = process.env.TELEGRAM_BOT_TOKEN
   if (!token) return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, { status: 500 })

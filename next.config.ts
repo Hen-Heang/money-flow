@@ -1,9 +1,15 @@
 import type { NextConfig } from 'next'
 
-// Allow self-signed certificates in dev (corporate network/VPN SSL inspection)
-if (process.env.NODE_ENV !== 'production') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-}
+// Corporate network/VPN SSL inspection can present a self-signed root CA that
+// Node doesn't trust by default, breaking outbound HTTPS in dev. Don't disable
+// certificate verification process-wide — instead point Node at the corporate
+// CA bundle so verification still happens, just against the right trust store:
+//   NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem npm run dev
+// (or set it in your shell profile / .env.local as a real env var, not here).
+
+// script-src needs 'unsafe-eval' in development only (Next.js dev/HMR and some
+// AI SDK internals rely on it); production never includes it.
+const isDev = process.env.NODE_ENV !== 'production'
 
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -14,7 +20,7 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",   // unsafe-eval needed by Next.js dev + some AI SDK internals
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com",
       "font-src 'self'",

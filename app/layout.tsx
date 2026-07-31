@@ -3,6 +3,7 @@ import { Toaster } from 'sonner'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
+import React from "react";
 
 const geistSans = GeistSans
 const geistMono = GeistMono
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
     template: '%s · Money Flow',
   },
   description: 'Track spending, plan budgets, and make steady progress toward your savings goals.',
+  manifest: '/manifest.webmanifest',
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',
@@ -34,11 +36,26 @@ export const viewport: Viewport = {
   ],
 }
 
+// Read directly (not via lib/env/client's throwing accessor) — this is a best-effort
+// resource hint rendered in the root layout for every route, so a missing/invalid
+// URL should silently drop the hint rather than fail the entire app shell.
+function supabaseOrigin(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) return null
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const supabaseUrl = supabaseOrigin()
+
   return (
     <html
       lang="en"
@@ -49,9 +66,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Money Flow" />
-        <link rel="manifest" href="/manifest.json" />
-        <link rel="preconnect" href="https://lqjjabfmaweztxkvfrsq.supabase.co" />
-        <link rel="dns-prefetch" href="https://lqjjabfmaweztxkvfrsq.supabase.co" />
+        {supabaseUrl && (
+          <>
+            <link rel="preconnect" href={supabaseUrl} />
+            <link rel="dns-prefetch" href={supabaseUrl} />
+          </>
+        )}
         {/* Theme init — runs before render to prevent flash */}
         <script dangerouslySetInnerHTML={{ __html: `
           try {

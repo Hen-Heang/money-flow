@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { loadFinancialPreferences } from '@/lib/finance/server/data'
 
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -48,10 +45,7 @@ const preferencesSchema = z.object({
 })
 
 export async function PUT(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

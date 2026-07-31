@@ -6,7 +6,7 @@ import {
   parseTransactionText,
 } from '@/lib/ai/transaction-parser'
 import type { AIProvider } from '@/lib/ai-provider'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import type { Category, PaymentMethod } from '@/lib/types'
 
 const requestSchema = z.object({
@@ -22,8 +22,7 @@ interface HistoryRow {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

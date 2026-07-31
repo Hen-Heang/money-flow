@@ -1,4 +1,4 @@
-const CACHE_NAME = 'money-flow-v3'
+const CACHE_NAME = 'money-flow-v4'
 
 // App shell: pre-cache these on install
 const PRECACHE_URLS = [
@@ -10,7 +10,7 @@ const PRECACHE_URLS = [
   '/apple-icon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/manifest.json',
+  '/manifest.webmanifest',
 ]
 
 // ── Install: pre-cache app shell ─────────────────────────────────────────────

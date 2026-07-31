@@ -44,32 +44,42 @@ money-flow/
 │   ├── (app)/                   # Authenticated app routes (uses AuthGuard layout)
 │   │   ├── dashboard/           # Home — summary, insights, recent activity
 │   │   ├── transactions/        # List, search, filter, swipe-edit
-│   │   ├── analytics/           # Charts (Recharts)
+│   │   ├── analytics/           # Charts (Recharts) — trends + monthly summary views
 │   │   ├── budget/              # Monthly limits per category
 │   │   ├── savings/             # Goals + auto-deposit
-│   │   ├── report/              # Monthly report view
-│   │   ├── settings/            # Theme, profile, push, export, logout
-│   │   └── layout.tsx           # Wraps with NavShell (TabBar / Sidebar)
+│   │   ├── review/              # Month-end review + adaptive next-month budget plan
+│   │   ├── subscriptions/       # Detected recurring payments (Keep/Review/Cancel)
+│   │   ├── settings/            # Theme, profile, categories, telegram, export, logout
+│   │   │   └── ai/              # AI Money Coach preferences (thresholds, privacy)
+│   │   ├── error.tsx            # Segment-level error boundary
+│   │   ├── loading.tsx (per route) # Route-level skeletons
+│   │   └── layout.tsx           # Wraps with NavShell (TabBar / Sidebar) + ErrorBoundary
 │   ├── (auth)/login/            # Public login page (Supabase OAuth)
 │   ├── api/                     # API routes (server-only)
-│   │   ├── ai/suggest-category/ # POST → Gemini suggests a category for a description
+│   │   ├── ai/                  # suggest-category, parse-transaction, insights
 │   │   ├── chat/                # AI chat streaming
 │   │   ├── cron/                # Vercel cron-triggered jobs (need CRON_SECRET)
 │   │   ├── exchange-rate/       # Cached KRW↔USD rate
 │   │   ├── export/              # CSV / JSON export
+│   │   ├── finance/             # aliases, budget-plan, goal-plans, monthly-review, preferences, subscriptions
 │   │   ├── recurring/           # CRUD for recurring templates
-│   │   └── transactions/        # (used for bulk ops / mobile fetch)
+│   │   ├── settings/ai-provider/# Switch Gemini/OpenAI
+│   │   ├── telegram/            # Webhook + link/unlink + setup
+│   │   ├── transactions/        # Bulk ops / mobile fetch
+│   │   └── version/             # Build version check
 │   ├── auth/callback/           # Supabase OAuth callback
 │   ├── layout.tsx               # Root: fonts, theme init, toaster
+│   ├── global-error.tsx         # Root-level error boundary (own <html>/<body>)
+│   ├── not-found.tsx            # Global 404
 │   ├── globals.css              # CSS variables (colors, fonts, spacing)
-│   ├── manifest.ts              # PWA manifest
+│   ├── manifest.ts              # PWA manifest (single source of truth)
 │   └── page.tsx                 # Redirects → /dashboard
 │
 ├── components/
-│   ├── ai/ChatBot.tsx           # Floating AI chat
+│   ├── ai/                      # ChatBot / chat launcher components
 │   ├── layout/                  # NavShell, TabBar (mobile), Sidebar (desktop)
-│   ├── transactions/            # AddTransactionSheet, CategoryGrid, SwipeableRow, RecurringSheet
-│   ├── ui/                      # BottomSheet, FAB, Avatar, Skeleton, NumericKeypad, …
+│   ├── transactions/            # AddTransactionSheet/, CategoryGrid, SwipeableRow, RecurringSheet
+│   ├── ui/                      # BottomSheet, FAB, Avatar, Skeleton, NumericKeypad, ErrorBoundary, …
 │   └── AuthGuard.tsx            # Client-side auth check
 │
 ├── hooks/                       # Custom React hooks (one concern each)
@@ -81,16 +91,22 @@ money-flow/
 │   ├── useMonthNavigation.ts    # Prev/next month state
 │   ├── usePullToRefresh.ts      # Mobile pull-to-refresh
 │   ├── useSupabaseClient.ts     # Memoized client
-│   └── useTransactionForm.ts    # Add/edit form state
+│   ├── useTransactionForm.ts    # Add/edit form state
+│   ├── useTransactionSync.ts    # Cross-component "transactions changed" pub/sub
+│   └── useDescriptionSuggestions.ts # Learned description → category/payment-method
 │
 ├── lib/                         # Pure utilities + thin clients
+│   ├── env/                     # client.ts / server.ts — validated env var access
+│   ├── supabase/                # client.ts / server.ts / admin.ts / database.types.ts
+│   ├── server/                  # requireUser(), requireCronAuthorization() — route helpers
+│   ├── finance/                 # Deterministic analysis engine (see §AI Money Coach)
 │   ├── constants.ts             # App-wide constants
 │   ├── dateHelpers.ts           # Date math, range builders
-│   ├── neon.ts                  # Neon client (backup target)
 │   ├── profile.ts               # Current user profile helpers
 │   ├── rate-limit.ts            # In-memory rate limiter for API routes
-│   ├── supabase.ts              # Browser Supabase client
-│   ├── supabase-server.ts       # Server Supabase client (SSR cookies)
+│   ├── ai-provider.ts           # Gemini/OpenAI model resolution + fallback
+│   ├── telegram.ts              # Telegram bot API + service-role client
+│   ├── email.ts                 # Monthly report email delivery (Resend)
 │   ├── types.ts                 # Domain types — import from here, don't redeclare
 │   └── utils.ts                 # formatKRW, formatUSD, haptic, cn (clsx+tw-merge)
 │
@@ -99,12 +115,17 @@ money-flow/
 │   └── presets.ts               # Page size, fallback exchange rate, search history cap
 │
 ├── supabase/migrations/         # SQL migrations (applied via Supabase dashboard / CLI)
-├── scripts/                     # One-off scripts (Neon schema, seed, etc.)
-├── public/                      # PWA icons, manifest assets, service worker
+├── scripts/                     # One-off scripts (seed, etc.)
+├── public/                      # PWA icons, service worker (manifest served from app/manifest.ts)
 ├── proxy.ts                     # Next.js middleware-style proxy (auth checks)
-├── next.config.ts               # PWA / image / header config
+├── next.config.ts               # Image / header / CSP config
 └── package.json
 ```
+
+Route-heavy pages under `app/(app)/<feature>/` follow a colocation convention:
+`page.tsx` (composition only) + `_components/`, `_hooks/`, `_types/`, `_lib/` (route-private,
+excluded from routing by the `_` prefix). See `savings/`, `analytics/`, `settings/`, or
+`transactions/` for examples.
 
 ---
 
@@ -117,7 +138,7 @@ money-flow/
                            │ for AI / cron / export
                            ▼
                     ┌──────────────┐
-                    │  API route   │ ── auth check ──► Supabase service-role / Gemini / Neon
+                    │  API route   │ ── auth check ──► Supabase (user or service-role) / Gemini / OpenAI
                     └──────────────┘
 ```
 
@@ -182,7 +203,7 @@ Use this checklist every time. It will save you debugging hours.
 ### Step 3 — Server logic (if needed)
 - New route under `app/api/<feature>/route.ts`
 - Validate input with Zod
-- Use [lib/supabase-server.ts](lib/supabase-server.ts) for user-scoped queries
+- Use [lib/server/auth.ts](lib/server/auth.ts)'s `requireUser()` for the auth check + user-scoped client
 - Rate-limit if public-ish (`lib/rate-limit.ts`)
 
 ### Step 4 — UI
@@ -241,13 +262,18 @@ Required `.env.local` keys (see README for full list):
 
 ## 9. Cron jobs
 
-All require `Authorization: Bearer ${CRON_SECRET}` and run on Vercel.
+All require `Authorization: Bearer ${CRON_SECRET}` and run on Vercel (see `vercel.json` for the authoritative schedule).
 
 | Endpoint | Schedule | Purpose |
 | --- | --- | --- |
 | `/api/cron/recurring` | Daily 00:00 UTC | Create recurring transactions |
-| `/api/cron/savings` | 1st of month 09:30 UTC | Auto-deposit savings |
+| `/api/cron/savings` | Daily 00:30 UTC | Send/apply due monthly savings contributions |
 | `/api/cron/cleanup-exchange-rates` | Sunday 03:00 UTC | Delete rates older than 30 days |
+| `/api/cron/budget-alerts` | Daily 10:00 UTC | Budget overspend notifications |
+| `/api/cron/daily-reminder` | Daily 03:00 & 12:00 UTC | Telegram expense-logging reminder |
+| `/api/cron/spending-spike` | Daily 12:00 UTC | Alert on unusually high daily spend |
+| `/api/cron/weekly-summary` | Monday 00:00 UTC | Weekly AI check-in |
+| `/api/cron/monthly-report` | Daily 02:00 UTC | Monthly report (Telegram/email), idempotent per user/month/channel |
 
 Test locally:
 ```bash
@@ -260,15 +286,17 @@ curl http://localhost:3000/api/cron/recurring -H "Authorization: Bearer <CRON_SE
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Redirects to `/dashboard` |
+| `/` | Marketing landing page (redirects signed-in users to `/dashboard`) |
 | `/login` | OAuth login |
 | `/dashboard` | Home — summary cards, insights, recent activity |
 | `/transactions` | Full list with search/filter/swipe actions |
-| `/analytics` | Charts by category, period, payment method |
+| `/analytics` | Charts by category, period, payment method + monthly summary view |
 | `/budget` | Set monthly limits |
 | `/savings` | Goals + progress |
-| `/report` | Monthly summary view |
-| `/settings` | Profile, theme, export, logout |
+| `/review` | Month-end review + adaptive next-month budget plan |
+| `/subscriptions` | Detected recurring payments (Keep/Review/Cancel) |
+| `/settings` | Profile, theme, categories, telegram, export, logout |
+| `/settings/ai` | AI Money Coach preferences (thresholds, privacy) |
 
 ---
 

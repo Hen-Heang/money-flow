@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { computeGoalPlan, detectDoubleCountingWarnings } from '@/lib/finance/analysis'
 import { loadSavingsGoals, loadSavingsContributions } from '@/lib/finance/server/data'
 
@@ -7,10 +7,7 @@ import { loadSavingsGoals, loadSavingsContributions } from '@/lib/finance/server
 // recorded through the confirmed record_savings_contribution RPC — nothing
 // here changes a balance.
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

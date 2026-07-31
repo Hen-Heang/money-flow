@@ -1,14 +1,13 @@
+import 'server-only'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+import { clientEnv } from '@/lib/env/client'
 
 export const createServerSupabaseClient = async () => {
   const cookieStore = await cookies()
   return createServerClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
+    clientEnv.supabaseUrl,
+    clientEnv.supabaseAnonKey,
     {
       cookies: {
         getAll() {

@@ -1,9 +1,8 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import type { AIProvider } from '@/lib/ai-provider'
 
 export async function POST(req: Request) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   const { provider } = await req.json() as { provider: AIProvider }

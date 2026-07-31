@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { detectSubscriptionCandidates } from '@/lib/finance/analysis'
 import { loadTransactions, loadRecurringTemplates, lookbackStartDate } from '@/lib/finance/server/data'
 import type { SubscriptionStatusRecord } from '@/lib/types'
@@ -8,10 +8,7 @@ import type { SubscriptionStatusRecord } from '@/lib/types'
 // Candidates are always derived fresh from transactions; only the user's
 // Keep / Review / Plan to cancel / Cancelled decision is stored.
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -61,10 +58,7 @@ const statusSchema = z.object({
 
 // Records the user's decision only. Nothing here cancels a real subscription.
 export async function PATCH(request: Request) {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

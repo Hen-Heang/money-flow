@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { requireUser } from '@/lib/server/auth'
 import { rateLimit } from '@/lib/rate-limit'
 
 // Authenticated endpoints for the in-app "Connect Telegram" flow.
@@ -19,8 +19,7 @@ function generateCode(): string {
 }
 
 export async function GET() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data } = await supabase
@@ -36,8 +35,7 @@ export async function GET() {
 }
 
 export async function POST() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { allowed } = rateLimit(`tg-link:${user.id}`, 10, 60_000)
@@ -65,8 +63,7 @@ export async function POST() {
 }
 
 export async function DELETE() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, supabase } = await requireUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { error } = await supabase

@@ -1,41 +1,22 @@
-import { createBrowserClient } from '@supabase/ssr'
-
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
-
-// In-memory sequential lock that prevents concurrent token refresh races.
-// navigator.locks caused AbortError in Safari/iOS when multiple tabs were open,
-// but a plain noop lets multiple callers refresh the token simultaneously —
-// the first rotation invalidates every other in-flight refresh token.
-// This queue ensures only one refresh runs at a time without relying on navigator.locks.
-const lockQueues = new Map<string, Promise<unknown>>()
-
-const memoryLock = <R>(name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
-  const pending = (lockQueues.get(name) ?? Promise.resolve()) as Promise<unknown>
-  const next = pending.then(() => fn())
-  lockQueues.set(name, next.catch(() => {}))
-  return next
-}
-
-const clientOptions = {
-  auth: { lock: memoryLock },
-}
-
-// Singleton — one client per environment, created once on first call
-let browserClient: ReturnType<typeof createBrowserClient> | undefined
-
-export const createClient = () => {
-  if (typeof window === 'undefined') {
-    return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, clientOptions)
-  }
-
-  if (!browserClient) {
-    browserClient = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, clientOptions)
-  }
-
-  return browserClient
-}
-
+/**
+ * Hand-maintained interim types — NOT generated from the live schema, and
+ * covers only a subset of tables (users, transactions, categories,
+ * payment_methods, exchange_rates). Many tables that exist in
+ * `supabase/migrations/` (budgets, savings_goals, recurring_transactions,
+ * ai_financial_insights, telegram_accounts, transaction_templates, etc.) are
+ * not represented here, so this file is not wired into any Supabase client's
+ * generic today — do not treat it as exhaustive.
+ *
+ * Regenerate authoritative types once the project is linked/authenticated:
+ *
+ *   npx supabase login
+ *   npx supabase link --project-ref <your-project-ref>
+ *   npx supabase gen types --linked --schema public > lib/supabase/database.types.ts
+ *
+ * (or `npx supabase gen types --project-id <ref> --schema public > ...` without
+ * linking). After regenerating, parameterize the clients in
+ * lib/supabase/{client,server,admin}.ts with `SupabaseClient<Database>`.
+ */
 export type Database = {
   public: {
     Tables: {
