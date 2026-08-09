@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, X, BookmarkPlus } from 'lucide-react'
+import { X, BookmarkPlus } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
@@ -46,7 +46,6 @@ export default function AddTransactionSheet({
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [canDrag, setCanDrag] = useState(true)
-  const [showDetails, setShowDetails] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
   const [isAiSuggesting, setIsAiSuggesting] = useState(false)
 
@@ -101,7 +100,7 @@ export default function AddTransactionSheet({
     resetQuickAdd,
     parseQuickAdd,
     applyQuickAddPreview,
-  } = useQuickAdd({ isMobile, setValue, setShowKeypad, setShowDetails })
+  } = useQuickAdd({ isMobile, setValue, setShowKeypad })
 
   useEffect(() => {
     if (isEditing || !learnedDescription) return
@@ -204,7 +203,6 @@ export default function AddTransactionSheet({
         payment_method_id: editTransaction.payment_method_id || '',
         note: editTransaction.note || '',
       })
-      if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     } else {
       const lastPaymentMethod = typeof window !== 'undefined'
         ? localStorage.getItem('lastPaymentMethod') ?? ''
@@ -217,14 +215,12 @@ export default function AddTransactionSheet({
         description: '',
         payment_method_id: lastPaymentMethod,
       })
-      if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile, loadTemplates])
 
   const handleClose = () => {
     setShowKeypad(false)
-    setShowDetails(false)
     onClose()
   }
 
@@ -493,31 +489,51 @@ export default function AddTransactionSheet({
                     sectionLabelStyle={sectionLabelStyle}
                   />
 
-                  {/* Basic Details */}
+                  {/* Details — always visible on mobile */}
                   <div className="space-y-4">
-                    <input {...register('description')} onFocus={() => setShowKeypad(false)} className={`${inputBaseStyle} font-bold`} placeholder="Description" />
-                    {descriptionSuggestionList}
-                    <button type="button" onClick={() => setShowDetails(!showDetails)} className="flex items-center gap-2 text-sm font-black text-[var(--color-accent-base)]">
-                      {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      {showDetails ? 'FEWER DETAILS' : 'MORE DETAILS'}
-                    </button>
-                    {showDetails && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden">
-                        <input {...register('date')} type="date" className={inputBaseStyle} />
-                        <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
-                        <textarea {...register('note')} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
-                        {!isEditing && (
-                          <button
-                            type="button"
-                            onClick={saveAsTemplate}
-                            disabled={savingTemplate}
-                            className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] opacity-60"
-                          >
-                            <BookmarkPlus size={16} />
-                            {savingTemplate ? 'Saving...' : 'Save as Template'}
-                          </button>
-                        )}
-                      </motion.div>
+                    <div className="space-y-2">
+                      <label htmlFor="tx-description-mobile" className={sectionLabelStyle}>Description</label>
+                      <input
+                        id="tx-description-mobile"
+                        {...register('description')}
+                        onFocus={() => setShowKeypad(false)}
+                        className={`${inputBaseStyle} font-bold`}
+                        placeholder="Description"
+                      />
+                      {descriptionSuggestionList}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="tx-date-mobile" className={sectionLabelStyle}>Date</label>
+                      <input id="tx-date-mobile" {...register('date')} type="date" className={inputBaseStyle} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className={sectionLabelStyle}>Payment Method</p>
+                      <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="tx-note-mobile" className={sectionLabelStyle}>Note</label>
+                      <textarea
+                        id="tx-note-mobile"
+                        {...register('note')}
+                        className={inputBaseStyle}
+                        placeholder="Optional note"
+                        rows={2}
+                      />
+                    </div>
+
+                    {!isEditing && (
+                      <button
+                        type="button"
+                        onClick={saveAsTemplate}
+                        disabled={savingTemplate}
+                        className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] opacity-60"
+                      >
+                        <BookmarkPlus size={16} />
+                        {savingTemplate ? 'Saving...' : 'Save as Template'}
+                      </button>
                     )}
                   </div>
                 </div>
