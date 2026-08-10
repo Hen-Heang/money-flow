@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { isSameMonth } from 'date-fns'
 import { FileText, ChevronRight, Settings } from 'lucide-react'
 
-import { getMonthRange } from '@/lib/dateHelpers'
+import { getMonthRange, monthKey } from '@/lib/dateHelpers'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useCategories } from '@/hooks/useCategories'
 import { useBudgets } from '@/hooks/useBudgets'
@@ -34,6 +34,11 @@ import { DailyBudgetPill } from './components/DailyBudgetPill'
 import { BudgetReviewPrompt } from './components/BudgetReviewPrompt'
 import { AnalyticsTabs } from './components/AnalyticsTabs'
 const MoneyCoach = dynamic(() => import('./components/MoneyCoach').then(m => m.MoneyCoach), { ssr: false })
+
+// Module-level cache keyed by month ("YYYY-MM") — avoids refetching the same
+// month's transactions on remount (e.g. navigating away and back). Cleared
+// wholesale whenever a transaction is added/edited/deleted anywhere in the app.
+const transactionsCache = new Map<string, Transaction[]>()
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -85,24 +90,39 @@ export default function DashboardPage() {
   }, [])
 
   const loadData = useCallback(async () => {
+    const key = monthKey(currentDate.getFullYear(), currentDate.getMonth() + 1)
+    const cached = transactionsCache.get(key)
+    if (cached) {
+      setTransactions(cached)
+      setLoading(false)
+      setAlertsDismissed(false)
+      return
+    }
+
     setLoading(true)
     setAlertsDismissed(false)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      if (!user) {
+      const { start, end } = getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1)
+      // Auth check and data query run in parallel — the transactions query
+      // doesn't need the session up front since RLS already scopes rows to
+      // the caller's user_id; the session is only needed for the redirect below.
+      const [{ data: { session } }, txResult] = await Promise.all([
+        supabase.auth.getSession(),
+        supabase
+          .from('transactions')
+          .select('id, date, type, amount_krw, description, category_id, categories(name, icon, color)')
+          .gte('date', start)
+          .lt('date', end)
+          .order('date', { ascending: false }),
+      ])
+      if (!session?.user) {
         router.push('/login')
         return
       }
 
-      const txResult = await supabase
-        .from('transactions')
-        .select('id, date, type, amount_krw, description, category_id, categories(name, icon, color)')
-        .eq('user_id', user.id)
-        .gte('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).start)
-        .lt('date', getMonthRange(currentDate.getFullYear(), currentDate.getMonth() + 1).end)
-        .order('date', { ascending: false })
-      setTransactions((txResult.data as Transaction[]) || [])
+      const rows = (txResult.data as Transaction[]) || []
+      transactionsCache.set(key, rows)
+      setTransactions(rows)
     } catch {
       toast.error('Failed to sync data')
     } finally {
@@ -115,7 +135,10 @@ export default function DashboardPage() {
     loadData()
   }, [loadData])
 
-  useTransactionsChanged(loadData)
+  useTransactionsChanged(useCallback(() => {
+    transactionsCache.clear()
+    loadData()
+  }, [loadData]))
 
   useEffect(() => {
     let active = true
@@ -151,6 +174,7 @@ export default function DashboardPage() {
     const { error } = await supabase.from('transactions').insert(payload)
     if (error) { toast.error('Quick Add failed'); return }
     toast.success(`Logged ${template.iconEmoji} ${template.name}`)
+    transactionsCache.clear()
     loadData()
     emitTransactionsChanged()
   }
