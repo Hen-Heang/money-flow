@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, X, BookmarkPlus } from 'lucide-react'
+import { X, BookmarkPlus } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPortal } from 'react-dom'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
@@ -46,7 +46,6 @@ export default function AddTransactionSheet({
   const [categories, setCategories] = useState<Category[]>([])
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [canDrag, setCanDrag] = useState(true)
-  const [showDetails, setShowDetails] = useState(false)
   const [showKeypad, setShowKeypad] = useState(false)
   const [isAiSuggesting, setIsAiSuggesting] = useState(false)
 
@@ -101,7 +100,7 @@ export default function AddTransactionSheet({
     resetQuickAdd,
     parseQuickAdd,
     applyQuickAddPreview,
-  } = useQuickAdd({ isMobile, setValue, setShowKeypad, setShowDetails })
+  } = useQuickAdd({ isMobile, setValue, setShowKeypad })
 
   useEffect(() => {
     if (isEditing || !learnedDescription) return
@@ -204,7 +203,6 @@ export default function AddTransactionSheet({
         payment_method_id: editTransaction.payment_method_id || '',
         note: editTransaction.note || '',
       })
-      if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     } else {
       const lastPaymentMethod = typeof window !== 'undefined'
         ? localStorage.getItem('lastPaymentMethod') ?? ''
@@ -217,14 +215,12 @@ export default function AddTransactionSheet({
         description: '',
         payment_method_id: lastPaymentMethod,
       })
-      if (isMobile) setTimeout(() => setShowKeypad(true), 400)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editTransaction, isDuplicate, reset, supabase, isMobile, loadTemplates])
 
   const handleClose = () => {
     setShowKeypad(false)
-    setShowDetails(false)
     onClose()
   }
 
@@ -443,7 +439,7 @@ export default function AddTransactionSheet({
             drag={canDrag ? 'y' : false} dragConstraints={{ top: 0 }} onDragEnd={(_, info) => { if (info.offset.y > 80) handleClose() }}
             className="fixed inset-0 z-100 flex flex-col bg-[var(--color-card-base)]"
           >
-            <div className="flex shrink-0 justify-center pt-3 pb-1">
+            <div className="flex shrink-0 justify-center pb-1" style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}>
               <div className="h-1.5 w-10 rounded-full bg-[var(--color-border-base)] opacity-50" />
             </div>
             <div className="flex items-center justify-between px-6 pb-4 pt-2 border-b border-[var(--color-border-base)]">
@@ -451,12 +447,12 @@ export default function AddTransactionSheet({
               <button onClick={handleClose} className="p-2 rounded-full bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)]"><X size={20} /></button>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
               <form id="tx-form-mobile" onSubmit={handleSubmit(onSubmit)}>
                 <div className="space-y-6">
                   {quickAddPanel}
                   {templateStrip}
-                  {/* Type Toggle */}
+                  {/* Expense / Income */}
                   <div className="flex bg-[var(--color-card-elevated-base)] p-1 rounded-[var(--radius-lg)]">
                     {(['expense', 'income'] as const).map(opt => (
                       <button key={opt} type="button" onClick={() => { setValue('type', opt); haptic('light') }} className={`flex-1 py-3.5 rounded-[var(--radius-md)] text-sm font-black transition-all ${type === opt ? (opt === 'expense' ? 'bg-[var(--color-expense-base)] text-white shadow-lg' : 'bg-[var(--color-income-base)] text-white shadow-lg') : 'text-[var(--color-text-secondary)]'}`}>
@@ -465,8 +461,8 @@ export default function AddTransactionSheet({
                     ))}
                   </div>
 
-                  {/* Amount Display */}
-                  <div onClick={() => setShowKeypad(true)} className={`p-6 rounded-[var(--radius-lg)] border-2 transition-all ${showKeypad ? 'border-[var(--color-accent-base)] bg-[var(--color-accent-base)]/[0.03]' : 'border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)]'}`}>
+                  {/* Amount and currency */}
+                  <div onClick={() => setShowKeypad(true)} aria-label="Amount" className={`p-6 rounded-[var(--radius-lg)] border-2 transition-all ${showKeypad ? 'border-[var(--color-accent-base)] bg-[var(--color-accent-base)]/[0.03]' : 'border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)]'}`}>
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex bg-[var(--color-card-base)] p-1 rounded-[var(--radius-sm)]">
                         {(['KRW', 'USD'] as const).map(cur => (
@@ -484,7 +480,7 @@ export default function AddTransactionSheet({
                     {convertedHint && <p className="text-right mt-2 text-sm font-bold text-[var(--color-accent-base)]">{convertedHint}</p>}
                   </div>
 
-                  {/* Categories */}
+                  {/* Category */}
                   <CategoryField
                     control={control}
                     filteredCategories={filteredCategories}
@@ -493,33 +489,42 @@ export default function AddTransactionSheet({
                     sectionLabelStyle={sectionLabelStyle}
                   />
 
-                  {/* Basic Details */}
-                  <div className="space-y-4">
+                  {/* Description */}
+                  <div>
                     <input {...register('description')} onFocus={() => setShowKeypad(false)} className={`${inputBaseStyle} font-bold`} placeholder="Description" />
                     {descriptionSuggestionList}
-                    <button type="button" onClick={() => setShowDetails(!showDetails)} className="flex items-center gap-2 text-sm font-black text-[var(--color-accent-base)]">
-                      {showDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      {showDetails ? 'FEWER DETAILS' : 'MORE DETAILS'}
-                    </button>
-                    {showDetails && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 overflow-hidden">
-                        <input {...register('date')} type="date" className={inputBaseStyle} />
-                        <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
-                        <textarea {...register('note')} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
-                        {!isEditing && (
-                          <button
-                            type="button"
-                            onClick={saveAsTemplate}
-                            disabled={savingTemplate}
-                            className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] opacity-60"
-                          >
-                            <BookmarkPlus size={16} />
-                            {savingTemplate ? 'Saving...' : 'Save as Template'}
-                          </button>
-                        )}
-                      </motion.div>
-                    )}
                   </div>
+
+                  {/* Date */}
+                  <div>
+                    <p className={sectionLabelStyle}>Date</p>
+                    <input {...register('date')} type="date" onFocus={() => setShowKeypad(false)} className={inputBaseStyle} />
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <p className={sectionLabelStyle}>Payment Method</p>
+                    <PaymentMethodField control={control} paymentMethods={paymentMethods} inputBaseStyle={inputBaseStyle} />
+                  </div>
+
+                  {/* Note */}
+                  <div>
+                    <p className={sectionLabelStyle}>Note</p>
+                    <textarea {...register('note')} onFocus={() => setShowKeypad(false)} className={inputBaseStyle} placeholder="Add a note..." rows={2} />
+                  </div>
+
+                  {/* Save as Template */}
+                  {!isEditing && (
+                    <button
+                      type="button"
+                      onClick={saveAsTemplate}
+                      disabled={savingTemplate}
+                      className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-secondary)] opacity-60"
+                    >
+                      <BookmarkPlus size={16} />
+                      {savingTemplate ? 'Saving...' : 'Save as Template'}
+                    </button>
+                  )}
                 </div>
               </form>
             </div>

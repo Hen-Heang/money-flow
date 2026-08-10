@@ -18,7 +18,7 @@ export function PaymentMethodField({
       name="payment_method_id"
       render={({ field }) => (
         <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-          <SelectTrigger className={inputBaseStyle}>
+          <SelectTrigger className={inputBaseStyle} aria-label="Payment Method">
             <SelectValue placeholder="Payment Method" />
           </SelectTrigger>
           <SelectContent>
