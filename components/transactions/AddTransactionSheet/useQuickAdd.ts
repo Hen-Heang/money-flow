@@ -9,12 +9,10 @@ export function useQuickAdd({
   isMobile,
   setValue,
   setShowKeypad,
-  setShowDetails,
 }: {
   isMobile: boolean
   setValue: UseFormSetValue<TransactionFormData>
   setShowKeypad: (v: boolean) => void
-  setShowDetails: (v: boolean) => void
 }) {
   const [quickAddText, setQuickAddText] = useState('')
   const [quickAddPreview, setQuickAddPreview] = useState<TransactionPreview | null>(null)
@@ -71,7 +69,6 @@ export function useQuickAdd({
     setValue('category_id', quickAddPreview.categoryId || '')
     setValue('payment_method_id', quickAddPreview.paymentMethodId || '')
     setValue('note', quickAddPreview.note || '')
-    if (quickAddPreview.paymentMethodId || quickAddPreview.note) setShowDetails(true)
     setQuickAddPreview(null)
     setQuickAddText('')
     setQuickAddError('')
