@@ -1,24 +1,25 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { startOfMonth, subMonths, endOfMonth, format } from 'date-fns'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { useTransactionsChanged } from '@/hooks/useTransactionSync'
 import type { Transaction } from '@/lib/types'
 import type { AnalyticsBudget } from '../_types'
 
-export function useAnalyticsData() {
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [budgets, setBudgets] = useState<AnalyticsBudget[]>([])
-  const [loading, setLoading] = useState(true)
-  const supabase = useSupabaseClient()
+const analyticsQueryKey = ['transactions', 'analytics'] as const
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
+export function useAnalyticsData() {
+  const supabase = useSupabaseClient()
+  const queryClient = useQueryClient()
+
+  const { data, isLoading } = useQuery({
+    queryKey: analyticsQueryKey,
+    queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession()
       const user = session?.user
-      if (!user) return
+      if (!user) return { transactions: [], budgets: [] }
 
       const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5))
       const now = endOfMonth(new Date())
@@ -38,17 +39,20 @@ export function useAnalyticsData() {
           .gt('amount_krw', 0),
       ])
 
-      setTransactions((txData as Transaction[]) || [])
-      setBudgets((budgetData as AnalyticsBudget[]) || [])
-    } catch {
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase])
+      return {
+        transactions: (txData as Transaction[]) || [],
+        budgets: (budgetData as AnalyticsBudget[]) || [],
+      }
+    },
+  })
 
-  useEffect(() => { loadData() }, [loadData])
+  useTransactionsChanged(useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: analyticsQueryKey })
+  }, [queryClient]))
 
-  useTransactionsChanged(loadData)
-
-  return { transactions, budgets, loading }
+  return {
+    transactions: data?.transactions ?? [],
+    budgets: data?.budgets ?? [],
+    loading: isLoading,
+  }
 }
