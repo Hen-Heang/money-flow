@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Check, ChevronDown, Info } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSupabaseClient } from '@/hooks/useSupabaseClient'
-import { invalidateCategoriesCache } from '@/hooks/useCategories'
+import { categoriesQueryKey } from '@/hooks/useCategories'
 import { haptic } from '@/lib/utils'
 import BottomSheet from '@/components/ui/BottomSheet'
 import { SPENDING_CLASSES, UNCLASSIFIED_META, spendingClassColor, spendingClassLabel } from '@/lib/finance/spending-class'
@@ -15,14 +16,16 @@ interface CategoryTypesSheetProps {
   isOpen: boolean
   onClose: () => void
   /**
-   * Called after each successful save. useCategories caches at module level,
-   * so callers that are already mounted need the change reported directly.
+   * Called after each successful save, ahead of the categories query
+   * invalidation resolving, so an already-mounted caller can apply the
+   * change optimistically instead of waiting on the background refetch.
    */
   onSaved?: (categoryId: string, value: SpendingClassValue | null) => void
 }
 
 export default function CategoryTypesSheet({ isOpen, onClose, onSaved }: CategoryTypesSheetProps) {
   const supabase = useSupabaseClient()
+  const queryClient = useQueryClient()
   const reduceMotion = useReducedMotion()
 
   const [categories, setCategories] = useState<Category[]>([])
@@ -88,7 +91,7 @@ export default function CategoryTypesSheet({ isOpen, onClose, onSaved }: Categor
       return
     }
 
-    invalidateCategoriesCache()
+    queryClient.invalidateQueries({ queryKey: categoriesQueryKey })
     setExpandedId(null)
     onSaved?.(category.id, next)
   }

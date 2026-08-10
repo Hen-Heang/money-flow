@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Wallet, ChevronLeft, ChevronRight, Pencil, Check, X, TrendingUp, AlertTriangle, Shapes } from 'lucide-react'
 import { toast } from 'sonner'
@@ -34,6 +35,7 @@ function getBarColor(pct: number) {
 
 export default function BudgetPage() {
   const supabase = useSupabaseClient()
+  const queryClient = useQueryClient()
   const { year, month, isCurrentMonth, navigateMonth } = useMonthNavigation()
 
   const { categories: allCategories } = useCategories()
@@ -47,14 +49,12 @@ export default function BudgetPage() {
   const [localBudgets, setLocalBudgets] = useState<Budget[] | null>(null)
   const budgets = localBudgets ?? cachedBudgets
 
-  const [spends, setSpends] = useState<CategorySpend[]>([])
-  const [loading, setLoading] = useState(true)
-
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editInput, setEditInput] = useState('')
   const [showCategoryTypes, setShowCategoryTypes] = useState(false)
-  // useCategories caches at module level and won't refetch for an already-
-  // mounted component, so the sheet reports changes back and we overlay them.
+  // The categories query updates every mounted subscriber on invalidation,
+  // but the overlay still gives an instant optimistic update instead of
+  // waiting on that background refetch — see CategoryTypesSheet's onSaved.
   const [classOverrides, setClassOverrides] = useState<Record<string, SpendingClassValue | null>>({})
 
   const classFor = useCallback(
@@ -62,37 +62,38 @@ export default function BudgetPage() {
     [classOverrides]
   )
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
-    if (!user) { setLoading(false); return }
+  // Cached per month — revisiting a month already viewed this session is instant.
+  const spendQueryKey = useMemo(() => ['transactions', 'budget-spend', year, month] as const, [year, month])
 
-    const { start, end } = getMonthRange(year, month)
+  const { data: spends = [], isLoading: loading } = useQuery({
+    queryKey: spendQueryKey,
+    queryFn: async (): Promise<CategorySpend[]> => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      if (!user) return []
 
-    const { data: txData } = await supabase
-      .from('transactions')
-      .select('category_id, amount_krw')
-      .eq('user_id', user.id)
-      .eq('type', 'expense')
-      .gte('date', start)
-      .lt('date', end)
+      const { start, end } = getMonthRange(year, month)
 
-    if (txData) {
+      const { data: txData } = await supabase
+        .from('transactions')
+        .select('category_id, amount_krw')
+        .eq('user_id', user.id)
+        .eq('type', 'expense')
+        .gte('date', start)
+        .lt('date', end)
+
+      if (!txData) return []
       const map: Record<string, number> = {}
       for (const tx of txData) {
         if (tx.category_id) map[tx.category_id] = (map[tx.category_id] ?? 0) + tx.amount_krw
       }
-      setSpends(Object.entries(map).map(([category_id, spent]) => ({ category_id, spent })))
-    }
+      return Object.entries(map).map(([category_id, spent]) => ({ category_id, spent }))
+    },
+  })
 
-    setLoading(false)
-  }, [supabase, year, month])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void load() }, [load])
-
-  useTransactionsChanged(load)
+  useTransactionsChanged(useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['transactions', 'budget-spend'] })
+  }, [queryClient]))
 
   const saveBudget = async (categoryId: string) => {
     const raw = editInput.replace(/,/g, '')
