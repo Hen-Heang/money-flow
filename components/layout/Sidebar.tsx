@@ -177,7 +177,7 @@ export default memo(function Sidebar() {
                   aria-current={isActive ? 'page' : undefined}
                   className={`group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-[color,background-color] duration-200 ${
                     isActive
-                      ? `text-[var(--color-text-primary)] ${item.iconClass}`
+                      ? item.iconClass
                       : 'text-[var(--color-text-secondary)] hover:bg-white/[0.04] hover:text-[var(--color-text-primary)]'
                   }`}
                 >
