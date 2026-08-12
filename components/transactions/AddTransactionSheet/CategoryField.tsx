@@ -33,7 +33,7 @@ export function CategoryField({
         name="category_id"
         render={({ field }) => (
           <Select value={field.value || '__none__'} onValueChange={v => field.onChange(v === '__none__' ? '' : v)}>
-            <SelectTrigger className={inputBaseStyle}>
+            <SelectTrigger className={inputBaseStyle} aria-label="Category">
               <SelectValue placeholder="No category" />
             </SelectTrigger>
             <SelectContent>

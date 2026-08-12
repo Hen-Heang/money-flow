@@ -4,6 +4,7 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import './globals.css'
 import React from "react";
+import { QueryProvider } from '@/components/providers/QueryProvider'
 
 const geistSans = GeistSans
 const geistMono = GeistMono
@@ -82,7 +83,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)]">
         <a href="#main-content" className="skip-link">Skip to main content</a>
-        {children}
+        <QueryProvider>{children}</QueryProvider>
         <Toaster
           position="bottom-center"
           theme="system"
