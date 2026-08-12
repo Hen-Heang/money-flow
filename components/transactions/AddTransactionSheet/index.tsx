@@ -439,7 +439,7 @@ export default function AddTransactionSheet({
             drag={canDrag ? 'y' : false} dragConstraints={{ top: 0 }} onDragEnd={(_, info) => { if (info.offset.y > 80) handleClose() }}
             className="fixed inset-0 z-100 flex flex-col bg-[var(--color-card-base)]"
           >
-            <div className="flex shrink-0 justify-center pt-3 pb-1">
+            <div className="flex shrink-0 justify-center pb-1" style={{ paddingTop: 'max(12px, env(safe-area-inset-top, 12px))' }}>
               <div className="h-1.5 w-10 rounded-full bg-[var(--color-border-base)] opacity-50" />
             </div>
             <div className="flex items-center justify-between px-6 pb-4 pt-2 border-b border-[var(--color-border-base)]">
@@ -447,12 +447,12 @@ export default function AddTransactionSheet({
               <button onClick={handleClose} className="p-2 rounded-full bg-[var(--color-card-elevated-base)] text-[var(--color-text-secondary)]"><X size={20} /></button>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
+            <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6 space-y-8" onScroll={() => setCanDrag(scrollRef.current?.scrollTop === 0)}>
               <form id="tx-form-mobile" onSubmit={handleSubmit(onSubmit)}>
                 <div className="space-y-6">
                   {quickAddPanel}
                   {templateStrip}
-                  {/* Type Toggle */}
+                  {/* Expense / Income */}
                   <div className="flex bg-[var(--color-card-elevated-base)] p-1 rounded-[var(--radius-lg)]">
                     {(['expense', 'income'] as const).map(opt => (
                       <button key={opt} type="button" onClick={() => { setValue('type', opt); haptic('light') }} className={`flex-1 py-3.5 rounded-[var(--radius-md)] text-sm font-black transition-all ${type === opt ? (opt === 'expense' ? 'bg-[var(--color-expense-base)] text-white shadow-lg' : 'bg-[var(--color-income-base)] text-white shadow-lg') : 'text-[var(--color-text-secondary)]'}`}>
@@ -461,8 +461,8 @@ export default function AddTransactionSheet({
                     ))}
                   </div>
 
-                  {/* Amount Display */}
-                  <div onClick={() => setShowKeypad(true)} className={`p-6 rounded-[var(--radius-lg)] border-2 transition-all ${showKeypad ? 'border-[var(--color-accent-base)] bg-[var(--color-accent-base)]/[0.03]' : 'border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)]'}`}>
+                  {/* Amount and currency */}
+                  <div onClick={() => setShowKeypad(true)} aria-label="Amount" className={`p-6 rounded-[var(--radius-lg)] border-2 transition-all ${showKeypad ? 'border-[var(--color-accent-base)] bg-[var(--color-accent-base)]/[0.03]' : 'border-[var(--color-border-base)] bg-[var(--color-card-elevated-base)]'}`}>
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex bg-[var(--color-card-base)] p-1 rounded-[var(--radius-sm)]">
                         {(['KRW', 'USD'] as const).map(cur => (
@@ -480,7 +480,7 @@ export default function AddTransactionSheet({
                     {convertedHint && <p className="text-right mt-2 text-sm font-bold text-[var(--color-accent-base)]">{convertedHint}</p>}
                   </div>
 
-                  {/* Categories */}
+                  {/* Category */}
                   <CategoryField
                     control={control}
                     filteredCategories={filteredCategories}
@@ -505,7 +505,7 @@ export default function AddTransactionSheet({
 
                     <div className="space-y-2">
                       <label htmlFor="tx-date-mobile" className={sectionLabelStyle}>Date</label>
-                      <input id="tx-date-mobile" {...register('date')} type="date" className={inputBaseStyle} />
+                      <input id="tx-date-mobile" {...register('date')} type="date" onFocus={() => setShowKeypad(false)} className={inputBaseStyle} />
                     </div>
 
                     <div className="space-y-2">
@@ -518,6 +518,7 @@ export default function AddTransactionSheet({
                       <textarea
                         id="tx-note-mobile"
                         {...register('note')}
+                        onFocus={() => setShowKeypad(false)}
                         className={inputBaseStyle}
                         placeholder="Optional note"
                         rows={2}

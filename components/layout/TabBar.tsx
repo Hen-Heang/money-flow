@@ -7,11 +7,51 @@ import { LayoutDashboard, List, PiggyBank, Wallet, BarChart2 } from 'lucide-reac
 import { motion } from 'framer-motion'
 
 const PRIMARY_TABS = [
-  { href: '/dashboard',    label: 'Home',      icon: LayoutDashboard },
-  { href: '/transactions', label: 'Transactions', icon: List },
-  { href: '/savings',      label: 'Savings',   icon: PiggyBank },
-  { href: '/budget',       label: 'Budget',    icon: Wallet },
-  { href: '/analytics',   label: 'Analytics', icon: BarChart2 },
+  {
+    href: '/dashboard',
+    label: 'Home',
+    icon: LayoutDashboard,
+    iconClass: 'text-blue-500',
+    tintClass: 'bg-blue-500/10',
+    borderClass: 'border-blue-500/25',
+    dotClass: 'bg-blue-500',
+  },
+  {
+    href: '/transactions',
+    label: 'Transactions',
+    icon: List,
+    iconClass: 'text-cyan-500',
+    tintClass: 'bg-cyan-500/10',
+    borderClass: 'border-cyan-500/25',
+    dotClass: 'bg-cyan-500',
+  },
+  {
+    href: '/savings',
+    label: 'Savings',
+    icon: PiggyBank,
+    iconClass: 'text-emerald-500',
+    tintClass: 'bg-emerald-500/10',
+    borderClass: 'border-emerald-500/25',
+    dotClass: 'bg-emerald-500',
+  },
+  {
+    href: '/budget',
+    label: 'Budget',
+    icon: Wallet,
+    iconClass: 'text-amber-500',
+    tintClass: 'bg-amber-500/10',
+    borderClass: 'border-amber-500/25',
+    dotClass: 'bg-amber-500',
+  },
+  {
+    href: '/analytics',
+    label: 'Analytics',
+    icon: BarChart2,
+    iconClass: 'text-fuchsia-500',
+    tintClass: 'bg-fuchsia-500/10',
+    borderClass: 'border-fuchsia-500/25',
+    dotClass: 'bg-fuchsia-500',
+  },
 ]
 
 export default function TabBar() {
@@ -35,12 +75,14 @@ export default function TabBar() {
           boxShadow: '0 18px 45px -20px rgba(0,0,0,0.72), inset 0 1px 1px rgba(255,255,255,0.06)',
         }}
       >
-        {PRIMARY_TABS.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href
+        {PRIMARY_TABS.map((item) => {
+          const Icon = item.icon
+          const isActive = pathname === item.href
+
           return (
             <Link
-              key={href}
-              href={href}
+              key={item.href}
+              href={item.href}
               aria-current={isActive ? 'page' : undefined}
               className="relative flex h-full flex-1 flex-col items-center justify-center gap-1"
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' } as React.CSSProperties}
@@ -51,23 +93,37 @@ export default function TabBar() {
                 className="flex flex-col items-center gap-1"
               >
                 <div
-                  className="flex items-center justify-center transition-[background-color,transform] duration-200"
-                  style={{
-                    width: 42, height: 28, borderRadius: 14,
-                    background: isActive ? 'color-mix(in srgb, var(--color-accent-base) 13%, transparent)' : 'transparent',
-                  }}
+                  className={`relative flex h-8 w-11 items-center justify-center rounded-2xl border transition-[background-color,border-color,transform,box-shadow] duration-200 ${item.tintClass} ${
+                    isActive
+                      ? `scale-105 shadow-sm ${item.borderClass}`
+                      : 'border-transparent opacity-80'
+                  }`}
                 >
                   <Icon
+                    aria-hidden="true"
                     size={19}
                     strokeWidth={isActive ? 2.5 : 2}
-                    className={`transition-[color,transform] ${isActive ? 'scale-105 text-[var(--color-accent-base)]' : 'text-[var(--color-text-secondary)] opacity-65'}`}
+                    className={`${item.iconClass} transition-[opacity,transform] duration-200 ${
+                      isActive ? 'scale-105 opacity-100' : 'opacity-75'
+                    }`}
                   />
+                  {isActive && (
+                    <motion.span
+                      layoutId="tab-active-dot"
+                      aria-hidden="true"
+                      className={`absolute -bottom-1 h-1 w-1 rounded-full ${item.dotClass}`}
+                      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    />
+                  )}
                 </div>
+
                 <span
-                  className={`font-bold tracking-tight transition-colors duration-200 ${isActive ? 'text-[var(--color-accent-base)]' : 'text-[var(--color-text-secondary)] opacity-65'}`}
-                  style={{ fontSize: label === 'Transactions' ? 9 : 10 }}
+                  className={`font-bold tracking-tight transition-[color,opacity] duration-200 ${
+                    isActive ? `${item.iconClass} opacity-100` : 'text-[var(--color-text-secondary)] opacity-65'
+                  }`}
+                  style={{ fontSize: item.label === 'Transactions' ? 9 : 10 }}
                 >
-                  {label}
+                  {item.label}
                 </span>
               </motion.div>
             </Link>
