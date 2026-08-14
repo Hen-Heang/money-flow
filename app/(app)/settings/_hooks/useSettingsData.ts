@@ -6,6 +6,7 @@ import { useSupabaseClient } from '@/hooks/useSupabaseClient'
 import { invalidateBudgetsCache } from '@/hooks/useBudgets'
 import { getUserProfile } from '@/lib/profile'
 import { formatNumber } from '@/lib/utils'
+import type { AIProvider } from '@/lib/ai-provider'
 import type { Category, PaymentMethod, Budget } from '@/lib/types'
 import type { UserProfile } from '../_types'
 
@@ -16,7 +17,7 @@ export function useSettingsData() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [budgetInputs, setBudgetInputs] = useState<Record<string, string>>({})
-  const [aiProvider, setAiProvider] = useState<'openai' | 'gemini'>('gemini')
+  const [aiProvider, setAiProvider] = useState<AIProvider>('gemini')
   const [telegramLinked, setTelegramLinked] = useState(false)
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export function useSettingsData() {
         supabase.from('users').select('ai_provider').eq('id', user.id).single(),
       ])
       setProfile(userProfile)
-      if (aiPref.data?.ai_provider) setAiProvider(aiPref.data.ai_provider as 'openai' | 'gemini')
+      if (aiPref.data?.ai_provider) setAiProvider(aiPref.data.ai_provider as AIProvider)
 
       // Telegram link status (best-effort)
       try {
@@ -128,7 +129,7 @@ export function useSettingsData() {
   }
 
   const [aiSwitching, setAiSwitching] = useState(false)
-  const switchAIProvider = async (provider: 'openai' | 'gemini') => {
+  const switchAIProvider = async (provider: AIProvider) => {
     if (provider === aiProvider) return
     setAiSwitching(true)
     try {
@@ -139,7 +140,12 @@ export function useSettingsData() {
       })
       if (!res.ok) throw new Error()
       setAiProvider(provider)
-      toast.success(`Switched to ${provider === 'openai' ? 'OpenAI GPT-5.6' : 'Google Gemini'}`)
+      const providerLabel = provider === 'openai'
+        ? 'OpenAI GPT-5.6'
+        : provider === 'ling'
+          ? 'Ling 3.0 Tiny'
+          : 'Google Gemini'
+      toast.success(`Switched to ${providerLabel}`)
     } catch {
       toast.error('Failed to switch AI provider')
     } finally {

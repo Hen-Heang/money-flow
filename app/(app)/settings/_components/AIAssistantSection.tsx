@@ -4,8 +4,38 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { CreditCard, Sparkles, Check } from 'lucide-react'
 import { haptic } from '@/lib/utils'
+import type { AIProvider } from '@/lib/ai-provider'
 import { Group, Row } from './Primitives'
 import type { SettingsSection } from '../_types'
+
+const PROVIDER_META: Record<AIProvider, { label: string; badge: string; badgeClass: string }> = {
+  gemini: {
+    label: 'Google Gemini',
+    badge: 'Gemini',
+    badgeClass: 'bg-blue-500/10 text-blue-400',
+  },
+  openai: {
+    label: 'OpenAI GPT-5.6',
+    badge: 'GPT-5.6',
+    badgeClass: 'bg-emerald-500/10 text-emerald-400',
+  },
+  ling: {
+    label: 'Ling 3.0 Tiny',
+    badge: 'Ling Tiny',
+    badgeClass: 'bg-violet-500/10 text-violet-400',
+  },
+}
+
+const PROVIDER_OPTIONS: Array<{
+  id: AIProvider
+  label: string
+  desc: string
+  emoji: string
+}> = [
+  { id: 'ling', label: 'Ling 3.0 Tiny', desc: 'Free listing · Vercel AI Gateway', emoji: '⚡' },
+  { id: 'gemini', label: 'Google Gemini', desc: 'gemini-2.5-flash · Default fallback', emoji: '🤖' },
+  { id: 'openai', label: 'OpenAI ChatGPT', desc: 'GPT-5.6 · Requires OPENAI_API_KEY', emoji: '✨' },
+]
 
 export function AIAssistantSection({
   aiProvider,
@@ -14,26 +44,27 @@ export function AIAssistantSection({
   activeSection,
   onToggle,
 }: {
-  aiProvider: 'openai' | 'gemini'
+  aiProvider: AIProvider
   aiSwitching: boolean
-  switchAIProvider: (provider: 'openai' | 'gemini') => void
+  switchAIProvider: (provider: AIProvider) => void
   activeSection: SettingsSection | null
   onToggle: (section: SettingsSection) => void
 }) {
   const router = useRouter()
+  const currentProvider = PROVIDER_META[aiProvider]
 
   return (
     <Group title="AI Assistant">
       <Row
         icon={Sparkles}
         color="#8b5cf6"
-        title={aiProvider === 'openai' ? 'OpenAI GPT-5.6' : 'Google Gemini'}
+        title={currentProvider.label}
         subtitle="Powers chat, Smart Quick Add & categorization"
         onClick={() => { haptic('light'); onToggle('ai') }}
         active={activeSection === 'ai'}
         right={
-          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${aiProvider === 'openai' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
-            {aiProvider === 'openai' ? 'GPT-5.6' : 'Gemini'}
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentProvider.badgeClass}`}>
+            {currentProvider.badge}
           </span>
         }
       />
@@ -42,12 +73,9 @@ export function AIAssistantSection({
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="bg-[var(--color-card-elevated-base)]/30 px-5 py-5 space-y-3">
               <p className="text-[12px] font-medium opacity-60 leading-relaxed">
-                Choose your preferred AI engine. Smart transaction tasks use the other configured provider if the first is unavailable.
+                Choose your preferred AI engine. Smart transaction tasks automatically try another configured provider if the first one is unavailable.
               </p>
-              {[
-                { id: 'gemini' as const, label: 'Google Gemini', desc: 'gemini-2.5-flash · Default', emoji: '🤖' },
-                { id: 'openai' as const, label: 'OpenAI ChatGPT', desc: 'GPT-5.6 · Requires OPENAI_API_KEY', emoji: '✨' },
-              ].map(opt => (
+              {PROVIDER_OPTIONS.map(opt => (
                 <button
                   key={opt.id}
                   disabled={aiSwitching}
