@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   const { provider } = await req.json() as { provider: AIProvider }
-  if (provider !== 'openai' && provider !== 'gemini') {
+  if (provider !== 'openai' && provider !== 'gemini' && provider !== 'ling') {
     return new Response('Invalid provider', { status: 400 })
   }
 
